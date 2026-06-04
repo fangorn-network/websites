@@ -15,21 +15,22 @@ export default function DataNotice() {
 
       <h2>What we collect</h2>
       <p>
-        Nothing about your visit. We use no cookies, no analytics, and no
+        Nothing. We use no cookies, no analytics, and no
         tracking of any kind. We don&rsquo;t log who you are, where you came
-        from, or what you do on the site. Any preferences (such as having
-        dismissed the intro screen) are kept only in your browser&rsquo;s
-        session storage and are never sent to us.
+        from, or what you do on the site. A few small preferences are kept only
+        in your browser and are never sent to us: whether you&rsquo;ve dismissed
+        the intro screen (cleared when you close the tab) and your light or dark
+        theme choice (remembered across visits until you clear it).
       </p>
 
       <h2>Third parties that may handle data</h2>
       <p>
         We rely on a few outside services to run this website. Each has its own
-        privacy practices, which we don&rsquo;t control:
+        privacy practices, which we don&rsquo;t control.
       </p>
       <ul>
         <li>
-          <strong>Hosting (Vercel)</strong> — our site is served by Vercel. As
+          <strong>Hosting (Vercel)</strong>: our site is served by Vercel. As
           with any web host, Vercel may automatically record technical
           information (such as IP addresses and request logs) in the course of
           delivering the site. See{' '}
@@ -43,12 +44,12 @@ export default function DataNotice() {
           .
         </li>
         <li>
-          <strong>Email</strong> — if you email us, we receive your email
+          <strong>Email</strong>: if you email us, we receive your email
           address and whatever you put in your message. We use it only to reply
           to you.
         </li>
         <li>
-          <strong>Payments (Stripe)</strong> — if you choose to support us,
+          <strong>Payments (Stripe)</strong>: if you choose to support us,
           payments are processed by Stripe, which collects the payment details
           it needs to complete the transaction. We never see or store your full
           card details. See{' '}

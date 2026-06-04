@@ -4,6 +4,24 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>SOND3R</title>
+    <!-- Set the theme before first paint to avoid a flash of the wrong colors.
+         Mirrors the logic in src/lib/theme.js (stored choice wins, else OS);
+         keep the storage key and fallback in sync with that module. -->
+    <script>
+      (function () {
+        try {
+          var stored = localStorage.getItem('sond3r:theme')
+          var theme =
+            stored === 'light' || stored === 'dark'
+              ? stored
+              : window.matchMedia &&
+                window.matchMedia('(prefers-color-scheme: dark)').matches
+              ? 'dark'
+              : 'light'
+          document.documentElement.setAttribute('data-theme', theme)
+        } catch (e) {}
+      })()
+    </script>
   </head>
   <body>
     <div id="root"></div>

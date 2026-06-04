@@ -6,10 +6,51 @@
      zoom working. */
   font-size: clamp(1rem, 0.84rem + 0.55vw, 1.375rem);
   --max-width: 44rem;
+
+  /* Color tokens — the single source of truth for theming. Every color in the
+     stylesheet references one of these; nothing below hardcodes a hex value.
+     Light is the default here; the dark palette lives in the [data-theme] and
+     prefers-color-scheme blocks below. To retheme the whole site, edit these.
+       --fg      primary text + solid/inverted-button fills
+       --muted   secondary text (leads, captions, footer)
+       --border  hairlines + section dividers
+       --bg      page background + inverted-button text
+       --surface raised panels on the page bg (e.g. code/license blocks) */
   --fg: #111;
   --muted: #666;
   --border: #e5e5e5;
   --bg: #fff;
+  --surface: #fafafa;
+
+  color-scheme: light;
+}
+
+/* Dark palette. Applied in two ways so it works with or without JS:
+   1. [data-theme="dark"] — explicit choice set by the theme toggle / init
+      script (also wins over OS preference, see selector specificity note).
+   2. prefers-color-scheme — OS-level preference for first-time visitors who
+      have not made an explicit choice. The :not([data-theme="light"]) guard
+      lets an explicit "light" override beat a dark OS setting. */
+:root[data-theme='dark'] {
+  --fg: #f2f2f2;
+  --muted: #9a9a9a;
+  --border: #2a2a2a;
+  --bg: #111;
+  --surface: #1a1a1a;
+
+  color-scheme: dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --fg: #f2f2f2;
+    --muted: #9a9a9a;
+    --border: #2a2a2a;
+    --bg: #111;
+    --surface: #1a1a1a;
+
+    color-scheme: dark;
+  }
 }
 
 * {
@@ -22,6 +63,15 @@ body {
   line-height: 1.6;
   color: var(--fg);
   background: var(--bg);
+  /* Ease the color swap when the theme toggles so it reads as a transition
+     rather than a flash. Only animates color properties. */
+  transition: color 0.2s ease, background-color 0.2s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body {
+    transition: none;
+  }
 }
 
 .container {
@@ -118,7 +168,7 @@ body {
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 0.75rem;
+  gap: 0.75rem 1.5rem;
   margin-top: 2.5rem;
   padding-top: 2rem;
   padding-bottom: 2rem;
@@ -130,7 +180,18 @@ body {
 .footer-links {
   display: flex;
   flex-wrap: wrap;
-  gap: 1rem;
+  align-items: center;
+  gap: 0.6rem 1rem;
+}
+
+/* When the footer can't fit copyright + links on one row, stack it into a
+   tidy left-aligned column instead of letting space-between scatter the
+   items. The links still wrap within their own row. */
+@media (max-width: 32rem) {
+  .footer {
+    flex-direction: column;
+    align-items: flex-start;
+  }
 }
 
 .footer-links a {
@@ -463,11 +524,36 @@ body {
   padding: 1.25rem;
   border: 1px solid var(--border);
   border-radius: 4px;
-  background: #fafafa;
+  background: var(--surface);
   color: var(--muted);
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 0.8rem;
   line-height: 1.6;
   white-space: pre-wrap;
   overflow-x: auto;
+}
+
+/* Theme toggle — a quiet text button that lives in the footer. Inherits its
+   muted/hover colors from the same tokens as the footer links so it stays
+   visually consistent in both themes. */
+.theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.theme-toggle:hover {
+  color: var(--fg);
+}
+
+.theme-toggle-icon {
+  font-size: 0.95rem;
+  line-height: 1;
 }
