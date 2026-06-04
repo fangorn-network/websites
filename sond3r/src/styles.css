@@ -1,0 +1,473 @@
+:root {
+  /* Scale the whole page with the viewport. Everything below is sized in rem,
+     so growing the root font-size proportionally enlarges type, spacing, and the
+     content column together — keeping the same reading ratio at any width.
+     ~16px on phones up to ~22px on large screens; the rem term keeps browser
+     zoom working. */
+  font-size: clamp(1rem, 0.84rem + 0.55vw, 1.375rem);
+  --max-width: 44rem;
+  --fg: #111;
+  --muted: #666;
+  --border: #e5e5e5;
+  --bg: #fff;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, sans-serif;
+  line-height: 1.6;
+  color: var(--fg);
+  background: var(--bg);
+}
+
+.container {
+  max-width: var(--max-width);
+  margin: 0 auto;
+  padding: 0 1.25rem;
+}
+
+.hero {
+  padding: 5rem 0 3rem;
+}
+
+.hero h1 {
+  margin: 0 0 0.5rem;
+  font-size: 2.5rem;
+  letter-spacing: 0.05em;
+}
+
+.lead {
+  margin: 0 0 2rem;
+  font-size: 1.125rem;
+  color: var(--muted);
+}
+
+.section {
+  padding: 2.5rem 0;
+  border-top: 1px solid var(--border);
+}
+
+.section h2 {
+  margin: 0 0 0.75rem;
+  font-size: 1.25rem;
+}
+
+.section p {
+  margin: 0;
+}
+
+.button-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 1.5rem;
+}
+
+/* Hero's .lead already spaces its buttons, so don't double up there. */
+.hero .button-row {
+  margin-top: 0;
+}
+
+.button {
+  display: inline-block;
+  padding: 0.6rem 1.1rem;
+  border: 1px solid var(--fg);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--fg);
+  font: inherit;
+  font-size: 0.95rem;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.button:hover,
+.button.active {
+  background: var(--fg);
+  color: var(--bg);
+}
+
+.faq {
+  margin: 0;
+}
+
+.faq-item + .faq-item {
+  margin-top: 1.25rem;
+}
+
+.faq dt {
+  font-weight: 600;
+}
+
+.faq dd {
+  margin: 0.25rem 0 0;
+  color: var(--muted);
+}
+
+.faq a {
+  color: var(--fg);
+  text-decoration: underline;
+}
+
+.footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-top: 2.5rem;
+  padding-top: 2rem;
+  padding-bottom: 2rem;
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.footer-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.footer-links a {
+  color: var(--muted);
+  text-decoration: none;
+}
+
+.footer-links a:hover {
+  color: var(--fg);
+}
+
+/* Support */
+.support-amount {
+  margin: 0.5rem 0 1rem;
+  font-size: 2.75rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.support-slider-wrap {
+  margin-bottom: 1.25rem;
+}
+
+.support-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  display: block;
+  width: 100%;
+  height: 2px;
+  outline: none;
+  cursor: pointer;
+}
+
+.support-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 4px;
+  height: 18px;
+  border: none;
+  background: var(--fg);
+  cursor: pointer;
+}
+
+.support-slider::-moz-range-thumb {
+  width: 4px;
+  height: 18px;
+  border: none;
+  border-radius: 0;
+  background: var(--fg);
+  cursor: pointer;
+}
+
+.support-slider-labels {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 0.4rem;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.support-quick {
+  display: flex;
+  margin-bottom: 1rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.support-quick-btn {
+  flex: 1;
+  padding: 0.55rem 0;
+  border: none;
+  border-right: 1px solid var(--border);
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.support-quick-btn:last-child {
+  border-right: none;
+}
+
+.support-quick-btn:hover {
+  color: var(--fg);
+}
+
+.support-quick-btn.active {
+  background: var(--fg);
+  color: var(--bg);
+}
+
+.support-custom {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-bottom: 1.75rem;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+.support-custom-input {
+  flex: 1;
+  min-width: 0;
+  padding: 0.35rem 0;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  background: transparent;
+  color: var(--fg);
+  font: inherit;
+  font-size: 0.9rem;
+  outline: none;
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+.support-custom-input::-webkit-outer-spin-button,
+.support-custom-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  appearance: none;
+  margin: 0;
+}
+
+.support-custom-input:focus {
+  border-color: var(--fg);
+}
+
+.support-cta {
+  display: block;
+  width: 100%;
+  padding: 0.8rem;
+  border: 1px solid var(--fg);
+  border-radius: 4px;
+  background: var(--fg);
+  color: var(--bg);
+  font: inherit;
+  font-size: 0.95rem;
+  cursor: pointer;
+}
+
+.support-cta:hover {
+  background: var(--bg);
+  color: var(--fg);
+}
+
+.support-note {
+  margin: 1.5rem 0 0;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+/* Entry overlay */
+.entry-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  background: var(--bg);
+  animation: entry-fade-in 0.5s ease forwards;
+}
+
+.entry-overlay--exit {
+  animation: entry-fade-out 0.6s ease forwards;
+}
+
+@keyframes entry-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes entry-fade-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+.entry-content {
+  width: 100%;
+  max-width: 36rem;
+  animation: entry-rise 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.15s both;
+}
+
+@keyframes entry-rise {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.entry-header {
+  display: flex;
+  gap: 0.75rem;
+  margin: 0 0 1.5rem;
+  font-size: 0.75rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.entry-dict {
+  color: var(--fg);
+}
+
+.entry-word {
+  margin: 0 0 0.25rem;
+  font-size: 3.5rem;
+  letter-spacing: 0.03em;
+  line-height: 1;
+}
+
+.entry-pos {
+  margin: 0 0 1.25rem;
+  font-style: italic;
+  color: var(--muted);
+}
+
+.entry-rule {
+  width: 2rem;
+  height: 1px;
+  margin-bottom: 1.5rem;
+  background: var(--fg);
+}
+
+.entry-definition {
+  margin: 0 0 1rem;
+  color: var(--muted);
+  line-height: 1.8;
+}
+
+.entry-cursor {
+  margin-left: 2px;
+  color: var(--fg);
+  transition: opacity 0.1s;
+}
+
+.entry-source {
+  margin: 0 0 2rem;
+  font-size: 0.8rem;
+  font-style: italic;
+  color: var(--muted);
+}
+
+.entry-source a {
+  color: var(--muted);
+  text-decoration: underline;
+}
+
+.entry-source a:hover {
+  color: var(--fg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .entry-overlay,
+  .entry-overlay--exit,
+  .entry-content {
+    animation: none;
+  }
+}
+
+/* Legal pages */
+.legal {
+  padding-top: 4rem;
+  padding-bottom: 5rem;
+}
+
+.legal-back {
+  display: inline-block;
+  margin-bottom: 2.5rem;
+  color: var(--muted);
+  font-size: 0.9rem;
+  text-decoration: none;
+}
+
+.legal-back:hover {
+  color: var(--fg);
+}
+
+.legal h1 {
+  margin: 0 0 0.5rem;
+  font-size: 2rem;
+  letter-spacing: 0.02em;
+}
+
+.legal-updated {
+  margin: 0 0 2.5rem;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.legal h2 {
+  margin: 2.5rem 0 0.75rem;
+  font-size: 1.2rem;
+}
+
+.legal p {
+  margin: 0 0 1rem;
+}
+
+.legal ul {
+  margin: 0 0 1rem;
+  padding-left: 1.25rem;
+}
+
+.legal li {
+  margin: 0.35rem 0;
+}
+
+.legal a {
+  color: var(--fg);
+  text-decoration: underline;
+}
+
+.legal-license {
+  margin: 0 0 1rem;
+  padding: 1.25rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: #fafafa;
+  color: var(--muted);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.8rem;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-x: auto;
+}
