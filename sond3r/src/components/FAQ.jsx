@@ -4,7 +4,15 @@ import { DISCORD_URL } from '../lib/constants.js'
 const faqs = [
   {
     q: 'What is SOND3R?',
-    a: 'A desktop music application to bring music lovers closer to the music they love.',
+    a: 'A desktop music application that plugs into existing music streaming applications.',
+  },
+  {
+    q: 'Do I need a subscription?',
+    a: 'SOND3R only supports playback on Spotify which requires a Spotify premium subscription.',
+  },
+  {
+    q: 'Does SOND3R plan to support other music streaming applications?',
+    a: 'Yes, SOND3R will eventually support playback across all major streaming applications.',
   },
   {
     q: 'Which platforms are supported?',
