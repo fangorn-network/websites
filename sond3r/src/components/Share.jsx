@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback } from 'react'
 import Section from './primitives/Section.jsx'
 import SonderButtons from './primitives/SonderButtons.jsx'
+import { SITE_URL } from '../lib/constants.js'
 
-const SITE_URL = 'https://sond3r.com'
 const SHARE_TEXT = 'Check out SOND3R'
 
 const u = encodeURIComponent(SITE_URL)

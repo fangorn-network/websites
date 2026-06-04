@@ -1,4 +1,5 @@
 import LegalPage from './LegalPage.jsx'
+import { CONTACT_EMAIL, CONTACT_MAILTO } from '../../lib/constants.js'
 
 // This is the Privacy Policy page. The file is deliberately named "DataNotice"
 // (not "PrivacyPolicy") so ad/privacy blocker extensions don't block the module
@@ -72,7 +73,7 @@ export default function DataNotice() {
       <p>
         Since the only personal information we hold is whatever you send us by
         email, you can ask us to access or delete it at any time. Email us at{' '}
-        <a href="mailto:fangorn@fangorn.network">fangorn@fangorn.network</a>.
+        <a href={CONTACT_MAILTO}>{CONTACT_EMAIL}</a>.
       </p>
 
       <h2>Changes to this policy</h2>

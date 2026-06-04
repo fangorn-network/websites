@@ -1,13 +1,14 @@
 import Section from './primitives/Section.jsx'
+import { DISCORD_URL } from '../lib/constants.js'
 
 const faqs = [
   {
     q: 'What is SOND3R?',
-    a: 'A minimal desktop music application focused on listening, not browsing.',
+    a: 'A desktop music application to bring music lovers closer to the music they love.',
   },
   {
     q: 'Which platforms are supported?',
-    a: 'macOS, Windows, and Linux.',
+    a: 'Windows, macOS, and Linux.',
   },
   {
     q: 'How much does it cost?',
@@ -15,12 +16,11 @@ const faqs = [
   },
   {
     q: 'How do I report a bug or get support?',
-    // Keep this invite in sync with the Discord link in Footer.jsx.
     a: (
       <>
         Reach out to us through{' '}
         <a
-          href="https://discord.gg/sond3r"
+          href={DISCORD_URL}
           target="_blank"
           rel="noopener noreferrer"
         >

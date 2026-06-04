@@ -1,4 +1,5 @@
 import LegalPage from './LegalPage.jsx'
+import { CONTACT_EMAIL, CONTACT_MAILTO } from '../../lib/constants.js'
 
 const MIT_LICENSE = `MIT License
 
@@ -92,7 +93,7 @@ export default function Terms() {
       <h2>Contact</h2>
       <p>
         Questions about these Terms? Email us at{' '}
-        <a href="mailto:fangorn@fangorn.network">fangorn@fangorn.network</a>.
+        <a href={CONTACT_MAILTO}>{CONTACT_EMAIL}</a>.
       </p>
     </LegalPage>
   )

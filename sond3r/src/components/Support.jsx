@@ -1,9 +1,9 @@
 import { useState, useCallback } from 'react'
 import Section from './primitives/Section.jsx'
+import { STRIPE_DONATE_URL } from '../lib/constants.js'
 
 const QUICK_AMOUNTS = [10, 25, 50, 100, 250]
 const MAX = 250
-const STRIPE_BASE_URL = 'https://donate.stripe.com/fZu14meFv9vy3Rjb3ZeZ200'
 
 export default function Support() {
   const [amount, setAmount] = useState(25)
@@ -31,7 +31,7 @@ export default function Support() {
 
   const handleCta = () => {
     // Pass the amount in cents via Stripe's official __prefilled_amount param.
-    window.open(`${STRIPE_BASE_URL}?__prefilled_amount=${amount * 100}`, '_blank')
+    window.open(`${STRIPE_DONATE_URL}?__prefilled_amount=${amount * 100}`, '_blank')
   }
 
   const pct = Math.min((amount / MAX) * 100, 100)

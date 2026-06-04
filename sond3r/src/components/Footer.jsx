@@ -1,12 +1,17 @@
 import FooterBar from './primitives/FooterBar.jsx'
 import ThemeToggle from './primitives/ThemeToggle.jsx'
+import {
+  CONTACT_MAILTO,
+  DISCORD_URL,
+  FANGORN_URL,
+  GITHUB_REPO_URL,
+} from '../lib/constants.js'
 
-// Placeholder links — point these at the real destinations when ready.
 const links = [
-  { label: 'Discord', href: 'https://discord.gg/XtxEmwsWmz', external: true },
-  { label: 'GitHub', href: 'https://github.com/fangorn-network/sonder', external: true },
-  { label: 'Fangorn Protocol', href: 'https://fangorn.network', external: true },
-  { label: 'Contact', href: 'mailto:fangorn@fangorn.network' },
+  { label: 'Discord', href: DISCORD_URL, external: true },
+  { label: 'GitHub', href: GITHUB_REPO_URL, external: true },
+  { label: 'Fangorn Protocol', href: FANGORN_URL, external: true },
+  { label: 'Contact', href: CONTACT_MAILTO },
   { label: 'Privacy', href: '#/privacy' },
   { label: 'Terms', href: '#/terms' },
 ]
