@@ -5,92 +5,79 @@ import LegalPage from './LegalPage.jsx'
 // URL — the route, title, and footer label all still read "Privacy".
 export default function DataNotice() {
   return (
-    <LegalPage title="Privacy Policy" updated="June 3, 2026">
+    <LegalPage title="Privacy Policy" updated="June 4, 2026">
       <p>
-        This Privacy Policy explains how SOND3R (“we”, “us”) collects, uses, and
-        protects information when you visit this website or use our application.
-        By using SOND3R, you agree to the practices described here.
+        SOND3R (“we”, “us”) is built to collect as close to nothing as possible
+        about the people who visit it. This page is short on purpose: it
+        describes the little data that can reach us, and the few third parties
+        that may handle it on our behalf.
       </p>
 
-      <h2>Information we collect</h2>
+      <h2>What we collect</h2>
       <p>
-        We aim to collect as little as possible. Depending on how you use
-        SOND3R, this may include:
+        Nothing about your visit. We use no cookies, no analytics, and no
+        tracking of any kind. We don&rsquo;t log who you are, where you came
+        from, or what you do on the site. Any preferences (such as having
+        dismissed the intro screen) are kept only in your browser&rsquo;s
+        session storage and are never sent to us.
+      </p>
+
+      <h2>Third parties that may handle data</h2>
+      <p>
+        We rely on a few outside services to run this website. Each has its own
+        privacy practices, which we don&rsquo;t control:
       </p>
       <ul>
         <li>
-          <strong>Information you provide</strong> — such as your email address
-          when you contact us.
+          <strong>Hosting (Vercel)</strong> — our site is served by Vercel. As
+          with any web host, Vercel may automatically record technical
+          information (such as IP addresses and request logs) in the course of
+          delivering the site. See{' '}
+          <a
+            href="https://vercel.com/legal/privacy-policy"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Vercel&rsquo;s Privacy Policy
+          </a>
+          .
         </li>
         <li>
-          <strong>Payment information</strong> — if you choose to support us,
-          payments are handled by Stripe. We never see or store your full card
-          details.
+          <strong>Email</strong> — if you email us, we receive your email
+          address and whatever you put in your message. We use it only to reply
+          to you.
         </li>
         <li>
-          <strong>Usage data</strong> — basic, non-identifying information such
-          as the pages you visit and your approximate region, used to understand
-          how the site is used.
-        </li>
-        <li>
-          <strong>Cookies</strong> — small files that keep the site working and
-          help us measure aggregate usage. You can disable cookies in your
-          browser.
+          <strong>Payments (Stripe)</strong> — if you choose to support us,
+          payments are processed by Stripe, which collects the payment details
+          it needs to complete the transaction. We never see or store your full
+          card details. See{' '}
+          <a
+            href="https://stripe.com/privacy"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Stripe&rsquo;s Privacy Policy
+          </a>
+          .
         </li>
       </ul>
-
-      <h2>How we use information</h2>
-      <ul>
-        <li>To operate, maintain, and improve the website and application.</li>
-        <li>To process contributions and respond to your requests.</li>
-        <li>To answer your questions and provide support.</li>
-        <li>To detect, prevent, and address technical issues or abuse.</li>
-      </ul>
-
-      <h2>Sharing</h2>
       <p>
-        We do not sell your personal information. We share information only with
-        the service providers that help us run SOND3R — for example, Stripe for
-        payment processing and our hosting provider — and only as needed to
-        provide those services, or when required by law.
+        We do not sell your information, and we only share it with the services
+        above as needed to run this website or when required by law.
       </p>
 
-      <h2>Data retention</h2>
+      <h2>Your rights and contact</h2>
       <p>
-        We keep information only as long as necessary for the purposes described
-        here or as required by law, after which it is deleted or anonymized.
-      </p>
-
-      <h2>Your rights</h2>
-      <p>
-        Depending on where you live, you may have the right to access, correct,
-        or delete your personal information, or to object to certain processing.
-        To exercise these rights, contact us at the address below.
-      </p>
-
-      <h2>Security</h2>
-      <p>
-        We use reasonable technical and organizational measures to protect your
-        information. No method of transmission or storage is completely secure,
-        however, and we cannot guarantee absolute security.
-      </p>
-
-      <h2>Children’s privacy</h2>
-      <p>
-        SOND3R is not directed to children under 13, and we do not knowingly
-        collect personal information from them.
+        Since the only personal information we hold is whatever you send us by
+        email, you can ask us to access or delete it at any time. Email us at{' '}
+        <a href="mailto:fangorn@fangorn.network">fangorn@fangorn.network</a>.
       </p>
 
       <h2>Changes to this policy</h2>
       <p>
-        We may update this policy from time to time. Material changes will be
+        We may update this policy from time to time. Any changes will be
         reflected by the “Last updated” date above.
-      </p>
-
-      <h2>Contact</h2>
-      <p>
-        Questions about this policy? Email us at{' '}
-        <a href="mailto:fangorn@fangorn.network">fangorn@fangorn.network</a>.
       </p>
     </LegalPage>
   )
