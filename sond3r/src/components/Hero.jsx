@@ -3,8 +3,8 @@ import SonderButtons from './primitives/SonderButtons.jsx'
 import { DOWNLOAD_URLS } from '../lib/constants.js'
 
 const downloads = [
-  { label: 'Download for Windows', href: DOWNLOAD_URLS.windows },
-  { label: 'Download for macOS', href: DOWNLOAD_URLS.macos },
+  // { label: 'Download for Windows', href: DOWNLOAD_URLS.windows },
+  // { label: 'Download for macOS', href: DOWNLOAD_URLS.macos },
   { label: 'Download for Linux', href: DOWNLOAD_URLS.linux },
 ]
 
