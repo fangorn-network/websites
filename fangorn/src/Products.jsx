@@ -130,7 +130,7 @@ const middleware = await FangornX402Middleware.create({
 const result = await middleware.fetchResource({
   privateKey,
   owner:      ownerAddress,
-  schemaName: 'fangorn.music.v0',
+  schemaName: 'sond3r.v0',
   tag:        'track1',
   baseUrl:    resourceServerUrl,
 });
@@ -172,7 +172,7 @@ function AgentPane() {
               <div style={{ height: 6 }} />
               <div><span className={styles.tA}>agent</span> <span className={styles.tD}>querying subgraph...</span></div>
               <div><span className={styles.tD}>&nbsp;&nbsp;schema</span> <span className={styles.tBl}>music.track.v1</span> <span className={styles.tD}>owner 0x3f9a...</span></div>
-              <div><span className={styles.tD}>&nbsp;&nbsp;schema</span> <span className={styles.tBl}>pl-genesis.fangorn.music</span> <span className={styles.tD}>owner 0x7c2b...</span></div>
+              <div><span className={styles.tD}>&nbsp;&nbsp;schema</span> <span className={styles.tBl}>pl-genesis.sond3r</span> <span className={styles.tD}>owner 0x7c2b...</span></div>
               <div><span className={styles.tD}>&nbsp;&nbsp;29 schemas, 2 unique owners</span></div>
               <div style={{ height: 6 }} />
               <div><span className={styles.tU}>you &gt;</span> <span className={styles.tC}>buy track1 from music.track.v1</span></div>
@@ -233,7 +233,7 @@ function MusicPane() {
   const [preview, setPreview] = useState(false);
 
   const stats = [
-    ['Schema', 'fangorn.music.v0'],
+    ['Schema', 'sond3r.v0'],
     ['Contracts', 'Arbitrum Sepolia'],
     ['Storage', 'Pinata (IPFS)'],
     ['Payment', 'x402f / USDC (ERC-3009)'],
@@ -254,7 +254,7 @@ function MusicPane() {
             {preview ? 'coming soon' : 'preview'}
           </button>
         </div>
-        <div className={styles.ppName}>fangorn.music</div>
+        <div className={styles.ppName}>sond3r</div>
         {preview ? (
           <>
             <p className={styles.ppDesc}>
@@ -263,7 +263,7 @@ function MusicPane() {
             <div className={styles.pills} style={{ marginBottom: 28 }}>
               {['Live on Arbitrum Sepolia', 'x402f', 'Fangorn Agent', 'Open template'].map(p => <span key={p} className={styles.pill}>{p}</span>)}
             </div>
-            <a href="https://fangorn.music" className={styles.ppLink} style={{ marginRight: 20 }}>fangorn.music</a>
+            <a href="https://sond3r.com" className={styles.ppLink} style={{ marginRight: 20 }}>sond3r.com</a>
             <a href="https://github.com/fangorn-network" className={styles.ppLink}>GitHub</a>
           </>
         ) : (
@@ -288,7 +288,7 @@ function MusicPane() {
           </>
         ) : (
           <>
-            <div className={styles.musicLabel}>fangorn.music</div>
+            <div className={styles.musicLabel}>sond3r</div>
             <p className={styles.ppDesc} style={{ maxWidth: 360 }}>
               A live music data application built entirely on the Fangorn stack. When it ships, every track will be a working demo of field-level encryption, x402f payments with ZK privacy, and agentic discovery.
             </p>
@@ -303,7 +303,7 @@ const TABS = [
   { id: 'sdk', label: 'SDK' },
   { id: 'x402f', label: 'x402f' },
   { id: 'agent', label: 'Fangorn Agent' },
-  { id: 'music', label: 'fangorn.music' },
+  { id: 'music', label: 'sond3r' },
 ];
 
 export default function Products() {

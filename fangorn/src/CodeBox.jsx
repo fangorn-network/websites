@@ -21,7 +21,7 @@ await fangorn.publisher.upload({
       audio: { data: audioBytes, fileType: 'audio/mp3' },
     },
   }],
-  schemaName: 'fangorn.music.demo.v0',
+  schemaName: 'sond3r.demo.v0',
   gateway: 'https://...',
 }, 1n);
   `,
@@ -46,7 +46,7 @@ const middleware = await FangornX402Middleware.create({
 });
 const result = await middleware.fetchResource({
   owner: '0x147c24c5Ea2f1EE1ac42AD16820De23bBba45Ef6',
-  schemaName: 'fangorn.music.demo.v0',
+  schemaName: 'sond3r.demo.v0',
   name: 'test',
   baseUrl: 'https://facilitator.fangorn.network',
 });
@@ -77,7 +77,7 @@ const CODE = {
       <Line n={16}>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<Prop>audio</Prop><Op>:</Op> <Op>{'{'}</Op> <Prop>data</Prop><Op>:</Op> <Fn>audioBytes</Fn><Op>,</Op> <Prop>fileType</Prop><Op>:</Op> <Str>'audio/mp3'</Str> <Op>{'}'}</Op><Op>,</Op> <Cm>{'// encrypted at rest'}</Cm></Line>
       <Line n={17}>&nbsp;&nbsp;&nbsp;&nbsp;<Op>{'}'}</Op><Op>,</Op></Line>
       <Line n={18}>&nbsp;&nbsp;<Op>{'}'}</Op><Op>],</Op></Line>
-      <Line n={19}>&nbsp;&nbsp;<Prop>schemaName</Prop><Op>:</Op> <Str>'fangorn.music.demo.v0'</Str><Op>,</Op></Line>
+      <Line n={19}>&nbsp;&nbsp;<Prop>schemaName</Prop><Op>:</Op> <Str>'sond3r.demo.v0'</Str><Op>,</Op></Line>
       <Line n={20}>&nbsp;&nbsp;<Prop>gateway</Prop><Op>:</Op> <Str>'https://ipfs.io'</Str><Op>,</Op></Line>
       <Line n={21}><Op>{'}'}</Op><Op>,</Op> <Num>1n</Num><Op>);</Op> <Cm>{'// price in USDC, buyers pay this to unlock'}</Cm><Cursor /></Line>
     </pre>
@@ -107,7 +107,7 @@ const CODE = {
       <Line n={21} />
       <Line n={22}><Kw>const</Kw> <Fn>result</Fn> <Op>=</Op> <Kw>await</Kw> <Fn>middleware</Fn><Op>.</Op><Fn>fetchResource</Fn><Op>{'({'}</Op> <Cm>{'// pays on-chain, decrypts locally'}</Cm></Line>
       <Line n={23}>&nbsp;&nbsp;<Prop>owner</Prop><Op>:</Op> <Str>'0x147c24c5Ea2f1EE1ac42AD16820De23bBba45Ef6'</Str><Op>,</Op></Line>
-      <Line n={24}>&nbsp;&nbsp;<Prop>schemaName</Prop><Op>:</Op> <Str>'fangorn.music.demo.v0'</Str><Op>,</Op></Line>
+      <Line n={24}>&nbsp;&nbsp;<Prop>schemaName</Prop><Op>:</Op> <Str>'sond3r.demo.v0'</Str><Op>,</Op></Line>
       <Line n={25}>&nbsp;&nbsp;<Prop>name</Prop><Op>:</Op> <Str>'test'</Str><Op>,</Op></Line>
       <Line n={26}>&nbsp;&nbsp;<Prop>baseUrl</Prop><Op>:</Op> <Str>'https://facilitator.fangorn.network'</Str><Op>,</Op></Line>
       <Line n={27}><Op>{'}'}</Op><Op>);</Op></Line>

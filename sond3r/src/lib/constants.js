@@ -7,7 +7,7 @@ export const CONTACT_EMAIL = 'fangorn@fangorn.network'
 export const CONTACT_MAILTO = `mailto:${CONTACT_EMAIL}`
 
 // Social / community
-export const DISCORD_URL = 'https://discord.gg/XtxEmwsWmz'
+export const DISCORD_URL = 'https://discord.gg/JDj8RdCVyU'
 export const GITHUB_REPO_URL = 'https://github.com/fangorn-network/sonder'
 
 // Related projects

@@ -14,7 +14,7 @@ export function Cta() {
           { href: 'https://github.com/fangorn-network/fangorn', label: 'SDK' },
           { href: 'https://github.com/fangorn-network/x402f', label: 'x402f' },
           { href: 'https://github.com/fangorn-network/fangorn-agent', label: 'Agent' },
-          { href: 'https://fangorn.music', label: 'fangorn.music' },
+          { href: 'https://sond3r.com', label: 'sond3r.com' },
         ].map(l => (
           <a key={l.label} href={l.href} className={styles.ctaLink}>{l.label}</a>
         ))}
@@ -31,7 +31,7 @@ export function Footer() {
       <div className={styles.flinks}>
         <a href="https://docs.fangorn.network" className={styles.flink}>Docs</a>
         <a href="https://github.com/fangorn-network" className={styles.flink}>GitHub</a>
-        <a href="https://fangorn.music" className={styles.flink}>fangorn.music</a>
+        <a href="https://sond3r.com" className={styles.flink}>sond3r.com</a>
       </div>
     </footer>
   );
