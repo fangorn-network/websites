@@ -7,7 +7,7 @@ export function Cta() {
       <p className={styles.ctaP}>The SDK is on npm. Contracts are live on Arbitrum Sepolia. Reach out directly if you want to talk.</p>
       <div className={styles.ctaBtns}>
         <a href="https://docs.fangorn.network" className={styles.btnA}>Documentation</a>
-        <a href="mailto:hello@fangorn.network" className={styles.btnB}>hello@fangorn.network</a>
+        <a href="mailto:fangorn@fangorn.network" className={styles.btnB}>fangorn@fangorn.network</a>
       </div>
       <div className={styles.ctaLinks}>
         {[
