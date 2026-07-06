@@ -127,6 +127,34 @@
   color: var(--text);
 }
 
+.walletCell {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.fundBtn {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--hi);
+  background: var(--s2);
+  border: 1px solid var(--line2);
+  padding: 5px 12px;
+  border-radius: 6px;
+  white-space: nowrap;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.fundBtn:hover:not(:disabled) {
+  border-color: var(--hi);
+  background: var(--s3);
+}
+
+.fundBtn:disabled {
+  color: var(--sub);
+  cursor: default;
+}
+
 .h2 {
   font-size: 13px;
   font-weight: 500;

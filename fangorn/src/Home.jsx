@@ -41,8 +41,9 @@ function GetStartedCard({ title, body, action, href, onClick }) {
 }
 
 export default function Home() {
-  const { user, logout } = useAuth();
+  const { user, logout, fundWallet } = useAuth();
   const [copied, setCopied] = useState(false);
+  const [funding, setFunding] = useState(false);
 
   const { name, contact, method } = readIdentity(user);
   const wallet = user?.wallet?.address;
@@ -51,6 +52,18 @@ export default function Home() {
     navigator.clipboard.writeText(INSTALL_CMD);
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
+  }
+
+  async function addFunds() {
+    setFunding(true);
+    try {
+      await fundWallet();
+    } catch (err) {
+      // Privy rejects when the user closes the flow — nothing to surface.
+      console.warn('Funding did not complete:', err);
+    } finally {
+      setFunding(false);
+    }
   }
 
   return (
@@ -86,7 +99,17 @@ export default function Home() {
           {wallet && (
             <div className={styles.accountRow}>
               <span className={styles.accountLabel}>Wallet</span>
-              <span className={styles.accountValueMono}>{truncate(wallet, 8, 6)}</span>
+              <div className={styles.walletCell}>
+                <span className={styles.accountValueMono}>{truncate(wallet, 8, 6)}</span>
+                <button
+                  className={styles.fundBtn}
+                  onClick={addFunds}
+                  disabled={funding}
+                  type="button"
+                >
+                  {funding ? 'Funding…' : 'Add funds'}
+                </button>
+              </div>
             </div>
           )}
           {user?.id && (
