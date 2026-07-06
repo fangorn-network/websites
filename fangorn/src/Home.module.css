@@ -1,0 +1,190 @@
+.page {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 32px;
+  height: 56px;
+  border-bottom: 1px solid var(--line);
+  background: rgba(8, 8, 10, 0.95);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  backdrop-filter: blur(8px);
+}
+
+.logo {
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--text);
+  letter-spacing: -0.01em;
+}
+
+.topRight {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.userChip {
+  font-size: 12px;
+  color: var(--sub);
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.logoutBtn {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+  background: var(--s2);
+  border: 1px solid var(--line2);
+  padding: 6px 15px;
+  border-radius: 6px;
+  transition: border-color 0.15s;
+}
+
+.logoutBtn:hover { border-color: var(--dim); }
+
+.main {
+  flex: 1;
+  width: 100%;
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 56px 32px 80px;
+}
+
+.welcome { margin-bottom: 40px; }
+
+.eyebrow {
+  font-family: var(--mono);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--hi);
+}
+
+.h1 {
+  font-size: clamp(26px, 4vw, 36px);
+  font-weight: 400;
+  line-height: 1.15;
+  letter-spacing: -0.03em;
+  color: var(--text);
+  margin: 10px 0 12px;
+}
+
+.sub {
+  font-size: 15px;
+  font-weight: 300;
+  line-height: 1.7;
+  color: var(--sub);
+  max-width: 460px;
+}
+
+.account {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--s1);
+  padding: 6px 20px;
+  margin-bottom: 48px;
+}
+
+.accountRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.accountRow:last-child { border-bottom: none; }
+
+.accountLabel {
+  font-size: 13px;
+  color: var(--sub);
+}
+
+.accountValue {
+  font-size: 13px;
+  color: var(--text);
+  text-align: right;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.accountValueMono {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--text);
+}
+
+.h2 {
+  font-size: 13px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--sub);
+  margin-bottom: 16px;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  text-align: left;
+  gap: 6px;
+  background: var(--s1);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 20px;
+  transition: border-color 0.15s, background 0.15s;
+  font-family: var(--sans);
+}
+
+.card:hover {
+  border-color: var(--line2);
+  background: var(--s2);
+}
+
+.cardTitle {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text);
+}
+
+.cardBody {
+  font-size: 13px;
+  font-weight: 300;
+  line-height: 1.55;
+  color: var(--sub);
+  min-height: 40px;
+}
+
+.cardAction {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--hi);
+  margin-top: 4px;
+}
+
+@media (max-width: 720px) {
+  .topbar { padding: 0 20px; }
+  .userChip { display: none; }
+  .main { padding: 40px 20px 64px; }
+  .grid { grid-template-columns: 1fr; }
+}
