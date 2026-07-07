@@ -26,9 +26,9 @@ const tree = privyAppId ? (
         accentColor: '#a78bfa',
         logo: '/favicon.svg',
       },
-      loginMethods: ['email', 'google', 'wallet'],
+      loginMethods: ['wallet'],
       embeddedWallets: {
-        ethereum: { createOnLogin: 'users-without-wallets' },
+        ethereum: { createOnLogin: 'off' },
       },
     }}
   >
