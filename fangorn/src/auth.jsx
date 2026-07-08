@@ -1,5 +1,5 @@
-import { useCallback } from 'react';
-import { usePrivy, useFundWallet } from '@privy-io/react-auth';
+import { useCallback, useMemo } from 'react';
+import { usePrivy, useFundWallet, useWallets } from '@privy-io/react-auth';
 import { AuthContext } from './authContext';
 
 /**
@@ -10,6 +10,14 @@ import { AuthContext } from './authContext';
 export function PrivyAuthBridge({ children }) {
   const { ready, authenticated, user, login, logout } = usePrivy();
   const { fundWallet } = useFundWallet();
+  const { wallets } = useWallets();
+
+  // The wallet the user signed in with (login is wallet-only). Buckets.js uses
+  // its EIP-1193 provider + switchChain to talk to the on-chain registry.
+  const wallet = useMemo(
+    () => wallets.find((w) => w.address === user?.wallet?.address) ?? wallets[0] ?? null,
+    [wallets, user?.wallet?.address],
+  );
 
   // Open Privy's funding flow for the signed-in user's wallet. Callers don't
   // need to know the address; pass `options` to override chain/amount/asset.
@@ -32,6 +40,7 @@ export function PrivyAuthBridge({ children }) {
         ready,
         authenticated,
         user,
+        wallet,
         login,
         logout,
         fundWallet: fund,
@@ -49,6 +58,7 @@ export function DisabledAuthProvider({ children }) {
     ready: true,
     authenticated: false,
     user: null,
+    wallet: null,
     login: () =>
       console.warn('Login unavailable: set VITE_PRIVY_APP_ID in .env.local.'),
     logout: () => {},

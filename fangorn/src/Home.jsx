@@ -1,8 +1,21 @@
 import { useState } from 'react';
 import styles from './Home.module.css';
 import { useAuth } from './authContext';
+import { useBuckets } from './buckets';
 
 const INSTALL_CMD = 'npm i @fangorn-network/sdk';
+const DEPLOY_CMD = 'fangorn deploy';
+const ARBISCAN = 'https://sepolia.arbiscan.io';
+const explorer = (addr) => `${ARBISCAN}/address/${addr}`;
+
+// viem attaches .shortMessage to contract/RPC errors; fall back to .message.
+function friendlyError(err) {
+  const msg = err?.shortMessage || err?.message || String(err);
+  if (/rejected|denied/i.test(msg)) return 'Transaction cancelled.';
+  if (/insufficient funds/i.test(msg)) return 'Not enough ETH for gas. Add funds and try again.';
+  if (/AlreadyRegistered/i.test(msg)) return 'This wallet already has a bucket.';
+  return msg;
+}
 
 function truncate(value, lead = 6, tail = 4) {
   if (!value) return '';
@@ -25,6 +38,114 @@ function readIdentity(user) {
   return { name: 'there', contact: null, method: null };
 }
 
+function CopyButton({ text, label = 'Copy', className }) {
+  const [copied, setCopied] = useState(false);
+  function copy() {
+    navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  }
+  return (
+    <button className={className} onClick={copy} type="button">
+      {copied ? 'Copied' : label}
+    </button>
+  );
+}
+
+function DetailRow({ label, children }) {
+  return (
+    <div className={styles.accountRow}>
+      <span className={styles.accountLabel}>{label}</span>
+      {children}
+    </div>
+  );
+}
+
+function AddressValue({ address }) {
+  if (!address) return <span className={styles.accountValueMono}>…</span>;
+  return (
+    <a className={styles.accountValueMono} href={explorer(address)} target="_blank" rel="noreferrer">
+      {truncate(address, 8, 6)}
+    </a>
+  );
+}
+
+// One bucket per wallet, provisioned on-chain by the PublisherRegistry. Shows
+// the registration CTA until the wallet has a bucket, then its on-chain info.
+function BucketPanel({ bucket, details, walletAddress, loading, creating, create }) {
+  const [error, setError] = useState(null);
+
+  async function onCreate() {
+    setError(null);
+    try {
+      await create();
+    } catch (err) {
+      setError(friendlyError(err));
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className={styles.emptyState}>
+        <p className={styles.emptyText}>Checking for your bucket…</p>
+      </div>
+    );
+  }
+
+  if (!bucket) {
+    return (
+      <div className={styles.emptyState}>
+        <p className={styles.emptyText}>
+          No bucket yet. Registering provisions your on-chain bucket — one per
+          wallet — so you can publish schemas and datasources.
+        </p>
+        {error && <div className={styles.formError}>{error}</div>}
+        <button className={styles.primaryBtn} onClick={onCreate} disabled={creating} type="button">
+          {creating ? 'Creating…' : 'Create a bucket'}
+        </button>
+      </div>
+    );
+  }
+
+  const ownerIsYou =
+    details?.owner && walletAddress &&
+    details.owner.toLowerCase() === walletAddress.toLowerCase();
+
+  return (
+    <div className={styles.bucketList}>
+      <div className={styles.bucketItem}>
+        <div className={styles.bucketHead}>
+          <span className={styles.bucketName}>Your bucket</span>
+          <a className={styles.bucketSlug} href={explorer(bucket)} target="_blank" rel="noreferrer">
+            {truncate(bucket, 8, 6)}
+          </a>
+          <CopyButton text={bucket} label="Copy address" className={styles.copyBtn} />
+        </div>
+
+        <div className={styles.bucketDetails}>
+          <DetailRow label="Owner">
+            <span className={styles.walletCell}>
+              <AddressValue address={details?.owner} />
+              {ownerIsYou && <span className={styles.bucketSlug}>you</span>}
+            </span>
+          </DetailRow>
+          <DetailRow label="Registry">
+            <AddressValue address={details?.registry} />
+          </DetailRow>
+          <DetailRow label="Network">
+            <span className={styles.accountValue}>Arbitrum Sepolia</span>
+          </DetailRow>
+        </div>
+
+        <div className={styles.deployRow}>
+          <code className={styles.deployCmd}>{DEPLOY_CMD}</code>
+          <CopyButton text={DEPLOY_CMD} className={styles.copyBtn} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function GetStartedCard({ title, body, action, href, onClick }) {
   const inner = (
     <>
@@ -42,6 +163,7 @@ function GetStartedCard({ title, body, action, href, onClick }) {
 
 export default function Home() {
   const { user, logout, fundWallet } = useAuth();
+  const { bucket, details, loading, creating, create } = useBuckets();
   const [copied, setCopied] = useState(false);
   const [funding, setFunding] = useState(false);
 
@@ -119,6 +241,16 @@ export default function Home() {
             </div>
           )}
         </section>
+
+        <h2 className={styles.h2}>Your bucket</h2>
+        <BucketPanel
+          bucket={bucket}
+          details={details}
+          walletAddress={wallet}
+          loading={loading}
+          creating={creating}
+          create={create}
+        />
 
         <h2 className={styles.h2}>Get started</h2>
         <div className={styles.grid}>
