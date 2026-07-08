@@ -11,7 +11,9 @@ import { useAuth } from './authContext.js';
 
 // Deployed PublisherRegistry (Stylus) on Arbitrum Sepolia — the only contract
 // users touch. register() provisions their per-publisher bucket proxy.
-export const REGISTRY_ADDRESS = '0x0d3f3b1bb7cb809e35f5e50c5c51f013b418ab64';
+// import.meta.env is undefined under plain node (the buckets self-check), so
+// guard the access; the browser build injects it from .env.local.
+export const REGISTRY_ADDRESS = import.meta.env?.VITE_REGISTRY_ADDRESS;
 
 // Only the three registry methods onboarding needs. Full ABI lives in
 // ../../contracts/publisher_registry. Stylus exports snake_case as camelCase.

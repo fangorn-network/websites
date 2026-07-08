@@ -3,7 +3,7 @@
 // a renamed/removed method or wrong signature silently breaks onboarding.
 import assert from 'node:assert';
 import { encodeFunctionData } from 'viem';
-import { REGISTRY_ABI, REGISTRY_ADDRESS, BUCKET_ABI } from './buckets.js';
+import { REGISTRY_ABI, BUCKET_ABI } from './buckets.js';
 
 // Selectors of the deployed contract (keccak256(sig)[:4]).
 assert.equal(encodeFunctionData({ abi: REGISTRY_ABI, functionName: 'register' }), '0x1aa3a008');
@@ -19,7 +19,6 @@ assert.equal(encodeFunctionData({ abi: REGISTRY_ABI, functionName: 'registration
 
 // register() must be payable — it forwards the registration fee as msg.value.
 assert.equal(REGISTRY_ABI.find((f) => f.name === 'register').stateMutability, 'payable');
-assert.equal(REGISTRY_ADDRESS.toLowerCase(), '0x0d3f3b1bb7cb809e35f5e50c5c51f013b418ab64');
 
 // Bucket identity getters read when viewing bucket info.
 assert.equal(encodeFunctionData({ abi: BUCKET_ABI, functionName: 'owner' }), '0x8da5cb5b');
