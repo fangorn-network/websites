@@ -21,12 +21,14 @@ function Landing() {
 }
 
 export default function App() {
-  const { ready, authenticated } = useAuth();
+  const { ready, authenticated, user } = useAuth();
 
   // Avoid a flash of the landing page before Privy resolves an existing session.
   if (!ready) {
     return <div className="appSplash" aria-busy="true">Loading…</div>;
   }
 
-  return authenticated ? <Home /> : <Landing />;
+  // Key Home by wallet so switching accounts in-session fully remounts it — the
+  // bucket/repo state is per-wallet and must not carry over from the last one.
+  return authenticated ? <Home key={user?.wallet?.address} /> : <Landing />;
 }

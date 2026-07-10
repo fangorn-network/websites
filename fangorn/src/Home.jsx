@@ -2,11 +2,10 @@ import { useState } from 'react';
 import styles from './Home.module.css';
 import { useAuth } from './authContext';
 import { useBuckets } from './buckets';
+import { truncate, explorer } from './format';
+import RepoView from './Repos';
 
 const INSTALL_CMD = 'npm i @fangorn-network/sdk';
-const DEPLOY_CMD = 'fangorn deploy';
-const ARBISCAN = 'https://sepolia.arbiscan.io';
-const explorer = (addr) => `${ARBISCAN}/address/${addr}`;
 
 // viem attaches .shortMessage to contract/RPC errors; fall back to .message.
 function friendlyError(err) {
@@ -15,13 +14,6 @@ function friendlyError(err) {
   if (/insufficient funds/i.test(msg)) return 'Not enough ETH for gas. Add funds and try again.';
   if (/AlreadyRegistered/i.test(msg)) return 'This wallet already has a bucket.';
   return msg;
-}
-
-function truncate(value, lead = 6, tail = 4) {
-  if (!value) return '';
-  return value.length > lead + tail + 1
-    ? `${value.slice(0, lead)}…${value.slice(-tail)}`
-    : value;
 }
 
 // Pull a friendly identity out of Privy's user object, whichever method they
@@ -72,7 +64,7 @@ function AddressValue({ address }) {
 
 // One bucket per wallet, provisioned on-chain by the PublisherRegistry. Shows
 // the registration CTA until the wallet has a bucket, then its on-chain info.
-function BucketPanel({ bucket, details, walletAddress, loading, creating, create }) {
+function BucketPanel({ bucket, details, repos, walletAddress, loading, reposLoading, creating, create }) {
   const [error, setError] = useState(null);
 
   async function onCreate() {
@@ -137,10 +129,7 @@ function BucketPanel({ bucket, details, walletAddress, loading, creating, create
           </DetailRow>
         </div>
 
-        <div className={styles.deployRow}>
-          <code className={styles.deployCmd}>{DEPLOY_CMD}</code>
-          <CopyButton text={DEPLOY_CMD} className={styles.copyBtn} />
-        </div>
+        <RepoView repos={repos} loading={reposLoading} bucket={bucket} />
       </div>
     </div>
   );
@@ -163,7 +152,7 @@ function GetStartedCard({ title, body, action, href, onClick }) {
 
 export default function Home() {
   const { user, logout, fundWallet } = useAuth();
-  const { bucket, details, loading, creating, create } = useBuckets();
+  const { bucket, details, repos, loading, reposLoading, creating, create } = useBuckets();
   const [copied, setCopied] = useState(false);
   const [funding, setFunding] = useState(false);
 
@@ -246,8 +235,10 @@ export default function Home() {
         <BucketPanel
           bucket={bucket}
           details={details}
+          repos={repos}
           walletAddress={wallet}
           loading={loading}
+          reposLoading={reposLoading}
           creating={creating}
           create={create}
         />
