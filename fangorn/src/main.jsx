@@ -10,13 +10,14 @@ import { PrivyProvider } from '@privy-io/react-auth';
 import './index.css';
 import App from './App.jsx';
 import { PrivyAuthBridge, DisabledAuthProvider } from './auth.jsx';
+import { arbitrumSepolia } from 'viem/chains';
 
 const privyAppId = import.meta.env.VITE_PRIVY_APP_ID;
 
 if (!privyAppId) {
   console.warn(
     'VITE_PRIVY_APP_ID is not set. Login is disabled until you add it to .env.local ' +
-      '(create an app at https://dashboard.privy.io).',
+    '(create an app at https://dashboard.privy.io).',
   );
 }
 
@@ -32,10 +33,12 @@ const tree = privyAppId ? (
         accentColor: '#a78bfa',
         logo: '/favicon.svg',
       },
-      loginMethods: ['wallet'],
+      defaultChain: arbitrumSepolia,
       embeddedWallets: {
         ethereum: { createOnLogin: 'off' },
       },
+      loginMethods: ['email', 'wallet'],
+      supportedChains: [arbitrumSepolia]
     }}
   >
     <PrivyAuthBridge>
