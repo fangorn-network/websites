@@ -43,7 +43,7 @@ export function PrivyAuthBridge({ children }) {
     else sessionStorage.removeItem(TAB_KEY);
   }, [ready, authenticated, logout]);
 
-  // The wallet the user signed in with (login is wallet-only). Buckets.js uses
+  // The wallet the user signed in with (login is wallet-only). fangorn.js uses
   // its EIP-1193 provider + switchChain to talk to the on-chain registry.
   const wallet = useMemo(
     () => wallets.find((w) => w.address === user?.wallet?.address) ?? wallets[0] ?? null,

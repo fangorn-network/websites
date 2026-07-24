@@ -1,9 +1,11 @@
 import { useState } from 'react';
+import { formatEther, formatUnits } from 'viem';
 import styles from './Home.module.css';
 import { useAuth } from './authContext';
-import { useBuckets } from './buckets';
-import { truncate, explorer } from './format';
-import RepoView from './Repos';
+import { usePublisher, useBalances } from './fangorn';
+import { useSubscription, SUBSCRIPTION_WINDOW_DAYS } from './subscription';
+import { useUsage } from './usage';
+import { truncate, explorer, formatBytes } from './format';
 
 const INSTALL_CMD = 'npm i @fangorn-network/sdk';
 
@@ -12,7 +14,8 @@ function friendlyError(err) {
   const msg = err?.shortMessage || err?.message || String(err);
   if (/rejected|denied/i.test(msg)) return 'Transaction cancelled.';
   if (/insufficient funds/i.test(msg)) return 'Not enough ETH for gas. Add funds and try again.';
-  if (/AlreadyRegistered/i.test(msg)) return 'This wallet already has a bucket.';
+  if (/AlreadyRegistered/i.test(msg)) return 'This wallet is already registered.';
+  if (/NotRegistered/i.test(msg)) return 'Register before subscribing.';
   return msg;
 }
 
@@ -62,15 +65,16 @@ function AddressValue({ address }) {
   );
 }
 
-// One bucket per wallet, provisioned on-chain by the PublisherRegistry. Shows
-// the registration CTA until the wallet has a bucket, then its on-chain info.
-function BucketPanel({ bucket, details, repos, walletAddress, loading, reposLoading, creating, create }) {
+// One publisher per wallet, registered on-chain in the DataRegistry. Shows the
+// registration CTA until the wallet is registered, then its on-chain info
+// (owner / registry / network).
+function PublisherPanel({ registered, details, walletAddress, loading, registering, register }) {
   const [error, setError] = useState(null);
 
-  async function onCreate() {
+  async function onRegister() {
     setError(null);
     try {
-      await create();
+      await register();
     } catch (err) {
       setError(friendlyError(err));
     }
@@ -79,21 +83,21 @@ function BucketPanel({ bucket, details, repos, walletAddress, loading, reposLoad
   if (loading) {
     return (
       <div className={styles.emptyState}>
-        <p className={styles.emptyText}>Checking for your bucket…</p>
+        <p className={styles.emptyText}>Checking your registration…</p>
       </div>
     );
   }
 
-  if (!bucket) {
+  if (!registered) {
     return (
       <div className={styles.emptyState}>
         <p className={styles.emptyText}>
-          No bucket yet. Registering provisions your on-chain bucket — one per
-          wallet — so you can publish schemas and datasources.
+          Not registered yet. Registering claims your on-chain namespace — one per
+          wallet — so you can publish knowledge graphs.
         </p>
         {error && <div className={styles.formError}>{error}</div>}
-        <button className={styles.primaryBtn} onClick={onCreate} disabled={creating} type="button">
-          {creating ? 'Creating…' : 'Create a bucket'}
+        <button className={styles.primaryBtn} onClick={onRegister} disabled={registering} type="button">
+          {registering ? 'Registering…' : 'Register'}
         </button>
       </div>
     );
@@ -107,11 +111,11 @@ function BucketPanel({ bucket, details, repos, walletAddress, loading, reposLoad
     <div className={styles.bucketList}>
       <div className={styles.bucketItem}>
         <div className={styles.bucketHead}>
-          <span className={styles.bucketName}>Your bucket</span>
-          <a className={styles.bucketSlug} href={explorer(bucket)} target="_blank" rel="noreferrer">
-            {truncate(bucket, 8, 6)}
+          <span className={styles.bucketName}>Your publisher</span>
+          <a className={styles.bucketSlug} href={explorer(details?.owner)} target="_blank" rel="noreferrer">
+            {truncate(details?.owner, 8, 6)}
           </a>
-          <CopyButton text={bucket} label="Copy address" className={styles.copyBtn} />
+          {details?.owner && <CopyButton text={details.owner} label="Copy address" className={styles.copyBtn} />}
         </div>
 
         <div className={styles.bucketDetails}>
@@ -128,8 +132,105 @@ function BucketPanel({ bucket, details, repos, walletAddress, loading, reposLoad
             <span className={styles.accountValue}>Arbitrum Sepolia</span>
           </DetailRow>
         </div>
+      </div>
+    </div>
+  );
+}
 
-        <RepoView repos={repos} loading={reposLoading} bucket={bucket} />
+// The wallet's storage subscription (a separate SubscriptionRegistry contract).
+// Shown only once registered — subscribe() requires an on-chain publisher. The
+// first 1 GB is free; beyond that the upload gate requires an active subscription.
+function SubscriptionPanel() {
+  const { active, fee, expiresAt, loading, renewing, renew } = useSubscription();
+  const [error, setError] = useState(null);
+
+  async function onRenew() {
+    setError(null);
+    try {
+      await renew();
+    } catch (err) {
+      setError(friendlyError(err));
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className={styles.emptyState}>
+        <p className={styles.emptyText}>Checking your subscription…</p>
+      </div>
+    );
+  }
+
+  const feeLabel = fee != null ? `${formatUnits(fee, 6)} USDC` : '…';
+
+  return (
+    <div className={styles.bucketList}>
+      <div className={styles.bucketItem}>
+        <div className={styles.bucketHead}>
+          <span className={styles.bucketName}>Storage subscription</span>
+          <span className={styles.bucketSlug}>{active ? 'Active' : 'Inactive'}</span>
+        </div>
+
+        <div className={styles.bucketDetails}>
+          <DetailRow label="Status">
+            <span className={styles.accountValue}>
+              {active
+                ? `Active until ${expiresAt?.toLocaleDateString()}`
+                : 'Not active — your first 1 GB is free'}
+            </span>
+          </DetailRow>
+          <DetailRow label="Fee">
+            <span className={styles.accountValue}>{feeLabel} / {SUBSCRIPTION_WINDOW_DAYS} days</span>
+          </DetailRow>
+        </div>
+
+        {error && <div className={styles.formError}>{error}</div>}
+        <button className={styles.primaryBtn} onClick={onRenew} disabled={renewing} type="button">
+          {renewing ? 'Confirming…' : active ? 'Renew subscription' : 'Subscribe'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// The wallet's storage usage, metered by the worker: lifetime total (vs the free
+// tier) and today's usage (vs the daily cap). A limit of 0 means that gate is off,
+// so we show just the amount.
+function UsagePanel() {
+  const { usage, loading } = useUsage();
+
+  if (loading) {
+    return (
+      <div className={styles.emptyState}>
+        <p className={styles.emptyText}>Loading your usage…</p>
+      </div>
+    );
+  }
+  if (!usage) {
+    return (
+      <div className={styles.emptyState}>
+        <p className={styles.emptyText}>Usage is unavailable right now.</p>
+      </div>
+    );
+  }
+
+  const amount = (used, limit) =>
+    limit > 0 ? `${formatBytes(used)} / ${formatBytes(limit)}` : formatBytes(used);
+
+  return (
+    <div className={styles.bucketList}>
+      <div className={styles.bucketItem}>
+        <div className={styles.bucketHead}>
+          <span className={styles.bucketName}>Storage usage</span>
+        </div>
+        <div className={styles.bucketDetails}>
+          <DetailRow label="Total stored">
+            <span className={styles.accountValue}>{amount(usage.total, usage.freeLimit)}</span>
+          </DetailRow>
+          <DetailRow label="Today">
+            <span className={styles.accountValue}>{amount(usage.daily, usage.dailyLimit)}</span>
+          </DetailRow>
+        </div>
       </div>
     </div>
   );
@@ -152,12 +253,15 @@ function GetStartedCard({ title, body, action, href, onClick }) {
 
 export default function Home() {
   const { user, logout, fundWallet } = useAuth();
-  const { bucket, details, repos, loading, reposLoading, creating, create } = useBuckets();
+  const { registered, details, loading, registering, register } = usePublisher();
+  const { balances } = useBalances();
   const [copied, setCopied] = useState(false);
   const [funding, setFunding] = useState(false);
 
   const { name, contact, method } = readIdentity(user);
   const wallet = user?.wallet?.address;
+  const ethBalance = balances ? `${Number(formatEther(balances.eth)).toFixed(4)} ETH` : '…';
+  const usdcBalance = balances ? `${Number(formatUnits(balances.usdc, 6)).toFixed(2)} USDC` : '…';
 
   function copyInstall() {
     navigator.clipboard.writeText(INSTALL_CMD);
@@ -223,6 +327,18 @@ export default function Home() {
               </div>
             </div>
           )}
+          {wallet && (
+            <div className={styles.accountRow}>
+              <span className={styles.accountLabel}>ETH balance</span>
+              <span className={styles.accountValue}>{ethBalance}</span>
+            </div>
+          )}
+          {wallet && (
+            <div className={styles.accountRow}>
+              <span className={styles.accountLabel}>USDC balance</span>
+              <span className={styles.accountValue}>{usdcBalance}</span>
+            </div>
+          )}
           {user?.id && (
             <div className={styles.accountRow}>
               <span className={styles.accountLabel}>User ID</span>
@@ -231,17 +347,25 @@ export default function Home() {
           )}
         </section>
 
-        <h2 className={styles.h2}>Your bucket</h2>
-        <BucketPanel
-          bucket={bucket}
+        <h2 className={styles.h2}>Publisher</h2>
+        <PublisherPanel
+          registered={registered}
           details={details}
-          repos={repos}
           walletAddress={wallet}
           loading={loading}
-          reposLoading={reposLoading}
-          creating={creating}
-          create={create}
+          registering={registering}
+          register={register}
         />
+
+        {registered && (
+          <>
+            <h2 className={styles.h2}>Subscription</h2>
+            <SubscriptionPanel />
+
+            <h2 className={styles.h2}>Storage usage</h2>
+            <UsagePanel />
+          </>
+        )}
 
         <h2 className={styles.h2}>Get started</h2>
         <div className={styles.grid}>

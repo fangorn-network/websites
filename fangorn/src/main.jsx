@@ -1,5 +1,11 @@
+import { Buffer } from 'buffer';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
+
+// The Fangorn SDK's engine reconstructs commit CIDs with node's Buffer
+// (hexToRootCid). Browsers have no global Buffer, so shim it before any import
+// that touches the engine runs.
+globalThis.Buffer ??= Buffer;
 import { PrivyProvider } from '@privy-io/react-auth';
 import './index.css';
 import App from './App.jsx';

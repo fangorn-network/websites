@@ -29,6 +29,6 @@ export default function App() {
   }
 
   // Key Home by wallet so switching accounts in-session fully remounts it — the
-  // bucket/repo state is per-wallet and must not carry over from the last one.
+  // publisher/namespace state is per-wallet and must not carry over.
   return authenticated ? <Home key={user?.wallet?.address} /> : <Landing />;
 }
