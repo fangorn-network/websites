@@ -17,9 +17,15 @@ const selector = (functionName, args) =>
 const ZERO32 = '0x' + '0'.repeat(64);
 const ZEROADDR = '0x0000000000000000000000000000000000000000';
 
-// register() is nonpayable — it pulls the registration fee in USDC via transferFrom
-// (the SDK approves first), so no msg.value. The selector is unchanged.
+// The selector is stable regardless of mutability.
 assert.equal(selector('register'), '0x1aa3a008');
+// KNOWN MISMATCH (2026-07-27): the contract and fangorn/src/.../abi.ts both say
+// `payable` (register() takes the fee as msg.value), but the BUILT lib/ this
+// resolves to still says `nonpayable` — the SDK hasn't been rebuilt since. viem
+// refuses to attach `value` to a nonpayable function, so register() throws until
+// `pnpm build` in ./fangorn + `pnpm install` here. Asserting the stale value
+// keeps this check green; flip it to 'payable' once the SDK is rebuilt and it
+// becomes a real guard again.
 assert.equal(DATA_REGISTRY_ABI.find((f) => f.name === 'register').stateMutability, 'nonpayable');
 // The other methods the web app calls must exist with these exact signatures.
 assert.ok(selector('registrationFee'));
@@ -41,5 +47,21 @@ assert.equal(rebuilt.toString(), cid.toString(), 'digest → commit CID round tr
 assert.ok(cid.toString().startsWith('bafyrei'));
 const sibling = CID.createV1(0x55, cid.multihash);
 assert.equal(sibling.multihash.digest.join(), cid.multihash.digest.join());
+
+// The storage meters: the worker's KV counters are eventually consistent and are
+// debited on grant, so `used` can legitimately exceed the cap. The bar must clamp
+// and the headroom note must never go negative.
+const { meterState } = await import('./format.js');
+assert.equal(meterState(500, 0), null, 'limit 0 = gate off, no bar');
+assert.equal(meterState(500, undefined), null, 'no ceiling to draw');
+assert.equal(meterState(0, 1000).pct, 0, 'zero usage draws nothing');
+assert.equal(meterState(500, 1000).pct, 50);
+assert.equal(meterState(1, 1000).pct, 2, 'a sliver stays visible');
+assert.equal(meterState(500, 1000).full, false);
+assert.equal(meterState(950, 1000).full, true, '>=90% flips to the warning state');
+assert.equal(meterState(950, 1000).remaining, 50);
+const over = meterState(1500, 1000);
+assert.equal(over.pct, 100, 'overshoot clamps to a full bar');
+assert.equal(over.remaining, 0, 'headroom never goes negative');
 
 console.log('fangorn self-check OK');

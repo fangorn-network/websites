@@ -1,13 +1,17 @@
 import { useState } from 'react';
-import { formatEther, formatUnits } from 'viem';
+import { formatEther, formatUnits, parseEther } from 'viem';
 import styles from './Home.module.css';
 import { useAuth } from './authContext';
 import { usePublisher, useBalances, useFaucet, FAUCET_ETH, FAUCET_USDC } from './fangorn';
 import { useSubscription, SUBSCRIPTION_WINDOW_DAYS } from './subscription';
 import { useUsage } from './usage';
-import { truncate, explorer, formatBytes } from './format';
+import { truncate, explorer, formatBytes, meterState } from './format';
 
 const INSTALL_CMD = 'npm i @fangorn-network/sdk';
+
+// Enough ETH to cover the registration fee and its gas. Below this the wallet is
+// "Low" and the faucet is the thing to do next.
+const LOW_ETH = parseEther('0.005');
 
 // viem attaches .shortMessage to contract/RPC errors; fall back to .message.
 function friendlyError(err) {
@@ -35,15 +39,15 @@ function formatCooldown(secs) {
 // Pull a friendly identity out of Privy's user object, whichever method they
 // signed in with (email, Google, or wallet).
 function readIdentity(user) {
-  if (!user) return { name: 'there', contact: null, method: null };
+  if (!user) return { name: 'there', contact: null };
 
   const email = user.email?.address || user.google?.email;
   const wallet = user.wallet?.address;
 
-  if (user.google?.name) return { name: user.google.name, contact: email, method: 'Google' };
-  if (email) return { name: email.split('@')[0], contact: email, method: user.google ? 'Google' : 'Email' };
-  if (wallet) return { name: truncate(wallet), contact: wallet, method: 'Wallet' };
-  return { name: 'there', contact: null, method: null };
+  if (user.google?.name) return { name: user.google.name, contact: email };
+  if (email) return { name: email.split('@')[0], contact: email };
+  if (wallet) return { name: truncate(wallet), contact: wallet };
+  return { name: 'there', contact: null };
 }
 
 function CopyButton({ text, label = 'Copy', className }) {
@@ -60,9 +64,85 @@ function CopyButton({ text, label = 'Copy', className }) {
   );
 }
 
+// ── Account panel primitives ────────────────────────────────────────────────
+// Fields stack their value under their label rather than sitting opposite it.
+// A column is only ~340px wide, and a space-between row there is one long string
+// (a faucet error, a balance) away from pushing its own action out of the panel.
+
+function Field({ label, children }) {
+  return (
+    <div className={styles.field}>
+      <div className={styles.fieldLabel}>{label}</div>
+      {children}
+    </div>
+  );
+}
+
+// One of the three setup stages. `state` drives the header dot and always ships
+// with `stateLabel` beside it — the colour alone never carries the meaning.
+function Column({ title, state, stateLabel, children }) {
+  return (
+    <div className={styles.accountCol}>
+      <div className={styles.colHead}>
+        <span className={styles.colTitle}>{title}</span>
+        <span className={`${styles.stateDot} ${styles[state]}`} aria-hidden="true" />
+        <span className={styles.stateLabel}>{stateLabel}</span>
+      </div>
+      {children}
+    </div>
+  );
+}
+
+// Bytes used against a limit. Not a chart — a stat with a meter, so the answer to
+// "am I near the cap?" survives a glance. A limit of 0 means the gate is off, and
+// `null` means there is no ceiling to draw (a subscription lifts the lifetime one),
+// so both render the bare amount.
+// ponytail: a div + inline width beats <progress>, which needs
+// ::-webkit-progress-value AND ::-moz-progress-bar to restyle. Swap if we ever
+// want the native semantics for free.
+function Meter({ label, used, limit }) {
+  const meter = meterState(used, limit);
+  if (!meter) {
+    return (
+      <Field label={label}>
+        <div className={styles.fieldValue}>{formatBytes(used)}</div>
+      </Field>
+    );
+  }
+
+  return (
+    <Field label={label}>
+      <div
+        className={styles.meterTrack}
+        role="progressbar"
+        aria-valuenow={used}
+        aria-valuemin={0}
+        aria-valuemax={limit}
+        aria-label={label}
+      >
+        <div
+          className={`${styles.meterFill} ${meter.full ? styles.meterFull : ''}`}
+          style={{ width: `${meter.pct}%` }}
+        />
+      </div>
+      <div className={styles.fieldValue}>
+        {formatBytes(used)} / {formatBytes(limit)}
+        {/* Near the cap the colour shift alone shouldn't carry it — say it in words. */}
+        {meter.full && (
+          <span className={styles.fieldNote}>
+            {meter.remaining ? ` · ${formatBytes(meter.remaining)} left` : ' · Limit reached'}
+          </span>
+        )}
+      </div>
+    </Field>
+  );
+}
+
+// ── Columns ─────────────────────────────────────────────────────────────────
+
 // Testnet faucet: 0.05 ETH + 10 USDC per wallet per 24h — enough to cover the
 // registration fee and its gas. Balances are re-read once the drip is mined.
-function FaucetRow({ onClaimed }) {
+function FaucetField({ onClaimed }) {
   const { eligible, retryAfter, loading, claiming, claim } = useFaucet();
   const [error, setError] = useState(null);
 
@@ -76,53 +156,70 @@ function FaucetRow({ onClaimed }) {
     }
   }
 
-  function status() {
-    if (error) return error;
-    if (loading) return '…';
-    if (eligible) return `${FAUCET_ETH} ETH + ${FAUCET_USDC} USDC available`;
-    return `Next drip in ${formatCooldown(retryAfter)}`;
-  }
-
   return (
-    <div className={styles.accountRow}>
-      <span className={styles.accountLabel}>Testnet faucet</span>
-      <div className={styles.walletCell}>
-        <span className={styles.accountValue}>{status()}</span>
-        <button
-          className={styles.fundBtn}
-          onClick={onClaim}
-          disabled={loading || claiming || !eligible}
-          type="button"
-        >
-          {claiming ? 'Dripping…' : 'Claim'}
-        </button>
+    <Field label="Testnet faucet">
+      <div className={styles.fieldValue}>
+        {loading ? '…' : eligible ? `${FAUCET_ETH} ETH + ${FAUCET_USDC} USDC` : `Next drip in ${formatCooldown(retryAfter)}`}
       </div>
-    </div>
+      {error && <div className={styles.formError}>{error}</div>}
+      <button
+        className={styles.ghostBtn}
+        onClick={onClaim}
+        disabled={loading || claiming || !eligible}
+        type="button"
+      >
+        {claiming ? 'Dripping…' : 'Claim'}
+      </button>
+    </Field>
   );
 }
 
-function DetailRow({ label, children }) {
+function WalletColumn({ wallet, balances, onFund, funding, refreshBalances }) {
+  // Don't call it low until the balances actually land — an orange dot on a
+  // still-loading wallet reads as a problem that isn't there.
+  const low = balances && balances.eth < LOW_ETH;
+
   return (
-    <div className={styles.accountRow}>
-      <span className={styles.accountLabel}>{label}</span>
-      {children}
-    </div>
+    <Column
+      title="Wallet"
+      state={!balances ? 'statePending' : low ? 'stateWarn' : 'stateGood'}
+      stateLabel={!balances ? 'Loading' : low ? 'Low balance' : 'Funded'}
+    >
+      <Field label="Address">
+        <div className={styles.inlineValue}>
+          <a
+            className={styles.fieldValueMono}
+            href={explorer(wallet)}
+            target="_blank"
+            rel="noreferrer"
+          >
+            {truncate(wallet, 8, 6)}
+          </a>
+          <CopyButton text={wallet} className={styles.ghostBtnSm} />
+        </div>
+      </Field>
+
+      <Field label="Balance">
+        <div className={styles.fieldValue}>
+          {balances ? `${Number(formatEther(balances.eth)).toFixed(4)} ETH` : '…'}
+        </div>
+        <div className={styles.fieldValue}>
+          {balances ? `${Number(formatUnits(balances.usdc, 6)).toFixed(2)} USDC` : '…'}
+        </div>
+        <button className={styles.ghostBtn} onClick={onFund} disabled={funding} type="button">
+          {funding ? 'Funding…' : 'Add funds'}
+        </button>
+      </Field>
+
+      <FaucetField onClaimed={refreshBalances} />
+    </Column>
   );
 }
 
-function AddressValue({ address }) {
-  if (!address) return <span className={styles.accountValueMono}>…</span>;
-  return (
-    <a className={styles.accountValueMono} href={explorer(address)} target="_blank" rel="noreferrer">
-      {truncate(address, 8, 6)}
-    </a>
-  );
-}
-
-// One publisher per wallet, registered on-chain in the DataRegistry. Shows the
-// registration CTA until the wallet is registered, then its on-chain info
-// (owner / registry / network).
-function PublisherPanel({ registered, details, walletAddress, loading, registering, register }) {
+// One publisher per wallet, registered on-chain in the DataRegistry. The register
+// CTA lives here beside the balances that pay for it — registering costs a native
+// ETH fee plus gas.
+function PublisherColumn({ registered, details, loading, registering, register }) {
   const [error, setError] = useState(null);
 
   async function onRegister() {
@@ -134,69 +231,59 @@ function PublisherPanel({ registered, details, walletAddress, loading, registeri
     }
   }
 
-  if (loading) {
-    return (
-      <div className={styles.emptyState}>
-        <p className={styles.emptyText}>Checking your registration…</p>
-      </div>
-    );
-  }
-
-  if (!registered) {
-    return (
-      <div className={styles.emptyState}>
-        <p className={styles.emptyText}>
-          Not registered yet. Registering records your wallet as a publisher in the
-          DataRegistry, giving it one state root of its own, so you can commit and
-          push namespaces.
-        </p>
-        {error && <div className={styles.formError}>{error}</div>}
-        <button className={styles.primaryBtn} onClick={onRegister} disabled={registering} type="button">
-          {registering ? 'Registering…' : 'Register'}
-        </button>
-      </div>
-    );
-  }
-
-  const ownerIsYou =
-    details?.owner && walletAddress &&
-    details.owner.toLowerCase() === walletAddress.toLowerCase();
-
   return (
-    <div className={styles.bucketList}>
-      <div className={styles.bucketItem}>
-        <div className={styles.bucketHead}>
-          <span className={styles.bucketName}>Your publisher</span>
-          <a className={styles.bucketSlug} href={explorer(details?.owner)} target="_blank" rel="noreferrer">
-            {truncate(details?.owner, 8, 6)}
-          </a>
-          {details?.owner && <CopyButton text={details.owner} label="Copy address" className={styles.copyBtn} />}
-        </div>
+    <Column
+      title="Publisher"
+      state={loading ? 'statePending' : registered ? 'stateGood' : 'statePending'}
+      stateLabel={loading ? 'Checking' : registered ? 'Active' : 'Not registered'}
+    >
+      {loading && <div className={styles.pending}>Checking your registration…</div>}
 
-        <div className={styles.bucketDetails}>
-          <DetailRow label="Owner">
-            <span className={styles.walletCell}>
-              <AddressValue address={details?.owner} />
-              {ownerIsYou && <span className={styles.bucketSlug}>you</span>}
-            </span>
-          </DetailRow>
-          <DetailRow label="Registry">
-            <AddressValue address={details?.registry} />
-          </DetailRow>
-          <DetailRow label="Network">
-            <span className={styles.accountValue}>Arbitrum Sepolia</span>
-          </DetailRow>
-        </div>
-      </div>
-    </div>
+      {!loading && !registered && (
+        <>
+          <p className={styles.colText}>
+            Registering records your wallet as a publisher, giving it a state root you
+            can commit and push to.
+          </p>
+          {error && <div className={styles.formError}>{error}</div>}
+          <button
+            className={styles.primaryBtn}
+            onClick={onRegister}
+            disabled={registering}
+            type="button"
+          >
+            {registering ? 'Registering…' : 'Register'}
+          </button>
+        </>
+      )}
+
+      {!loading && registered && (
+        <>
+          <Field label="Network">
+            <div className={styles.fieldValue}>Arbitrum Sepolia</div>
+          </Field>
+          <Field label="Registry">
+            <a
+              className={styles.fieldValueMono}
+              href={explorer(details?.registry)}
+              target="_blank"
+              rel="noreferrer"
+            >
+              {truncate(details?.registry, 8, 6)}
+            </a>
+          </Field>
+        </>
+      )}
+    </Column>
   );
 }
 
-// The wallet's storage subscription (a separate SubscriptionRegistry contract).
-// Shown only once registered — subscribe() requires an on-chain publisher. The
-// first 1 GB is free; beyond that the upload gate requires an active subscription.
-function SubscriptionPanel() {
-  const { active, fee, expiresAt, loading, renewing, renew } = useSubscription();
+// Usage and the subscription that lifts it, in one column: the lifetime free tier
+// (which a subscription removes the ceiling on) and the daily upload cap (which
+// applies to everyone). Both are metered by the worker, not the chain.
+function StorageColumn({ registered }) {
+  const { usage, loading } = useUsage();
+  const { active, fee, expiresAt, loading: subLoading, renewing, renew } = useSubscription();
   const [error, setError] = useState(null);
 
   async function onRenew() {
@@ -208,88 +295,56 @@ function SubscriptionPanel() {
     }
   }
 
-  if (loading) {
-    return (
-      <div className={styles.emptyState}>
-        <p className={styles.emptyText}>Checking your subscription…</p>
-      </div>
-    );
-  }
-
+  const busy = loading || subLoading;
   const feeLabel = fee != null ? `${formatUnits(fee, 6)} USDC` : '…';
 
   return (
-    <div className={styles.bucketList}>
-      <div className={styles.bucketItem}>
-        <div className={styles.bucketHead}>
-          <span className={styles.bucketName}>Storage subscription</span>
-          <span className={styles.bucketSlug}>{active ? 'Active' : 'Inactive'}</span>
-        </div>
+    <Column
+      title="Storage"
+      state={busy ? 'statePending' : active ? 'stateGood' : 'statePending'}
+      stateLabel={busy ? 'Loading' : active ? 'Subscribed' : 'Free tier'}
+    >
+      {busy && <div className={styles.pending}>Loading your usage…</div>}
+      {!busy && !usage && <div className={styles.pending}>Usage is unavailable right now.</div>}
 
-        <div className={styles.bucketDetails}>
-          <DetailRow label="Status">
-            <span className={styles.accountValue}>
-              {active
-                ? `Active until ${expiresAt?.toLocaleDateString()}`
-                : 'Not active. Your first 1 GB is free'}
-            </span>
-          </DetailRow>
-          <DetailRow label="Fee">
-            <span className={styles.accountValue}>{feeLabel} / {SUBSCRIPTION_WINDOW_DAYS} days</span>
-          </DetailRow>
-        </div>
+      {!busy && usage && (
+        <>
+          {/* A subscription removes the lifetime ceiling, so there's no limit to meter. */}
+          <Meter
+            label={active ? 'Total stored' : 'Free tier used'}
+            used={usage.total}
+            limit={active ? 0 : usage.freeLimit}
+          />
+          <Meter label="Uploaded today" used={usage.daily} limit={usage.dailyLimit} />
+        </>
+      )}
 
-        {error && <div className={styles.formError}>{error}</div>}
-        <button className={styles.primaryBtn} onClick={onRenew} disabled={renewing} type="button">
-          {renewing ? 'Confirming…' : active ? 'Renew subscription' : 'Subscribe'}
-        </button>
-      </div>
-    </div>
+      {!busy && (
+        <Field label="Subscription">
+          <div className={styles.fieldValue}>
+            {active
+              ? `Active until ${expiresAt?.toLocaleDateString()}`
+              : `${feeLabel} / ${SUBSCRIPTION_WINDOW_DAYS} days`}
+          </div>
+          {error && <div className={styles.formError}>{error}</div>}
+          <button
+            className={styles.ghostBtn}
+            onClick={onRenew}
+            disabled={renewing || !registered}
+            type="button"
+            // subscribe() cross-calls isRegistered and reverts NotRegistered, so
+            // say why it's unavailable rather than letting the tx fail.
+            title={registered ? undefined : 'Register first'}
+          >
+            {renewing ? 'Confirming…' : active ? 'Renew' : 'Subscribe'}
+          </button>
+        </Field>
+      )}
+    </Column>
   );
 }
 
-// The wallet's storage usage, metered by the worker: lifetime total (vs the free
-// tier) and today's usage (vs the daily cap). A limit of 0 means that gate is off,
-// so we show just the amount.
-function UsagePanel() {
-  const { usage, loading } = useUsage();
-
-  if (loading) {
-    return (
-      <div className={styles.emptyState}>
-        <p className={styles.emptyText}>Loading your usage…</p>
-      </div>
-    );
-  }
-  if (!usage) {
-    return (
-      <div className={styles.emptyState}>
-        <p className={styles.emptyText}>Usage is unavailable right now.</p>
-      </div>
-    );
-  }
-
-  const amount = (used, limit) =>
-    limit > 0 ? `${formatBytes(used)} / ${formatBytes(limit)}` : formatBytes(used);
-
-  return (
-    <div className={styles.bucketList}>
-      <div className={styles.bucketItem}>
-        <div className={styles.bucketHead}>
-          <span className={styles.bucketName}>Storage usage</span>
-        </div>
-        <div className={styles.bucketDetails}>
-          <DetailRow label="Total stored">
-            <span className={styles.accountValue}>{amount(usage.total, usage.freeLimit)}</span>
-          </DetailRow>
-          <DetailRow label="Today">
-            <span className={styles.accountValue}>{amount(usage.daily, usage.dailyLimit)}</span>
-          </DetailRow>
-        </div>
-      </div>
-    </div>
-  );
-}
+// ── Cards ───────────────────────────────────────────────────────────────────
 
 function GetStartedCard({ title, body, action, href, onClick, soon }) {
   const inner = (
@@ -355,19 +410,10 @@ export default function Home() {
   const { user, logout, fundWallet } = useAuth();
   const { registered, details, loading, registering, register } = usePublisher();
   const { balances, refresh: refreshBalances } = useBalances();
-  const [copied, setCopied] = useState(false);
   const [funding, setFunding] = useState(false);
 
-  const { name, contact, method } = readIdentity(user);
+  const { name, contact } = readIdentity(user);
   const wallet = user?.wallet?.address;
-  const ethBalance = balances ? `${Number(formatEther(balances.eth)).toFixed(4)} ETH` : '…';
-  const usdcBalance = balances ? `${Number(formatUnits(balances.usdc, 6)).toFixed(2)} USDC` : '…';
-
-  function copyInstall() {
-    navigator.clipboard.writeText(INSTALL_CMD);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
-  }
 
   async function addFunds() {
     setFunding(true);
@@ -400,104 +446,57 @@ export default function Home() {
           </p>
         </section>
 
-        <div className={styles.layout}>
-          <div className={styles.colMain}>
-            <h2 className={styles.h2}>Publisher</h2>
-            <PublisherPanel
-              registered={registered}
-              details={details}
-              walletAddress={wallet}
-              loading={loading}
-              registering={registering}
-              register={register}
+        {/* The three columns are the setup order, and it's the contracts' order:
+            fund the wallet, register the publisher, then subscribe to upload past
+            the free tier. All three stay on screen in every state so the panel
+            never changes shape as registration lands. */}
+        <h2 className={styles.h2}>Account</h2>
+        <section className={styles.accountPanel}>
+          {wallet && (
+            <WalletColumn
+              wallet={wallet}
+              balances={balances}
+              onFund={addFunds}
+              funding={funding}
+              refreshBalances={refreshBalances}
             />
+          )}
+          <PublisherColumn
+            registered={registered}
+            details={details}
+            loading={loading}
+            registering={registering}
+            register={register}
+          />
+          <StorageColumn registered={registered} />
+        </section>
 
-            {registered && (
-              <>
-                <h2 className={styles.h2}>Apps</h2>
-                <div className={styles.grid}>
-                  {APPS.map((app) => <GetStartedCard key={app.title} {...app} />)}
-                </div>
-              </>
-            )}
-
-            <br></br>
-            <h2 className={styles.h2}>Built on Fangorn</h2>
+        {registered && (
+          <section className={styles.section}>
+            <h2 className={styles.h2}>Apps</h2>
             <div className={styles.grid}>
-              {EXAMPLES.map((example) => (
-                <GetStartedCard key={example.title} action="Open" {...example} />
-              ))}
+              {APPS.map((app) => <GetStartedCard key={app.title} {...app} />)}
             </div>
+          </section>
+        )}
+
+        <section className={styles.section}>
+          <h2 className={styles.h2}>Built on Fangorn</h2>
+          <div className={styles.grid}>
+            {EXAMPLES.map((example) => (
+              <GetStartedCard key={example.title} action="Open" {...example} />
+            ))}
           </div>
+        </section>
 
-          <aside className={styles.colSide}>
-            <h2 className={styles.h2}>Account</h2>
-            <section className={styles.account}>
-              <div className={styles.accountRow}>
-                <span className={styles.accountLabel}>Signed in with</span>
-                <span className={styles.accountValue}>{method || 'Account'}</span>
-              </div>
-              {contact && (
-                <div className={styles.accountRow}>
-                  <span className={styles.accountLabel}>Account</span>
-                  <span className={styles.accountValue}>{contact}</span>
-                </div>
-              )}
-              {wallet && (
-                <div className={styles.accountRow}>
-                  <span className={styles.accountLabel}>Wallet</span>
-                  <div className={styles.walletCell}>
-                    <span className={styles.accountValueMono}>{truncate(wallet, 8, 6)}</span>
-                    <button
-                      className={styles.fundBtn}
-                      onClick={addFunds}
-                      disabled={funding}
-                      type="button"
-                    >
-                      {funding ? 'Funding…' : 'Add funds'}
-                    </button>
-                  </div>
-                </div>
-              )}
-              {wallet && (
-                <div className={styles.accountRow}>
-                  <span className={styles.accountLabel}>ETH balance</span>
-                  <span className={styles.accountValue}>{ethBalance}</span>
-                </div>
-              )}
-              {wallet && (
-                <div className={styles.accountRow}>
-                  <span className={styles.accountLabel}>USDC balance</span>
-                  <span className={styles.accountValue}>{usdcBalance}</span>
-                </div>
-              )}
-              {wallet && <FaucetRow onClaimed={refreshBalances} />}
-              {user?.id && (
-                <div className={styles.accountRow}>
-                  <span className={styles.accountLabel}>User ID</span>
-                  <span className={styles.accountValueMono}>{truncate(user.id, 14, 6)}</span>
-                </div>
-              )}
-            </section>
-
-            {registered && (
-              <>
-                <h2 className={styles.h2}>Subscription</h2>
-                <SubscriptionPanel />
-
-                <h2 className={styles.h2}>Storage usage</h2>
-                <UsagePanel />
-              </>
-            )}
-
-            <h2 className={styles.h2}>Build with the SDK</h2>
-            <section className={styles.account}>
-              <div className={styles.accountRow}>
-                <span className={styles.accountValueMono}>{INSTALL_CMD}</span>
-                <button className={styles.copyBtn} onClick={copyInstall} type="button">
-                  {copied ? 'Copied' : 'Copy'}
-                </button>
-              </div>
+        <section className={styles.section}>
+          <h2 className={styles.h2}>Build with the SDK</h2>
+          <div className={styles.sdkStrip}>
+            <div className={styles.installLine}>
+              <span className={styles.fieldValueMono}>{INSTALL_CMD}</span>
+              <CopyButton text={INSTALL_CMD} className={styles.ghostBtnSm} />
+            </div>
+            <div className={styles.sdkLinks}>
               <a className={styles.resLink} href="https://deepwiki.com/fangorn-network/fangorn" target="_blank" rel="noreferrer">
                 Documentation <span className={styles.resArrow}>→</span>
               </a>
@@ -507,9 +506,9 @@ export default function Home() {
               <a className={styles.resLink} href="https://discord.gg/JDj8RdCVyU" target="_blank" rel="noreferrer">
                 Discord <span className={styles.resArrow}>→</span>
               </a>
-            </section>
-          </aside>
-        </div>
+            </div>
+          </div>
+        </section>
       </main>
     </div>
   );
