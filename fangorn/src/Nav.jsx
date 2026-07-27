@@ -24,7 +24,7 @@ export default function Nav() {
         ) : (
           <button className={styles.ghostBtn} onClick={login} disabled={!ready}>Log in</button>
         )}
-        <a href="https://docs.fangorn.network" className={styles.btn}>Documentation [Coming Soon]</a>
+        <a href="https://deepwiki.com/fangorn-network/fangorn" className={styles.btn}>Documentation</a>
       </div>
     </nav>
   );

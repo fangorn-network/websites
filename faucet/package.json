@@ -1,0 +1,15 @@
+{
+  "name": "fangorn-faucet",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy"
+  },
+  "dependencies": {
+    "viem": "2.52.0"
+  },
+  "devDependencies": {
+    "wrangler": "^4"
+  }
+}

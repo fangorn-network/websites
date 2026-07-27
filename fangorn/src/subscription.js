@@ -18,7 +18,7 @@ import {
 import { arbitrumSepolia } from 'viem/chains';
 import { useAuth } from './authContext.js';
 import { SUBSCRIPTION_ABI } from './subscriptionAbi.js';
-import { USDC_ADDRESS } from './fangorn.js';
+import { USDC_ADDRESS, writeFees } from './fangorn.js';
 
 // The deployed SubscriptionRegistry. import.meta.env is undefined under plain node
 // (the self-check), so guard it — same convention as REGISTRY_ADDRESS.
@@ -108,6 +108,9 @@ export function useSubscription() {
         functionName: 'subscriptionFee',
       });
 
+      // Both writes below need explicit fees — see writeFees() for why.
+      const fees = await writeFees();
+
       // subscribe() pulls the fee via transferFrom, so approve the registry to
       // spend USDC first — but only when the current allowance falls short.
       const allowance = await publicClient.readContract({
@@ -124,6 +127,7 @@ export function useSubscription() {
           args: [SUBSCRIPTION_ADDRESS, fee],
           account,
           chain: arbitrumSepolia,
+          ...fees,
         });
         await publicClient.waitForTransactionReceipt({ hash: approveHash });
       }
@@ -134,6 +138,7 @@ export function useSubscription() {
         functionName: 'subscribe',
         account,
         chain: arbitrumSepolia,
+        ...fees,
       });
       await publicClient.waitForTransactionReceipt({ hash: subscribeHash });
 

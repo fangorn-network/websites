@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { formatEther, formatUnits } from 'viem';
 import styles from './Home.module.css';
 import { useAuth } from './authContext';
-import { usePublisher, useBalances } from './fangorn';
+import { usePublisher, useBalances, useFaucet, FAUCET_ETH, FAUCET_USDC } from './fangorn';
 import { useSubscription, SUBSCRIPTION_WINDOW_DAYS } from './subscription';
 import { useUsage } from './usage';
 import { truncate, explorer, formatBytes } from './format';
@@ -16,7 +16,20 @@ function friendlyError(err) {
   if (/insufficient funds/i.test(msg)) return 'Not enough ETH for gas. Add funds and try again.';
   if (/AlreadyRegistered/i.test(msg)) return 'This wallet is already registered.';
   if (/NotRegistered/i.test(msg)) return 'Register before subscribing.';
+  if (/cooldown/i.test(msg)) return 'Already claimed. Try again tomorrow.';
+  if (/max fee per gas less than block base fee/i.test(msg)) {
+    return 'Network fees moved while confirming. Try again.';
+  }
   return msg;
+}
+
+// The faucet cooldown as "13h 20m" / "45m". Coarse on purpose — it's a hint,
+// not a countdown.
+function formatCooldown(secs) {
+  const hours = Math.floor(secs / 3600);
+  const mins = Math.round((secs % 3600) / 60);
+  if (hours) return `${hours}h ${mins}m`;
+  return mins ? `${mins}m` : 'a moment';
 }
 
 // Pull a friendly identity out of Privy's user object, whichever method they
@@ -44,6 +57,47 @@ function CopyButton({ text, label = 'Copy', className }) {
     <button className={className} onClick={copy} type="button">
       {copied ? 'Copied' : label}
     </button>
+  );
+}
+
+// Testnet faucet: 0.05 ETH + 10 USDC per wallet per 24h — enough to cover the
+// registration fee and its gas. Balances are re-read once the drip is mined.
+function FaucetRow({ onClaimed }) {
+  const { eligible, retryAfter, loading, claiming, claim } = useFaucet();
+  const [error, setError] = useState(null);
+
+  async function onClaim() {
+    setError(null);
+    try {
+      await claim();
+      onClaimed();
+    } catch (err) {
+      setError(friendlyError(err));
+    }
+  }
+
+  function status() {
+    if (error) return error;
+    if (loading) return '…';
+    if (eligible) return `${FAUCET_ETH} ETH + ${FAUCET_USDC} USDC available`;
+    return `Next drip in ${formatCooldown(retryAfter)}`;
+  }
+
+  return (
+    <div className={styles.accountRow}>
+      <span className={styles.accountLabel}>Testnet faucet</span>
+      <div className={styles.walletCell}>
+        <span className={styles.accountValue}>{status()}</span>
+        <button
+          className={styles.fundBtn}
+          onClick={onClaim}
+          disabled={loading || claiming || !eligible}
+          type="button"
+        >
+          {claiming ? 'Dripping…' : 'Claim'}
+        </button>
+      </div>
+    </div>
   );
 }
 
@@ -92,8 +146,9 @@ function PublisherPanel({ registered, details, walletAddress, loading, registeri
     return (
       <div className={styles.emptyState}>
         <p className={styles.emptyText}>
-          Not registered yet. Registering claims your on-chain namespace — one per
-          wallet — so you can publish knowledge graphs.
+          Not registered yet. Registering records your wallet as a publisher in the
+          DataRegistry, giving it one state root of its own, so you can commit and
+          push namespaces.
         </p>
         {error && <div className={styles.formError}>{error}</div>}
         <button className={styles.primaryBtn} onClick={onRegister} disabled={registering} type="button">
@@ -176,7 +231,7 @@ function SubscriptionPanel() {
             <span className={styles.accountValue}>
               {active
                 ? `Active until ${expiresAt?.toLocaleDateString()}`
-                : 'Not active — your first 1 GB is free'}
+                : 'Not active. Your first 1 GB is free'}
             </span>
           </DetailRow>
           <DetailRow label="Fee">
@@ -236,14 +291,18 @@ function UsagePanel() {
   );
 }
 
-function GetStartedCard({ title, body, action, href, onClick }) {
+function GetStartedCard({ title, body, action, href, onClick, soon }) {
   const inner = (
     <>
       <div className={styles.cardTitle}>{title}</div>
       <p className={styles.cardBody}>{body}</p>
-      <span className={styles.cardAction}>{action} →</span>
+      <span className={styles.cardAction}>{soon ? action : `${action} →`}</span>
     </>
   );
+  // `soon` cards are announcements, not links — no target to click yet.
+  if (soon) {
+    return <div className={`${styles.card} ${styles.cardSoon}`} aria-disabled="true">{inner}</div>;
+  }
   return href ? (
     <a className={styles.card} href={href} target="_blank" rel="noreferrer">{inner}</a>
   ) : (
@@ -251,10 +310,51 @@ function GetStartedCard({ title, body, action, href, onClick }) {
   );
 }
 
+// Apps built on Fangorn, shown once the wallet is a registered publisher — Drive
+// is the first place a new publisher has something to do with their namespace.
+const APPS = [
+  {
+    title: 'Fangorn Drive',
+    body: 'Browse, upload, and share the namespaces your wallet publishes.',
+    action: 'Open Drive',
+    href: 'https://drive.fangorn.network',
+  },
+  {
+    title: 'Builder guides',
+    body: 'End-to-end walkthroughs for building your own app on a Fangorn namespace.',
+    action: 'Coming soon',
+    soon: true,
+  },
+];
+
+// Live namespaces to look at.
+const EXAMPLES = [
+  {
+    title: 'Eagle River',
+    body: "What's on this week in Eagle River, published as a namespace anyone can subscribe to.",
+    href: 'https://eagleriver.sond3r.com',
+  },
+  {
+    title: 'Jackson',
+    body: 'The same events graph, run by a different publisher for Jackson.',
+    href: 'https://jackson.sond3r.com',
+  },
+  {
+    title: 'Sherwood',
+    body: 'Sherwood venues and listings, kept current by whoever owns the namespace.',
+    href: 'https://sherwood.sond3r.com',
+  },
+  {
+    title: 'SurgeXT manual',
+    body: 'A product manual you can query instead of scroll through.',
+    href: 'https://surgext-manual.fangorn.network',
+  },
+];
+
 export default function Home() {
   const { user, logout, fundWallet } = useAuth();
   const { registered, details, loading, registering, register } = usePublisher();
-  const { balances } = useBalances();
+  const { balances, refresh: refreshBalances } = useBalances();
   const [copied, setCopied] = useState(false);
   const [funding, setFunding] = useState(false);
 
@@ -300,99 +400,115 @@ export default function Home() {
           </p>
         </section>
 
-        <section className={styles.account}>
-          <div className={styles.accountRow}>
-            <span className={styles.accountLabel}>Signed in with</span>
-            <span className={styles.accountValue}>{method || 'Account'}</span>
-          </div>
-          {contact && (
-            <div className={styles.accountRow}>
-              <span className={styles.accountLabel}>Account</span>
-              <span className={styles.accountValue}>{contact}</span>
+        <div className={styles.layout}>
+          <div className={styles.colMain}>
+            <h2 className={styles.h2}>Publisher</h2>
+            <PublisherPanel
+              registered={registered}
+              details={details}
+              walletAddress={wallet}
+              loading={loading}
+              registering={registering}
+              register={register}
+            />
+
+            {registered && (
+              <>
+                <h2 className={styles.h2}>Apps</h2>
+                <div className={styles.grid}>
+                  {APPS.map((app) => <GetStartedCard key={app.title} {...app} />)}
+                </div>
+              </>
+            )}
+
+            <br></br>
+            <h2 className={styles.h2}>Built on Fangorn</h2>
+            <div className={styles.grid}>
+              {EXAMPLES.map((example) => (
+                <GetStartedCard key={example.title} action="Open" {...example} />
+              ))}
             </div>
-          )}
-          {wallet && (
-            <div className={styles.accountRow}>
-              <span className={styles.accountLabel}>Wallet</span>
-              <div className={styles.walletCell}>
-                <span className={styles.accountValueMono}>{truncate(wallet, 8, 6)}</span>
-                <button
-                  className={styles.fundBtn}
-                  onClick={addFunds}
-                  disabled={funding}
-                  type="button"
-                >
-                  {funding ? 'Funding…' : 'Add funds'}
+          </div>
+
+          <aside className={styles.colSide}>
+            <h2 className={styles.h2}>Account</h2>
+            <section className={styles.account}>
+              <div className={styles.accountRow}>
+                <span className={styles.accountLabel}>Signed in with</span>
+                <span className={styles.accountValue}>{method || 'Account'}</span>
+              </div>
+              {contact && (
+                <div className={styles.accountRow}>
+                  <span className={styles.accountLabel}>Account</span>
+                  <span className={styles.accountValue}>{contact}</span>
+                </div>
+              )}
+              {wallet && (
+                <div className={styles.accountRow}>
+                  <span className={styles.accountLabel}>Wallet</span>
+                  <div className={styles.walletCell}>
+                    <span className={styles.accountValueMono}>{truncate(wallet, 8, 6)}</span>
+                    <button
+                      className={styles.fundBtn}
+                      onClick={addFunds}
+                      disabled={funding}
+                      type="button"
+                    >
+                      {funding ? 'Funding…' : 'Add funds'}
+                    </button>
+                  </div>
+                </div>
+              )}
+              {wallet && (
+                <div className={styles.accountRow}>
+                  <span className={styles.accountLabel}>ETH balance</span>
+                  <span className={styles.accountValue}>{ethBalance}</span>
+                </div>
+              )}
+              {wallet && (
+                <div className={styles.accountRow}>
+                  <span className={styles.accountLabel}>USDC balance</span>
+                  <span className={styles.accountValue}>{usdcBalance}</span>
+                </div>
+              )}
+              {wallet && <FaucetRow onClaimed={refreshBalances} />}
+              {user?.id && (
+                <div className={styles.accountRow}>
+                  <span className={styles.accountLabel}>User ID</span>
+                  <span className={styles.accountValueMono}>{truncate(user.id, 14, 6)}</span>
+                </div>
+              )}
+            </section>
+
+            {registered && (
+              <>
+                <h2 className={styles.h2}>Subscription</h2>
+                <SubscriptionPanel />
+
+                <h2 className={styles.h2}>Storage usage</h2>
+                <UsagePanel />
+              </>
+            )}
+
+            <h2 className={styles.h2}>Build with the SDK</h2>
+            <section className={styles.account}>
+              <div className={styles.accountRow}>
+                <span className={styles.accountValueMono}>{INSTALL_CMD}</span>
+                <button className={styles.copyBtn} onClick={copyInstall} type="button">
+                  {copied ? 'Copied' : 'Copy'}
                 </button>
               </div>
-            </div>
-          )}
-          {wallet && (
-            <div className={styles.accountRow}>
-              <span className={styles.accountLabel}>ETH balance</span>
-              <span className={styles.accountValue}>{ethBalance}</span>
-            </div>
-          )}
-          {wallet && (
-            <div className={styles.accountRow}>
-              <span className={styles.accountLabel}>USDC balance</span>
-              <span className={styles.accountValue}>{usdcBalance}</span>
-            </div>
-          )}
-          {user?.id && (
-            <div className={styles.accountRow}>
-              <span className={styles.accountLabel}>User ID</span>
-              <span className={styles.accountValueMono}>{truncate(user.id, 14, 6)}</span>
-            </div>
-          )}
-        </section>
-
-        <h2 className={styles.h2}>Publisher</h2>
-        <PublisherPanel
-          registered={registered}
-          details={details}
-          walletAddress={wallet}
-          loading={loading}
-          registering={registering}
-          register={register}
-        />
-
-        {registered && (
-          <>
-            <h2 className={styles.h2}>Subscription</h2>
-            <SubscriptionPanel />
-
-            <h2 className={styles.h2}>Storage usage</h2>
-            <UsagePanel />
-          </>
-        )}
-
-        <h2 className={styles.h2}>Get started</h2>
-        <div className={styles.grid}>
-          <GetStartedCard
-            title="Install the SDK"
-            body={copied ? 'Copied to clipboard.' : INSTALL_CMD}
-            action={copied ? 'Copied' : 'Copy command'}
-            onClick={copyInstall}
-          />
-          <GetStartedCard
-            title="Read the docs"
-            body="Define schemas, encrypt by intent, and publish on-chain."
-            action="Open docs"
-            href="https://docs.fangorn.network"
-          />
-          <GetStartedCard
-            title="Explore on GitHub"
-            body="Browse the SDK, x402f, and the Fangorn agent."
-            action="View source"
-            href="https://github.com/fangorn-network/fangorn"
-          />
-          <GetStartedCard
-            title="Join the community"
-            body="Ask questions and share what you're building on Discord."
-            action="Open Discord"
-            href="https://discord.gg/JDj8RdCVyU"
-          />
+              <a className={styles.resLink} href="https://deepwiki.com/fangorn-network/fangorn" target="_blank" rel="noreferrer">
+                Documentation <span className={styles.resArrow}>→</span>
+              </a>
+              <a className={styles.resLink} href="https://github.com/fangorn-network/fangorn" target="_blank" rel="noreferrer">
+                Source on GitHub <span className={styles.resArrow}>→</span>
+              </a>
+              <a className={styles.resLink} href="https://discord.gg/JDj8RdCVyU" target="_blank" rel="noreferrer">
+                Discord <span className={styles.resArrow}>→</span>
+              </a>
+            </section>
+          </aside>
         </div>
       </main>
     </div>

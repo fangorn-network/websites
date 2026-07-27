@@ -56,10 +56,38 @@
 .main {
   flex: 1;
   width: 100%;
-  max-width: 720px;
+  max-width: 1080px;
   margin: 0 auto;
   padding: 56px 32px 80px;
 }
+
+/* Primary column carries the things to click; account/config sits beside it so
+   apps and examples are visible without scrolling past five stacked panels. */
+.layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 48px;
+  align-items: start;
+}
+
+.colMain, .colSide { min-width: 0; }
+
+.resLink {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 11px 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 13px;
+  color: var(--text);
+  text-decoration: none;
+  transition: color 0.15s;
+}
+
+.resLink:last-child { border-bottom: none; }
+.resLink:hover { color: var(--hi); }
+
+.resArrow { color: var(--hi); font-size: 12px; }
 
 .welcome { margin-bottom: 40px; }
 
@@ -187,6 +215,17 @@
 .card:hover {
   border-color: var(--line2);
   background: var(--s2);
+}
+
+/* Not-yet-shipped card: reads as a card, doesn't invite a click. */
+.cardSoon {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.cardSoon:hover {
+  border-color: var(--line);
+  background: var(--s1);
 }
 
 .cardTitle {
@@ -332,4 +371,8 @@
   .userChip { display: none; }
   .main { padding: 40px 20px 64px; }
   .grid { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 940px) {
+  .layout { grid-template-columns: 1fr; gap: 0; }
 }

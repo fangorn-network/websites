@@ -1,145 +1,141 @@
 import { useState } from 'react';
 import styles from './CodeBox.module.css';
 
-const TABS = ['publish', 'consume', 'schema'];
+const TABS = ['commit', 'subscribe', 'cli'];
 
 const PLAIN = {
-  publish: `
+  commit: `
 import { Fangorn, FangornConfig } from '@fangorn-network/sdk';
-const fangorn = await Fangorn.create({
+
+const fangorn = Fangorn.create({
   privateKey: '0x...',
-  storage: { pinata: { jwt: '...', gateway: 'https://...' } },
-  encryption: { lit: true },
-  config: FangornConfig.ArbitrumSepolia,
+  storage: { pinata: { jwt: PINATA_JWT, gateway: PINATA_GATEWAY } },
+  config: FangornConfig,
 });
-await fangorn.publisher.upload({
-  records: [{
-    name: \`track-\${Date.now()}\`,
-    fields: {
-      title: 'Track One',
-      artist: 'Alice',
-      audio: { data: audioBytes, fileType: 'audio/mp3' },
-    },
-  }],
-  schemaName: 'sond3r.demo.v0',
-  gateway: 'https://...',
-}, 1n);
+
+await fangorn.initRepo('rusty-anchor');
+
+const c1 = await fangorn.commit({
+  namespace: 'rusty-anchor',
+  message: 'initial import',
+  vertices: [
+    { id: 't1', tag: 'track', payload: { title: 'Locura', artist: 'Alice' } },
+    { id: 'a1', tag: 'artist', payload: { name: 'Alice' } },
+  ],
+  edges: [{ rel: 'performed_by', from: 't1', to: 'a1' }],
+});
+
+await fangorn.push(c1.commitCid);
   `,
-  consume: `
-import { createWalletClient, http } from 'viem';
-import { privateKeyToAccount } from 'viem/accounts';
-import { arbitrumSepolia } from 'viem/chains';
-import { FangornX402Middleware } from '@fangorn-network/fetch';
-import { FangornConfig } from '@fangorn-network/sdk';
-const walletClient = createWalletClient({
-  account: privateKeyToAccount('0x...'),
-  chain: arbitrumSepolia,
-  transport: http(FangornConfig.ArbitrumSepolia.rpcUrl),
+  subscribe: `
+import { Fangorn } from '@fangorn-network/sdk';
+
+const fangorn = Fangorn.create({
+  privateKey: '0x...',
+  storage: { pinata: { jwt: PINATA_JWT, gateway: PINATA_GATEWAY } },
 });
-const middleware = await FangornX402Middleware.create({
-  walletClient,
-  config: FangornConfig.ArbitrumSepolia,
-  usdcContractAddress: '0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d',
-  usdcDomainName: 'USD Coin',
-  facilitatorAddress: '0x147c24c5Ea2f1EE1ac42AD16820De23bBba45Ef6',
-  domain: 'localhost',
-});
-const result = await middleware.fetchResource({
-  owner: '0x147c24c5Ea2f1EE1ac42AD16820De23bBba45Ef6',
-  schemaName: 'sond3r.demo.v0',
-  name: 'test',
-  baseUrl: 'https://facilitator.fangorn.network',
-});
-console.log(JSON.stringify(result))
+
+for await (const change of fangorn.subscribe({
+  namespace: 'rusty-anchor',
+  owner: '0x1f9840a85d5aF5bf1D1762F925BDADdC4201F984',
+  fromBlock: savedCursor,
+})) {
+  for (const v of change.addedVertices) index.upsert(v.cid, v.payload);
+  for (const cid of change.removedVertexCids) index.remove(cid);
+  persistCursor(change.blockNumber);
+}
   `,
-  schema: `fangorn init
-fangorn schema register my.schema.v0`,
+  cli: `npm i -g @fangorn-network/sdk
+fangorn init
+fangorn register
+fangorn repo init rusty-anchor
+fangorn commit graph.json -m "initial import"
+fangorn push`,
 };
 
 const CODE = {
-  publish: (
+  commit: (
     <pre>
       <Line n={1}><Kw>import</Kw> <Op>{'{'}</Op> <Fn>Fangorn</Fn><Op>,</Op> <Fn>FangornConfig</Fn> <Op>{'}'}</Op> <Kw>from</Kw> <Str>'@fangorn-network/sdk'</Str><Op>;</Op></Line>
       <Line n={2} />
-      <Line n={3}><Kw>const</Kw> <Fn>fangorn</Fn> <Op>=</Op> <Kw>await</Kw> <Fn>Fangorn</Fn><Op>.</Op><Fn>create</Fn><Op>{'({'}</Op></Line>
-      <Line n={4}>&nbsp;&nbsp;<Prop>walletClient</Prop><Op>,</Op></Line>
-      <Line n={5}>&nbsp;&nbsp;<Prop>storage</Prop><Op>:</Op> <Op>{'{'}</Op> <Prop>pinata</Prop><Op>:</Op> <Op>{'{'}</Op> <Prop>jwt</Prop><Op>:</Op> <Str>'...'</Str><Op>,</Op> <Prop>gateway</Prop><Op>:</Op> <Str>'...'</Str> <Op>{'}'}</Op> <Op>{'}'}</Op><Op>,</Op></Line>
-      <Line n={6}>&nbsp;&nbsp;<Prop>encryption</Prop><Op>:</Op> <Op>{'{'}</Op> <Prop>lit</Prop><Op>:</Op> <Kw>true</Kw> <Op>{'}'}</Op><Op>,</Op></Line>
-      <Line n={7}>&nbsp;&nbsp;<Prop>config</Prop><Op>:</Op> <Fn>FangornConfig</Fn><Op>.</Op><Fn>ArbitrumSepolia</Fn><Op>,</Op></Line>
-      <Line n={8}><Op>{'}'}</Op><Op>);</Op></Line>
-      <Line n={9} />
-      <Line n={10}><Kw>await</Kw> <Fn>fangorn</Fn><Op>.</Op><Fn>publisher</Fn><Op>.</Op><Fn>upload</Fn><Op>{'({'}</Op></Line>
-      <Line n={11}>&nbsp;&nbsp;<Prop>records</Prop><Op>:</Op> <Op>[{'{'}</Op></Line>
-      <Line n={12}>&nbsp;&nbsp;&nbsp;&nbsp;<Prop>name</Prop><Op>:</Op> <Str>{`\`track-\${Date.now()}\``}</Str><Op>,</Op></Line>
-      <Line n={13}>&nbsp;&nbsp;&nbsp;&nbsp;<Prop>fields</Prop><Op>:</Op> <Op>{'{'}</Op></Line>
-      <Line n={14}>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<Prop>title</Prop><Op>:</Op> <Str>'Track One'</Str><Op>,</Op></Line>
-      <Line n={15}>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<Prop>artist</Prop><Op>:</Op> <Str>'Alice'</Str><Op>,</Op></Line>
-      <Line n={16}>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<Prop>audio</Prop><Op>:</Op> <Op>{'{'}</Op> <Prop>data</Prop><Op>:</Op> <Fn>audioBytes</Fn><Op>,</Op> <Prop>fileType</Prop><Op>:</Op> <Str>'audio/mp3'</Str> <Op>{'}'}</Op><Op>,</Op> <Cm>{'// encrypted at rest'}</Cm></Line>
-      <Line n={17}>&nbsp;&nbsp;&nbsp;&nbsp;<Op>{'}'}</Op><Op>,</Op></Line>
-      <Line n={18}>&nbsp;&nbsp;<Op>{'}'}</Op><Op>],</Op></Line>
-      <Line n={19}>&nbsp;&nbsp;<Prop>schemaName</Prop><Op>:</Op> <Str>'sond3r.demo.v0'</Str><Op>,</Op></Line>
-      <Line n={20}>&nbsp;&nbsp;<Prop>gateway</Prop><Op>:</Op> <Str>'https://ipfs.io'</Str><Op>,</Op></Line>
-      <Line n={21}><Op>{'}'}</Op><Op>,</Op> <Num>1n</Num><Op>);</Op> <Cm>{'// price in USDC, buyers pay this to unlock'}</Cm><Cursor /></Line>
+      <Line n={3}><Kw>const</Kw> <Fn>fangorn</Fn> <Op>=</Op> <Fn>Fangorn</Fn><Op>.</Op><Fn>create</Fn><Op>{'({'}</Op></Line>
+      <Line n={4}>&nbsp;&nbsp;<Prop>privateKey</Prop><Op>:</Op> <Str>'0x...'</Str><Op>,</Op></Line>
+      <Line n={5}>&nbsp;&nbsp;<Prop>storage</Prop><Op>:</Op> <Op>{'{'}</Op> <Prop>pinata</Prop><Op>:</Op> <Op>{'{'}</Op> <Prop>jwt</Prop><Op>:</Op> <Fn>PINATA_JWT</Fn><Op>,</Op> <Prop>gateway</Prop><Op>:</Op> <Fn>PINATA_GATEWAY</Fn> <Op>{'}'}</Op> <Op>{'}'}</Op><Op>,</Op></Line>
+      <Line n={6}>&nbsp;&nbsp;<Prop>config</Prop><Op>:</Op> <Fn>FangornConfig</Fn><Op>,</Op> <Cm>{'// defaults to Arbitrum Sepolia'}</Cm></Line>
+      <Line n={7}><Op>{'}'}</Op><Op>);</Op></Line>
+      <Line n={8} />
+      <Line n={9}><Kw>await</Kw> <Fn>fangorn</Fn><Op>.</Op><Fn>initRepo</Fn><Op>(</Op><Str>'rusty-anchor'</Str><Op>);</Op> <Cm>{'// a namespace in your one root'}</Cm></Line>
+      <Line n={10} />
+      <Line n={11}><Kw>const</Kw> <Fn>c1</Fn> <Op>=</Op> <Kw>await</Kw> <Fn>fangorn</Fn><Op>.</Op><Fn>commit</Fn><Op>{'({'}</Op> <Cm>{'// one CAR upload, nothing on-chain yet'}</Cm></Line>
+      <Line n={12}>&nbsp;&nbsp;<Prop>namespace</Prop><Op>:</Op> <Str>'rusty-anchor'</Str><Op>,</Op></Line>
+      <Line n={13}>&nbsp;&nbsp;<Prop>message</Prop><Op>:</Op> <Str>'initial import'</Str><Op>,</Op></Line>
+      <Line n={14}>&nbsp;&nbsp;<Prop>vertices</Prop><Op>:</Op> <Op>[</Op></Line>
+      <Line n={15}>&nbsp;&nbsp;&nbsp;&nbsp;<Op>{'{'}</Op> <Prop>id</Prop><Op>:</Op> <Str>'t1'</Str><Op>,</Op> <Prop>tag</Prop><Op>:</Op> <Str>'track'</Str><Op>,</Op> <Prop>payload</Prop><Op>:</Op> <Op>{'{'}</Op> <Prop>title</Prop><Op>:</Op> <Str>'Locura'</Str><Op>,</Op> <Prop>artist</Prop><Op>:</Op> <Str>'Alice'</Str> <Op>{'}'}</Op> <Op>{'}'}</Op><Op>,</Op></Line>
+      <Line n={16}>&nbsp;&nbsp;&nbsp;&nbsp;<Op>{'{'}</Op> <Prop>id</Prop><Op>:</Op> <Str>'a1'</Str><Op>,</Op> <Prop>tag</Prop><Op>:</Op> <Str>'artist'</Str><Op>,</Op> <Prop>payload</Prop><Op>:</Op> <Op>{'{'}</Op> <Prop>name</Prop><Op>:</Op> <Str>'Alice'</Str> <Op>{'}'}</Op> <Op>{'}'}</Op><Op>,</Op></Line>
+      <Line n={17}>&nbsp;&nbsp;<Op>],</Op></Line>
+      <Line n={18}>&nbsp;&nbsp;<Prop>edges</Prop><Op>:</Op> <Op>[{'{'}</Op> <Prop>rel</Prop><Op>:</Op> <Str>'performed_by'</Str><Op>,</Op> <Prop>from</Prop><Op>:</Op> <Str>'t1'</Str><Op>,</Op> <Prop>to</Prop><Op>:</Op> <Str>'a1'</Str> <Op>{'}'}]</Op><Op>,</Op></Line>
+      <Line n={19}><Op>{'}'}</Op><Op>);</Op></Line>
+      <Line n={20} />
+      <Line n={21}><Kw>await</Kw> <Fn>fangorn</Fn><Op>.</Op><Fn>push</Fn><Op>(</Op><Fn>c1</Fn><Op>.</Op><Prop>commitCid</Prop><Op>);</Op> <Cm>{'// fast-forwards your on-chain root'}</Cm><Cursor /></Line>
     </pre>
   ),
-  consume: (
+  subscribe: (
     <pre>
-      <Line n={1}><Kw>import</Kw> <Op>{'{'}</Op> <Fn>createWalletClient</Fn><Op>,</Op> <Fn>http</Fn> <Op>{'}'}</Op> <Kw>from</Kw> <Str>'viem'</Str><Op>;</Op></Line>
-      <Line n={2}><Kw>import</Kw> <Op>{'{'}</Op> <Fn>privateKeyToAccount</Fn> <Op>{'}'}</Op> <Kw>from</Kw> <Str>'viem/accounts'</Str><Op>;</Op></Line>
-      <Line n={3}><Kw>import</Kw> <Op>{'{'}</Op> <Fn>arbitrumSepolia</Fn> <Op>{'}'}</Op> <Kw>from</Kw> <Str>'viem/chains'</Str><Op>;</Op></Line>
-      <Line n={4}><Kw>import</Kw> <Op>{'{'}</Op> <Fn>FangornX402Middleware</Fn> <Op>{'}'}</Op> <Kw>from</Kw> <Str>'@fangorn-network/fetch'</Str><Op>;</Op></Line>
-      <Line n={5}><Kw>import</Kw> <Op>{'{'}</Op> <Fn>FangornConfig</Fn> <Op>{'}'}</Op> <Kw>from</Kw> <Str>'@fangorn-network/sdk'</Str><Op>;</Op></Line>
-      <Line n={6} />
-      <Line n={7}><Kw>const</Kw> <Fn>walletClient</Fn> <Op>=</Op> <Fn>createWalletClient</Fn><Op>{'({'}</Op></Line>
-      <Line n={8}>&nbsp;&nbsp;<Prop>account</Prop><Op>:</Op> <Fn>privateKeyToAccount</Fn><Op>(</Op><Str>'0x...'</Str><Op>),</Op></Line>
-      <Line n={9}>&nbsp;&nbsp;<Prop>chain</Prop><Op>:</Op> <Fn>arbitrumSepolia</Fn><Op>,</Op></Line>
-      <Line n={10}>&nbsp;&nbsp;<Prop>transport</Prop><Op>:</Op> <Fn>http</Fn><Op>(</Op><Fn>FangornConfig</Fn><Op>.</Op><Fn>ArbitrumSepolia</Fn><Op>.</Op><Prop>rpcUrl</Prop><Op>),</Op></Line>
-      <Line n={11}><Op>{'}'}</Op><Op>);</Op></Line>
-      <Line n={12} />
-      <Line n={13}><Kw>const</Kw> <Fn>middleware</Fn> <Op>=</Op> <Kw>await</Kw> <Fn>FangornX402Middleware</Fn><Op>.</Op><Fn>create</Fn><Op>{'({'}</Op></Line>
-      <Line n={14}>&nbsp;&nbsp;<Prop>walletClient</Prop><Op>,</Op></Line>
-      <Line n={15}>&nbsp;&nbsp;<Prop>config</Prop><Op>:</Op> <Fn>FangornConfig</Fn><Op>.</Op><Fn>ArbitrumSepolia</Fn><Op>,</Op></Line>
-      <Line n={16}>&nbsp;&nbsp;<Prop>usdcContractAddress</Prop><Op>:</Op> <Str>'0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d'</Str><Op>,</Op></Line>
-      <Line n={17}>&nbsp;&nbsp;<Prop>usdcDomainName</Prop><Op>:</Op> <Str>'USD Coin'</Str><Op>,</Op></Line>
-      <Line n={18}>&nbsp;&nbsp;<Prop>facilitatorAddress</Prop><Op>:</Op> <Str>'0x147c24c5Ea2f1EE1ac42AD16820De23bBba45Ef6'</Str><Op>,</Op></Line>
-      <Line n={19}>&nbsp;&nbsp;<Prop>domain</Prop><Op>:</Op> <Str>'localhost'</Str><Op>,</Op></Line>
-      <Line n={20}><Op>{'}'}</Op><Op>);</Op></Line>
-      <Line n={21} />
-      <Line n={22}><Kw>const</Kw> <Fn>result</Fn> <Op>=</Op> <Kw>await</Kw> <Fn>middleware</Fn><Op>.</Op><Fn>fetchResource</Fn><Op>{'({'}</Op> <Cm>{'// pays on-chain, decrypts locally'}</Cm></Line>
-      <Line n={23}>&nbsp;&nbsp;<Prop>owner</Prop><Op>:</Op> <Str>'0x147c24c5Ea2f1EE1ac42AD16820De23bBba45Ef6'</Str><Op>,</Op></Line>
-      <Line n={24}>&nbsp;&nbsp;<Prop>schemaName</Prop><Op>:</Op> <Str>'sond3r.demo.v0'</Str><Op>,</Op></Line>
-      <Line n={25}>&nbsp;&nbsp;<Prop>name</Prop><Op>:</Op> <Str>'test'</Str><Op>,</Op></Line>
-      <Line n={26}>&nbsp;&nbsp;<Prop>baseUrl</Prop><Op>:</Op> <Str>'https://facilitator.fangorn.network'</Str><Op>,</Op></Line>
-      <Line n={27}><Op>{'}'}</Op><Op>);</Op></Line>
-      <Line n={28} />
-      <Line n={29}><Fn>console</Fn><Op>.</Op><Fn>log</Fn><Op>(</Op><Fn>JSON</Fn><Op>.</Op><Fn>stringify</Fn><Op>(</Op><Fn>result</Fn><Op>));</Op> <Cm>{'// { success, data: decrypted fields }'}</Cm><Cursor /></Line>
+      <Line n={1}><Kw>import</Kw> <Op>{'{'}</Op> <Fn>Fangorn</Fn> <Op>{'}'}</Op> <Kw>from</Kw> <Str>'@fangorn-network/sdk'</Str><Op>;</Op></Line>
+      <Line n={2} />
+      <Line n={3}><Kw>const</Kw> <Fn>fangorn</Fn> <Op>=</Op> <Fn>Fangorn</Fn><Op>.</Op><Fn>create</Fn><Op>{'({'}</Op></Line>
+      <Line n={4}>&nbsp;&nbsp;<Prop>privateKey</Prop><Op>:</Op> <Str>'0x...'</Str><Op>,</Op></Line>
+      <Line n={5}>&nbsp;&nbsp;<Prop>storage</Prop><Op>:</Op> <Op>{'{'}</Op> <Prop>pinata</Prop><Op>:</Op> <Op>{'{'}</Op> <Prop>jwt</Prop><Op>:</Op> <Fn>PINATA_JWT</Fn><Op>,</Op> <Prop>gateway</Prop><Op>:</Op> <Fn>PINATA_GATEWAY</Fn> <Op>{'}'}</Op> <Op>{'}'}</Op><Op>,</Op></Line>
+      <Line n={6}><Op>{'}'}</Op><Op>);</Op></Line>
+      <Line n={7} />
+      <Line n={8}><Cm>{'// A light client: logs from the RPC node, blocks from IPFS.'}</Cm></Line>
+      <Line n={9}><Cm>{'// No subgraph. No indexer.'}</Cm></Line>
+      <Line n={10}><Kw>for await</Kw> <Op>(</Op><Kw>const</Kw> <Fn>change</Fn> <Kw>of</Kw> <Fn>fangorn</Fn><Op>.</Op><Fn>subscribe</Fn><Op>{'({'}</Op></Line>
+      <Line n={11}>&nbsp;&nbsp;<Prop>namespace</Prop><Op>:</Op> <Str>'rusty-anchor'</Str><Op>,</Op></Line>
+      <Line n={12}>&nbsp;&nbsp;<Prop>owner</Prop><Op>:</Op> <Str>'0x1f9840a85d5aF5bf1D1762F925BDADdC4201F984'</Str><Op>,</Op></Line>
+      <Line n={13}>&nbsp;&nbsp;<Prop>fromBlock</Prop><Op>:</Op> <Fn>savedCursor</Fn><Op>,</Op> <Cm>{'// omit to start live from the on-chain tip'}</Cm></Line>
+      <Line n={14}><Op>{'}))'}</Op> <Op>{'{'}</Op></Line>
+      <Line n={15}>&nbsp;&nbsp;<Kw>for</Kw> <Op>(</Op><Kw>const</Kw> <Fn>v</Fn> <Kw>of</Kw> <Fn>change</Fn><Op>.</Op><Prop>addedVertices</Prop><Op>)</Op> <Fn>index</Fn><Op>.</Op><Fn>upsert</Fn><Op>(</Op><Fn>v</Fn><Op>.</Op><Prop>cid</Prop><Op>,</Op> <Fn>v</Fn><Op>.</Op><Prop>payload</Prop><Op>);</Op></Line>
+      <Line n={16}>&nbsp;&nbsp;<Kw>for</Kw> <Op>(</Op><Kw>const</Kw> <Fn>cid</Fn> <Kw>of</Kw> <Fn>change</Fn><Op>.</Op><Prop>removedVertexCids</Prop><Op>)</Op> <Fn>index</Fn><Op>.</Op><Fn>remove</Fn><Op>(</Op><Fn>cid</Fn><Op>);</Op></Line>
+      <Line n={17}>&nbsp;&nbsp;<Fn>persistCursor</Fn><Op>(</Op><Fn>change</Fn><Op>.</Op><Prop>blockNumber</Prop><Op>);</Op> <Cm>{'// restart resumes here'}</Cm></Line>
+      <Line n={18}><Op>{'}'}</Op><Cursor /></Line>
     </pre>
   ),
-  schema: (
+  cli: (
     <div className={styles.cli}>
       <CliLine prompt>npm i -g @fangorn-network/sdk</CliLine>
       <CliLine prompt>fangorn init</CliLine>
-      <CliLine prompt>fangorn schema register my.schema.v0</CliLine>
-      <CliBlank />
-      <CliSection title="Chain selection">
-        <CliPrompt label="Pick your chain." value="Arbitrum Sepolia" />
-        <CliInfo>Selected chain: Arbitrum Sepolia</CliInfo>
+      <CliSection title="Fangorn Setup">
+        <CliPrompt label="Wallet private key:" value="0x••••" />
+        <CliPrompt label="Pinata JWT:" value="••••" />
+        <CliPrompt label="Pinata Gateway URL:" value="https://your-gateway.mypinata.cloud" />
+        <CliInfo>Config saved to ~/.fangorn/config.json</CliInfo>
       </CliSection>
       <CliBlank />
-      <CliSection title="Schema Registration">
-        <CliPrompt label="Path to your JSON schema file:" value="./schema.json" />
-        <CliPrompt label="Schema definition:" value={null} />
-        <CliJson>{`{
-  "title":  { "@type": "string" },
-  "artist": { "@type": "string" },
-  "audio":  { "@type": "encrypted", "gadget": "settled" }
+      <CliLine prompt>fangorn register</CliLine>
+      <CliInfo>Publisher: 0x1f9840a85d5aF5bf1D1762F925BDADdC4201F984</CliInfo>
+      <CliBlank />
+      <CliLine prompt>fangorn repo init rusty-anchor</CliLine>
+      <CliInfo>Namespace: rusty-anchor &nbsp;HEAD: (none)</CliInfo>
+      <CliBlank />
+      <CliLine prompt>fangorn commit graph.json -m "initial import"</CliLine>
+      <CliJson>{`{
+  "vertices": [
+    { "id": "t1", "tag": "track",  "payload": { "title": "Locura" } },
+    { "id": "a1", "tag": "artist", "payload": { "name": "Alice" } }
+  ],
+  "edges": [{ "rel": "performed_by", "from": "t1", "to": "a1" }]
 }`}</CliJson>
-        <CliPrompt label="Register this schema?" value="Yes" />
-      </CliSection>
+      <CliResult title="Committed locally">
+        <CliResultRow label="Commit:" value="bafyreihdwdcefgh4dqkjv67uzcmw7oje...4pbmomqfjrhtb2q" />
+        <CliResultRow label="Parent:" value="(root)" />
+        <CliResultRow label="Staged:" value="2 vertice(s) / 1 edge(s)" />
+      </CliResult>
       <CliBlank />
-      <CliResult>
-        <CliResultRow label="Schema ID:" value="0x79e4f0361e5c1ebe1cbe8e88d6a29729...805fb0d" />
-        <CliResultRow label="CID:" value="bafkreibiopernk7njq3dobvl77by6nsheihcigh3nrr77ifm5gr23ttwv4" />
+      <CliLine prompt>fangorn push</CliLine>
+      <CliResult title="On-chain tip advanced">
+        <CliResultRow label="Tx:" value="0x8f3c1a...b29d" />
+        <CliResultRow label="Tip:" value="bafyreihdwdcefgh4dqkjv67uzcmw7oje...4pbmomqfjrhtb2q" />
       </CliResult>
     </div>
   ),
@@ -203,12 +199,12 @@ function CliJson({ children }) {
   );
 }
 
-function CliResult({ children }) {
+function CliResult({ title, children }) {
   return (
     <div className={styles.cliResultBlock}>
       <div className={styles.cliResultHeader}>
         <span className={styles.cliDiamond}>◇</span>
-        <span className={styles.cliResultTitle}>Schema registered</span>
+        <span className={styles.cliResultTitle}>{title}</span>
       </div>
       <div className={styles.cliResultBody}>
         {children}
@@ -240,11 +236,10 @@ function Str({ children }) { return <span className={styles.str}>{children}</spa
 function Op({ children }) { return <span className={styles.op}>{children}</span>; }
 function Cm({ children }) { return <span className={styles.cm}>{children}</span>; }
 function Prop({ children }) { return <span className={styles.prop}>{children}</span>; }
-function Num({ children }) { return <span className={styles.num}>{children}</span>; }
 function Cursor() { return <span className={styles.cursor} />; }
 
 export default function CodeBox() {
-  const [active, setActive] = useState('publish');
+  const [active, setActive] = useState('commit');
   const [copied, setCopied] = useState(false);
 
   function handleCopy() {
