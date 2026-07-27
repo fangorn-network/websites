@@ -16,7 +16,7 @@ export default function Hero() {
     <section className={styles.hero}>
       <h1 className={styles.h1}>Intent-bound data for the agentic web.</h1>
       <p className={styles.sub}>
-        Define schemas, encrypt by intent, and publish on-chain: enable agents to discover and purchase the data you actually want, entirely free from algorithmic gatekeepers.
+        Commit knowledge graphs the way you commit code. Your data stays in storage you control. All the chain holds is one pointer per publisher, which is enough for anyone (or any agent) to clone it, check who wrote it, and walk the whole history without running an indexer.
       </p>
 
       <div className={styles.installWrap}>
@@ -29,7 +29,7 @@ export default function Hero() {
       </div>
 
       <div className={styles.btns}>
-        <a href="https://docs.fangorn.network" className={styles.btnA}>Read the Docs [Coming Soon]</a>
+        <a href="https://deepwiki.com/fangorn-network/fangorn" className={styles.btnA}>Docs</a>
         <a href="https://github.com/fangorn-network/fangorn" className={styles.btnB}>View on GitHub</a>
       </div>
 

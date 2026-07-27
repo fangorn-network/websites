@@ -1,0 +1,19 @@
+name = "fangorn-faucet"
+main = "src/index.js"
+compatibility_date = "2025-07-18"
+compatibility_flags = ["nodejs_compat"]
+
+# Per-address 24h cooldown. Create with:
+#   wrangler kv namespace create FAUCET_KV
+# then paste the returned id below.
+[[kv_namespaces]]
+binding = "FAUCET_KV"
+id = "3a6d6b5c154c488d827fd6751008faa3"
+
+[vars]
+# FAUCET_PRIVATE_KEY is a secret: `wrangler secret put FAUCET_PRIVATE_KEY`
+ARBITRUM_SEPOLIA_RPC = "https://sepolia-rollup.arbitrum.io/rpc"
+USDC_ADDRESS = "0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d"
+
+[observability]
+enabled = true

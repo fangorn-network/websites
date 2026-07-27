@@ -4,7 +4,7 @@ const team = [
   {
     name: 'Tony Riemer',
     role: 'Co-Founder',
-    bio: 'Architect of secure systems. Enterprise fintech at Capital One, deep blockchain infrastructure at Ideal Labs. Multiple Web3 Foundation grants. Specializes in translating advanced cryptographic theory into production-ready code.',
+    bio: 'Builds secure systems. Enterprise fintech at Capital One, then blockchain infrastructure at Ideal Labs, with several Web3 Foundation grants along the way. Turns cryptography papers into code that ships.',
     image: '/team/tony.jpg',
     links: {
       linkedin: 'https://www.linkedin.com/in/tony-riemer/',
@@ -14,7 +14,7 @@ const team = [
   {
     name: 'Coleman Irby',
     role: 'Co-Founder',
-    bio: 'Full stack engineer with a Masters in Physics. Builds the graph and indexing layer. Focused on making encrypted data discoverable without making it accessible.',
+    bio: 'Full stack engineer with a Masters in Physics. Builds the graph and indexing layer, where the hard part is making encrypted data discoverable without making it readable.',
     image: '/team/coleman.jpg',
     links: {
       linkedin: 'https://www.linkedin.com/in/coleman-irby',
@@ -48,7 +48,7 @@ export default function Team() {
           {/* <h2 className={styles.h2}>Built by two people who care about the problem.</h2> */}
         </div>
         <p className={styles.headerRight}>
-          We're cryptography and systems engineers who got tired of watching platforms extract value from data they don't own. Fangorn is what we wanted to exist.
+          We're cryptography and systems engineers who got tired of watching platforms make money off data they didn't own. Fangorn is the thing we kept wishing already existed.
         </p>
       </div>
 

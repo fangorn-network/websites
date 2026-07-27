@@ -1,4 +1,5 @@
 import styles from './Nav.module.css';
+import { useAuth } from './authContext';
 
 const DiscordIcon = () => (
   <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
@@ -7,6 +8,8 @@ const DiscordIcon = () => (
 );
 
 export default function Nav() {
+  const { ready, authenticated, login, logout } = useAuth();
+
   return (
     <nav className={styles.nav}>
       <a href="#" className={styles.logo}>Fangorn</a>
@@ -16,7 +19,12 @@ export default function Nav() {
         <a href="https://discord.gg/JDj8RdCVyU" className={styles.link} aria-label="Discord">
           <DiscordIcon />
         </a>
-        <a href="https://docs.fangorn.network" className={styles.btn}>Documentation [Coming Soon]</a>
+        {authenticated ? (
+          <button className={styles.ghostBtn} onClick={logout}>Log out</button>
+        ) : (
+          <button className={styles.ghostBtn} onClick={login} disabled={!ready}>Log in</button>
+        )}
+        <a href="https://deepwiki.com/fangorn-network/fangorn" className={styles.btn}>Documentation</a>
       </div>
     </nav>
   );

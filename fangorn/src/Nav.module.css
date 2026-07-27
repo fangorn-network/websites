@@ -53,6 +53,27 @@
   background: var(--hi2);
 }
 
+.ghostBtn {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+  background: var(--s2);
+  border: 1px solid var(--line2);
+  padding: 6px 15px;
+  border-radius: 6px;
+  transition: border-color 0.15s, color 0.15s;
+}
+
+.ghostBtn:hover:not(:disabled) {
+  border-color: var(--dim);
+  color: var(--text);
+}
+
+.ghostBtn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
 @media (max-width: 860px) {
   .nav { padding: 0 20px; }
   .link { display: none; }

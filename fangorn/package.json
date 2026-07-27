@@ -9,8 +9,13 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@fangorn-network/sdk": "2026.07.27",
+    "@privy-io/react-auth": "^3.33.1",
+    "buffer": "^6.0.3",
+    "multiformats": "^14.0.0",
     "react": "^19.2.4",
-    "react-dom": "^19.2.4"
+    "react-dom": "^19.2.4",
+    "viem": "2.52.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.4",

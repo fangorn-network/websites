@@ -1,0 +1,406 @@
+.page {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 32px;
+  height: 56px;
+  border-bottom: 1px solid var(--line);
+  background: rgba(8, 8, 10, 0.95);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  backdrop-filter: blur(8px);
+}
+
+.logo {
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--text);
+  letter-spacing: -0.01em;
+}
+
+.topRight {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.userChip {
+  font-size: 12px;
+  color: var(--sub);
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.logoutBtn {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+  background: var(--s2);
+  border: 1px solid var(--line2);
+  padding: 6px 15px;
+  border-radius: 6px;
+  transition: border-color 0.15s;
+}
+
+.logoutBtn:hover { border-color: var(--dim); }
+
+.main {
+  flex: 1;
+  width: 100%;
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 56px 32px 80px;
+}
+
+.welcome { margin-bottom: 40px; }
+
+/* Every block below the welcome owns its own top gap, so no block needs a spacer
+   element and the rhythm can't drift between block types. */
+.section { margin-top: 48px; }
+
+.eyebrow {
+  font-family: var(--mono);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--hi);
+}
+
+.h1 {
+  font-size: clamp(26px, 4vw, 36px);
+  font-weight: 400;
+  line-height: 1.15;
+  letter-spacing: -0.03em;
+  color: var(--text);
+  margin: 10px 0 12px;
+}
+
+.sub {
+  font-size: 15px;
+  font-weight: 300;
+  line-height: 1.7;
+  color: var(--sub);
+  max-width: 460px;
+}
+
+.h2 {
+  font-size: 13px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--sub);
+  margin-bottom: 16px;
+}
+
+/* ── Account panel ─────────────────────────────────────────────────────────
+   One panel, three columns: the setup order the contracts enforce. auto-fit
+   carries it from 3 up to 2 up to 1 with no media query of its own. */
+
+.accountPanel {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  /* Dividers as grid gaps showing the panel background through, not borders on
+     the columns: auto-fit can wrap to 2 or 1 up, and a border-right would then
+     strand a hairline against the panel edge. A gap is right in every layout. */
+  gap: 1px;
+  background: var(--line);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.accountCol {
+  padding: 20px 24px 24px;
+  background: var(--s1);
+}
+
+.colHead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 20px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--line);
+}
+
+.colTitle {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+  margin-right: auto;
+}
+
+.stateDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+/* State is always spelled out beside the dot — the colour never carries it alone. */
+.stateGood { background: var(--g1); }
+.statePending { background: var(--dim); }
+.stateWarn { background: var(--orange); }
+
+.stateLabel {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--sub);
+  white-space: nowrap;
+}
+
+.colText {
+  font-size: 13px;
+  font-weight: 300;
+  line-height: 1.6;
+  color: var(--sub);
+  margin-bottom: 14px;
+}
+
+.pending {
+  font-size: 13px;
+  font-weight: 300;
+  color: var(--sub);
+}
+
+/* ── Fields ────────────────────────────────────────────────────────────────
+   Value under label, not opposite it. A column is ~340px at full width, and a
+   space-between row there gets pushed apart by its own content. */
+
+.field { margin-bottom: 20px; }
+.field:last-child { margin-bottom: 0; }
+
+.fieldLabel {
+  font-family: var(--mono);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--sub);
+  margin-bottom: 7px;
+}
+
+.fieldValue {
+  font-size: 13px;
+  color: var(--text);
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+.fieldValueMono {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--text);
+  overflow-wrap: anywhere;
+  transition: color 0.15s;
+}
+
+a.fieldValueMono:hover { color: var(--hi); }
+
+.fieldNote { color: var(--sub); }
+
+.inlineValue {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+/* ── Meters ────────────────────────────────────────────────────────────────
+   Magnitude against a limit. One hue, quiet — the numbers underneath stay the
+   precise read, the bar only answers "near the cap?". */
+
+.meterTrack {
+  height: 4px;
+  border-radius: 2px;
+  background: var(--line);
+  overflow: hidden;
+  margin-bottom: 7px;
+}
+
+.meterFill {
+  height: 100%;
+  border-radius: 2px;
+  background: var(--hi);
+  transition: width 0.3s ease;
+}
+
+.meterFull { background: var(--orange); }
+
+/* ── Buttons ───────────────────────────────────────────────────────────────*/
+
+.primaryBtn {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--bg);
+  background: var(--hi);
+  border: none;
+  padding: 9px 18px;
+  border-radius: 6px;
+  transition: background 0.15s;
+}
+
+.primaryBtn:hover:not(:disabled) { background: var(--hi2); }
+.primaryBtn:disabled { opacity: 0.4; cursor: default; }
+
+.ghostBtn {
+  margin-top: 10px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--hi);
+  background: var(--s2);
+  border: 1px solid var(--line2);
+  padding: 6px 14px;
+  border-radius: 6px;
+  white-space: nowrap;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.ghostBtn:hover:not(:disabled) {
+  border-color: var(--hi);
+  background: var(--s3);
+}
+
+.ghostBtn:disabled {
+  color: var(--sub);
+  cursor: default;
+}
+
+/* Sits beside a value rather than under it, so it must not be squeezed. */
+.ghostBtnSm {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--sub);
+  background: var(--s2);
+  border: 1px solid var(--line2);
+  padding: 3px 9px;
+  border-radius: 5px;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: border-color 0.15s, color 0.15s;
+}
+
+.ghostBtnSm:hover { border-color: var(--dim); color: var(--text); }
+
+.formError {
+  font-size: 12px;
+  color: var(--orange);
+  line-height: 1.5;
+  margin-top: 6px;
+}
+
+/* ── Cards ─────────────────────────────────────────────────────────────────*/
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 12px;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  text-align: left;
+  gap: 6px;
+  background: var(--s1);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 20px;
+  transition: border-color 0.15s, background 0.15s;
+  font-family: var(--sans);
+}
+
+.card:hover {
+  border-color: var(--line2);
+  background: var(--s2);
+}
+
+/* Not-yet-shipped card: reads as a card, doesn't invite a click. */
+.cardSoon {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.cardSoon:hover {
+  border-color: var(--line);
+  background: var(--s1);
+}
+
+.cardTitle {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text);
+}
+
+.cardBody {
+  font-size: 13px;
+  font-weight: 300;
+  line-height: 1.55;
+  color: var(--sub);
+  min-height: 40px;
+}
+
+.cardAction {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--hi);
+  margin-top: 4px;
+}
+
+/* ── SDK strip ─────────────────────────────────────────────────────────────*/
+
+.sdkStrip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px 32px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--s1);
+  padding: 16px 20px;
+}
+
+.installLine {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.sdkLinks {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 24px;
+}
+
+.resLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text);
+  text-decoration: none;
+  white-space: nowrap;
+  transition: color 0.15s;
+}
+
+.resLink:hover { color: var(--hi); }
+
+.resArrow { color: var(--hi); font-size: 12px; }
+
+@media (max-width: 720px) {
+  .topbar { padding: 0 20px; }
+  .userChip { display: none; }
+  .main { padding: 40px 20px 64px; }
+}

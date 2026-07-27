@@ -36,3 +36,12 @@ body {
 
 a { text-decoration: none; }
 button { cursor: pointer; font-family: var(--sans); }
+
+.appSplash {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--sub);
+  font-size: 14px;
+}
