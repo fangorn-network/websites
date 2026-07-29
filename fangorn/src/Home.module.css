@@ -61,35 +61,11 @@
   padding: 56px 32px 80px;
 }
 
-/* Primary column carries the things to click; account/config sits beside it so
-   apps and examples are visible without scrolling past five stacked panels. */
-.layout {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 320px;
-  gap: 48px;
-  align-items: start;
-}
-
-.colMain, .colSide { min-width: 0; }
-
-.resLink {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 11px 0;
-  border-bottom: 1px solid var(--line);
-  font-size: 13px;
-  color: var(--text);
-  text-decoration: none;
-  transition: color 0.15s;
-}
-
-.resLink:last-child { border-bottom: none; }
-.resLink:hover { color: var(--hi); }
-
-.resArrow { color: var(--hi); font-size: 12px; }
-
 .welcome { margin-bottom: 40px; }
+
+/* Every block below the welcome owns its own top gap, so no block needs a spacer
+   element and the rhythm can't drift between block types. */
+.section { margin-top: 48px; }
 
 .eyebrow {
   font-family: var(--mono);
@@ -116,73 +92,6 @@
   max-width: 460px;
 }
 
-.account {
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  background: var(--s1);
-  padding: 6px 20px;
-  margin-bottom: 48px;
-}
-
-.accountRow {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 14px 0;
-  border-bottom: 1px solid var(--line);
-}
-
-.accountRow:last-child { border-bottom: none; }
-
-.accountLabel {
-  font-size: 13px;
-  color: var(--sub);
-}
-
-.accountValue {
-  font-size: 13px;
-  color: var(--text);
-  text-align: right;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.accountValueMono {
-  font-family: var(--mono);
-  font-size: 12px;
-  color: var(--text);
-}
-
-.walletCell {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.fundBtn {
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--hi);
-  background: var(--s2);
-  border: 1px solid var(--line2);
-  padding: 5px 12px;
-  border-radius: 6px;
-  white-space: nowrap;
-  transition: border-color 0.15s, background 0.15s;
-}
-
-.fundBtn:hover:not(:disabled) {
-  border-color: var(--hi);
-  background: var(--s3);
-}
-
-.fundBtn:disabled {
-  color: var(--sub);
-  cursor: default;
-}
-
 .h2 {
   font-size: 13px;
   font-weight: 500;
@@ -192,9 +101,207 @@
   margin-bottom: 16px;
 }
 
+/* ── Account panel ─────────────────────────────────────────────────────────
+   One panel, three columns: the setup order the contracts enforce. auto-fit
+   carries it from 3 up to 2 up to 1 with no media query of its own. */
+
+.accountPanel {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  /* Dividers as grid gaps showing the panel background through, not borders on
+     the columns: auto-fit can wrap to 2 or 1 up, and a border-right would then
+     strand a hairline against the panel edge. A gap is right in every layout. */
+  gap: 1px;
+  background: var(--line);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.accountCol {
+  padding: 20px 24px 24px;
+  background: var(--s1);
+}
+
+.colHead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 20px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--line);
+}
+
+.colTitle {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+  margin-right: auto;
+}
+
+.stateDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+/* State is always spelled out beside the dot — the colour never carries it alone. */
+.stateGood { background: var(--g1); }
+.statePending { background: var(--dim); }
+.stateWarn { background: var(--orange); }
+
+.stateLabel {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--sub);
+  white-space: nowrap;
+}
+
+.colText {
+  font-size: 13px;
+  font-weight: 300;
+  line-height: 1.6;
+  color: var(--sub);
+  margin-bottom: 14px;
+}
+
+.pending {
+  font-size: 13px;
+  font-weight: 300;
+  color: var(--sub);
+}
+
+/* ── Fields ────────────────────────────────────────────────────────────────
+   Value under label, not opposite it. A column is ~340px at full width, and a
+   space-between row there gets pushed apart by its own content. */
+
+.field { margin-bottom: 20px; }
+.field:last-child { margin-bottom: 0; }
+
+.fieldLabel {
+  font-family: var(--mono);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--sub);
+  margin-bottom: 7px;
+}
+
+.fieldValue {
+  font-size: 13px;
+  color: var(--text);
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+.fieldValueMono {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--text);
+  overflow-wrap: anywhere;
+  transition: color 0.15s;
+}
+
+a.fieldValueMono:hover { color: var(--hi); }
+
+.fieldNote { color: var(--sub); }
+
+.inlineValue {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+/* ── Meters ────────────────────────────────────────────────────────────────
+   Magnitude against a limit. One hue, quiet — the numbers underneath stay the
+   precise read, the bar only answers "near the cap?". */
+
+.meterTrack {
+  height: 4px;
+  border-radius: 2px;
+  background: var(--line);
+  overflow: hidden;
+  margin-bottom: 7px;
+}
+
+.meterFill {
+  height: 100%;
+  border-radius: 2px;
+  background: var(--hi);
+  transition: width 0.3s ease;
+}
+
+.meterFull { background: var(--orange); }
+
+/* ── Buttons ───────────────────────────────────────────────────────────────*/
+
+.primaryBtn {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--bg);
+  background: var(--hi);
+  border: none;
+  padding: 9px 18px;
+  border-radius: 6px;
+  transition: background 0.15s;
+}
+
+.primaryBtn:hover:not(:disabled) { background: var(--hi2); }
+.primaryBtn:disabled { opacity: 0.4; cursor: default; }
+
+.ghostBtn {
+  margin-top: 10px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--hi);
+  background: var(--s2);
+  border: 1px solid var(--line2);
+  padding: 6px 14px;
+  border-radius: 6px;
+  white-space: nowrap;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.ghostBtn:hover:not(:disabled) {
+  border-color: var(--hi);
+  background: var(--s3);
+}
+
+.ghostBtn:disabled {
+  color: var(--sub);
+  cursor: default;
+}
+
+/* Sits beside a value rather than under it, so it must not be squeezed. */
+.ghostBtnSm {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--sub);
+  background: var(--s2);
+  border: 1px solid var(--line2);
+  padding: 3px 9px;
+  border-radius: 5px;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: border-color 0.15s, color 0.15s;
+}
+
+.ghostBtnSm:hover { border-color: var(--dim); color: var(--text); }
+
+.formError {
+  font-size: 12px;
+  color: var(--orange);
+  line-height: 1.5;
+  margin-top: 6px;
+}
+
+/* ── Cards ─────────────────────────────────────────────────────────────────*/
+
 .grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
   gap: 12px;
 }
 
@@ -249,130 +356,51 @@
   margin-top: 4px;
 }
 
-/* Buckets */
+/* ── SDK strip ─────────────────────────────────────────────────────────────*/
 
-.emptyState {
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  background: var(--s1);
-  padding: 28px 24px;
-  margin-bottom: 48px;
+.sdkStrip {
   display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 4px;
-}
-
-.emptyText {
-  font-size: 13px;
-  font-weight: 300;
-  line-height: 1.6;
-  color: var(--sub);
-  max-width: 420px;
-}
-
-.formError {
-  font-size: 12px;
-  color: var(--orange);
-}
-
-.primaryBtn {
-  align-self: flex-start;
-  margin-top: 8px;
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--bg);
-  background: var(--hi);
-  border: none;
-  padding: 9px 18px;
-  border-radius: 6px;
-  transition: background 0.15s;
-}
-
-.primaryBtn:hover:not(:disabled) { background: var(--hi2); }
-.primaryBtn:disabled { opacity: 0.4; cursor: default; }
-
-.bucketList {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  margin-bottom: 48px;
-}
-
-.bucketItem {
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px 32px;
   border: 1px solid var(--line);
   border-radius: 10px;
   background: var(--s1);
   padding: 16px 20px;
 }
 
-.bucketHead {
+.installLine {
   display: flex;
   align-items: center;
-  gap: 10px;
-  margin-bottom: 4px;
+  gap: 12px;
+  min-width: 0;
 }
 
-.bucketDetails {
-  margin-bottom: 12px;
-}
-
-.bucketName {
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--text);
-}
-
-.bucketSlug {
-  font-family: var(--mono);
-  font-size: 11px;
-  color: var(--hi);
-  background: var(--s3);
-  border: 1px solid var(--line2);
-  padding: 2px 8px;
-  border-radius: 5px;
-}
-
-.deployRow {
+.sdkLinks {
   display: flex;
   align-items: center;
-  gap: 10px;
+  flex-wrap: wrap;
+  gap: 24px;
 }
 
-.deployCmd {
-  flex: 1;
-  font-family: var(--mono);
-  font-size: 12px;
-  color: var(--sub);
-  background: var(--bg);
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  padding: 8px 12px;
-  overflow-x: auto;
-  white-space: nowrap;
-}
-
-.copyBtn {
-  font-size: 12px;
-  font-weight: 500;
+.resLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
   color: var(--text);
-  background: var(--s2);
-  border: 1px solid var(--line2);
-  padding: 8px 14px;
-  border-radius: 6px;
+  text-decoration: none;
   white-space: nowrap;
-  transition: border-color 0.15s;
+  transition: color 0.15s;
 }
 
-.copyBtn:hover { border-color: var(--dim); }
+.resLink:hover { color: var(--hi); }
+
+.resArrow { color: var(--hi); font-size: 12px; }
 
 @media (max-width: 720px) {
   .topbar { padding: 0 20px; }
   .userChip { display: none; }
   .main { padding: 40px 20px 64px; }
-  .grid { grid-template-columns: 1fr; }
-}
-
-@media (max-width: 940px) {
-  .layout { grid-template-columns: 1fr; gap: 0; }
 }

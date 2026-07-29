@@ -48,4 +48,20 @@ assert.ok(cid.toString().startsWith('bafyrei'));
 const sibling = CID.createV1(0x55, cid.multihash);
 assert.equal(sibling.multihash.digest.join(), cid.multihash.digest.join());
 
+// The storage meters: the worker's KV counters are eventually consistent and are
+// debited on grant, so `used` can legitimately exceed the cap. The bar must clamp
+// and the headroom note must never go negative.
+const { meterState } = await import('./format.js');
+assert.equal(meterState(500, 0), null, 'limit 0 = gate off, no bar');
+assert.equal(meterState(500, undefined), null, 'no ceiling to draw');
+assert.equal(meterState(0, 1000).pct, 0, 'zero usage draws nothing');
+assert.equal(meterState(500, 1000).pct, 50);
+assert.equal(meterState(1, 1000).pct, 2, 'a sliver stays visible');
+assert.equal(meterState(500, 1000).full, false);
+assert.equal(meterState(950, 1000).full, true, '>=90% flips to the warning state');
+assert.equal(meterState(950, 1000).remaining, 50);
+const over = meterState(1500, 1000);
+assert.equal(over.pct, 100, 'overshoot clamps to a full bar');
+assert.equal(over.remaining, 0, 'headroom never goes negative');
+
 console.log('fangorn self-check OK');
