@@ -444,40 +444,39 @@ export default function Home() {
       </header>
 
       <main className={styles.main}>
-        {/* Account lives in a side panel: it's setup state you glance at, not the
-            thing you came to do. The apps and examples get the main column. */}
-        <aside className={styles.aside}>
-          <h2 className={styles.h2}>Account</h2>
-          {/* Wallet, publisher, storage stay in this order in every state — it's the
-              order the contracts enforce: fund, register, then subscribe. */}
-          <section className={styles.accountPanel}>
-            {wallet && (
-              <WalletColumn
-                wallet={wallet}
-                balances={balances}
-                onFund={addFunds}
-                funding={funding}
-                refreshBalances={refreshBalances}
-              />
-            )}
-            <PublisherColumn
-              registered={registered}
-              details={details}
-              loading={loading}
-              registering={registering}
-              register={register}
-            />
-            <StorageColumn registered={registered} />
-          </section>
-        </aside>
-
-        <div className={styles.content}>
+        <>
           <section className={styles.welcome}>
             <span className={styles.eyebrow}>Home</span>
             <h1 className={styles.h1}>Welcome, {name}.</h1>
             <p className={styles.sub}>
               Your account is ready. Here's where to go next to start building on Fangorn.
             </p>
+          </section>
+
+          {/* Wallet, publisher, storage in the order the contracts enforce: fund,
+              register, then subscribe. All three stay on screen in every state so
+              the panel never changes shape as registration lands. */}
+          <section className={styles.section}>
+            <h2 className={styles.h2}>Account</h2>
+            <div className={styles.accountPanel}>
+              {wallet && (
+                <WalletColumn
+                  wallet={wallet}
+                  balances={balances}
+                  onFund={addFunds}
+                  funding={funding}
+                  refreshBalances={refreshBalances}
+                />
+              )}
+              <PublisherColumn
+                registered={registered}
+                details={details}
+                loading={loading}
+                registering={registering}
+                register={register}
+              />
+              <StorageColumn registered={registered} />
+            </div>
           </section>
 
           <section className={styles.section}>
@@ -516,7 +515,7 @@ export default function Home() {
               </div>
             </div>
           </section>
-        </div>
+        </>
       </main>
     </div>
   );
