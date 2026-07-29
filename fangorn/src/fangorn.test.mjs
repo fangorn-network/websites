@@ -11,28 +11,28 @@ import { CID } from 'multiformats/cid';
 import * as Digest from 'multiformats/hashes/digest';
 import { DATA_REGISTRY_ABI } from '@fangorn-network/sdk/lib/contracts/data-registry/abi.js';
 import { encodeBlock } from '@fangorn-network/sdk/lib/engine/graph.js';
+import { DEFAULT_APP, FangornConfig, toAppId } from '@fangorn-network/sdk/lib/config.js';
 
 const selector = (functionName, args) =>
   encodeFunctionData({ abi: DATA_REGISTRY_ABI, functionName, args }).slice(0, 10);
 const ZERO32 = '0x' + '0'.repeat(64);
 const ZEROADDR = '0x0000000000000000000000000000000000000000';
 
-// The selector is stable regardless of mutability.
+// register() is payable — the SDK reads registrationFee() and attaches it as
+// msg.value (it used to be an ERC-20 pull; the website must not approve USDC for it).
 assert.equal(selector('register'), '0x1aa3a008');
-// KNOWN MISMATCH (2026-07-27): the contract and fangorn/src/.../abi.ts both say
-// `payable` (register() takes the fee as msg.value), but the BUILT lib/ this
-// resolves to still says `nonpayable` — the SDK hasn't been rebuilt since. viem
-// refuses to attach `value` to a nonpayable function, so register() throws until
-// `pnpm build` in ./fangorn + `pnpm install` here. Asserting the stale value
-// keeps this check green; flip it to 'payable' once the SDK is rebuilt and it
-// becomes a real guard again.
-assert.equal(DATA_REGISTRY_ABI.find((f) => f.name === 'register').stateMutability, 'nonpayable');
+assert.equal(DATA_REGISTRY_ABI.find((f) => f.name === 'register').stateMutability, 'payable');
 // The other methods the web app calls must exist with these exact signatures.
 assert.ok(selector('registrationFee'));
-assert.ok(selector('getNamespaceHead', [ZEROADDR]));
+assert.ok(selector('getNamespaceHead', [ZERO32, ZEROADDR, ZERO32]));
 assert.ok(selector('getPublisherStatus', [ZEROADDR]));
 assert.ok(selector('isRegistered', [ZEROADDR]));
-assert.ok(selector('commitStateRoot', [ZERO32, ZERO32]));
+assert.ok(selector('commitStateRoot', [ZERO32, ZERO32, ZERO32, ZERO32]));
+
+// The site takes the deployment from the SDK rather than its own env var, so the
+// address it registers against is whatever this SDK version ships.
+assert.match(FangornConfig.dataRegistryContractAddress, /^0x[0-9a-fA-F]{40}$/);
+assert.equal(toAppId(DEFAULT_APP).length, 66);
 
 // The contract stores a bare 32-byte sha256 digest; the read path rebuilds the
 // CID by WRAPPING that digest (not re-hashing it). Round-trip a real block.

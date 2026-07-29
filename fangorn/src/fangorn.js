@@ -1,27 +1,29 @@
 import { useCallback, useEffect, useState } from 'react';
+import { createPublicClient, createWalletClient, custom, http, getAddress, parseEther, erc20Abi } from 'viem';
 import {
-  createPublicClient,
-  createWalletClient,
-  custom,
-  http,
-  getAddress,
-  parseEther,
-  erc20Abi,
-} from 'viem';
-import { arbitrumSepolia } from 'viem/chains';
-import { DataRegistryClient, PublisherStatus } from '@fangorn-network/sdk/lib/contracts/data-registry/index.js';
+  DataRegistryClient,
+  PublisherStatus,
+} from '@fangorn-network/sdk/lib/contracts/data-registry/index.js';
+import { DEFAULT_APP, FangornConfig, toAppId } from '@fangorn-network/sdk/lib/config.js';
 import { useAuth } from './authContext.js';
 
 export { PublisherStatus };
 
-// The single deployed DataRegistry (Arbitrum Sepolia) — one state root per
-// publisher. The dashboard only reads a publisher's lifecycle status and lets them
-// register; graph content is not browsed here.
-// import.meta.env is undefined under plain node (the self-check), so guard it.
-export const REGISTRY_ADDRESS = import.meta.env?.VITE_REGISTRY_ADDRESS;
+// Deployment settings come from the SDK (FangornConfig) — registry address, chain
+// and RPC — so the site can never drift from the network the SDK publishes to.
+// Deep imports on purpose: the SDK root entry pulls the graph engine, Pinata and
+// the ZK gadgets (bb.js/noir WASM) into the bundle, and the dashboard only ever
+// touches the DataRegistry.
+export const CHAIN = FangornConfig.chain;
+export const REGISTRY_ADDRESS = FangornConfig.dataRegistryContractAddress;
 
-// The ERC-20 the registration fee is paid in (USDC). register() approves + pulls
-// it via the SDK client, so the client needs the token address.
+// Every registry call is scoped to an app id. Publishers register app-agnostically,
+// but the client requires one, so use the SDK's default app.
+const APP_ID = toAppId(DEFAULT_APP);
+
+// USDC, for the balance display and the subscription fee (subscription.js). The
+// registration fee is native ETH, paid by the SDK's register().
+// import.meta.env is undefined under plain node (the self-check), so guard it.
 export const USDC_ADDRESS =
   import.meta.env?.VITE_USDC_ADDRESS ?? '0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d';
 
@@ -60,35 +62,13 @@ export async function dripFaucet(address) {
   return body;
 }
 
-// Reads go through a dedicated Arbitrum Sepolia client so they hit the right
-// chain regardless of the wallet's current network.
-const publicClient = createPublicClient({ chain: arbitrumSepolia, transport: http() });
+// Reads go through a dedicated client on the SDK's chain/RPC so they hit the right
+// network regardless of the wallet's current one.
+export const publicClient = createPublicClient({ chain: CHAIN, transport: http(FangornConfig.rpcUrl) });
 
 // A DataRegistryClient wired for reads. Writes need the user's wallet, so
 // register() below builds its own client with a Privy-backed walletClient.
-const readRegistry = new DataRegistryClient(REGISTRY_ADDRESS, publicClient, publicClient, USDC_ADDRESS);
-
-/**
- * Fee overrides for any write sent through an embedded wallet.
- *
- * Writes here use a JSON-RPC account (wallet address + `custom(provider)`), so
- * viem forwards the tx to Privy and Privy fills the fee fields itself — at the
- * base fee it saw a moment ago, with no headroom. Arbitrum Sepolia's base fee
- * drifts up between estimate and inclusion, and the node then rejects the tx
- * with "max fee per gas less than block base fee". Passing these explicitly
- * takes the decision away from the wallet. 3x matches what the SDK's
- * executeWrite() already does for DataRegistry writes.
- *
- * Overpaying is free: EIP-1559 refunds the difference between maxFeePerGas and
- * the actual base fee.
- */
-export async function writeFees() {
-  const fees = await publicClient.estimateFeesPerGas();
-  return {
-    maxFeePerGas: fees.maxFeePerGas * 3n,
-    maxPriorityFeePerGas: fees.maxPriorityFeePerGas,
-  };
-}
+const readRegistry = new DataRegistryClient(REGISTRY_ADDRESS, APP_ID, publicClient, publicClient);
 
 /** The publisher's lifecycle status: UNREGISTERED / ACTIVE / SUSPENDED. */
 export async function readStatus(publisher) {
@@ -216,26 +196,30 @@ export function usePublisher() {
     if (!wallet || !address) throw new Error('Connect a wallet first.');
     setRegistering(true);
     try {
-      // Registration costs USDC plus gas, so a brand-new wallet can't pay for it.
-      // Auto-claim only when the wallet is actually short, so a funded user
-      // doesn't burn their 24h drip here. A faucet failure (outage, cooldown
-      // already spent) must not block a wallet with its own funds — let
-      // register() surface the real error instead.
-      const { eth, usdc } = await readBalances(address);
-      if (eth < parseEther('0.005') || usdc < 1_000_000n) {
+      // Registration costs a native fee plus gas, and the subscription panel needs
+      // USDC right after, so a brand-new wallet can't pay for either. Auto-claim
+      // only when the wallet is actually short, so a funded user doesn't burn their
+      // 24h drip here. A faucet failure (outage, cooldown already spent) must not
+      // block a wallet with its own funds — let register() surface the real error.
+      const [{ eth, usdc }, fee] = await Promise.all([
+        readBalances(address),
+        readRegistry.registrationFee(),
+      ]);
+      if (eth < fee + parseEther('0.005') || usdc < 1_000_000n) {
         await dripFaucet(address).catch((err) => console.warn('Faucet drip failed:', err));
       }
-      // register() pulls the registration fee in USDC (approving first if needed);
-      // make sure the wallet is on Arbitrum Sepolia so the tx lands on the right network.
-      await wallet.switchChain(arbitrumSepolia.id);
+      // Make sure the wallet is on the SDK's chain so the tx lands on the right network.
+      await wallet.switchChain(CHAIN.id);
       const provider = await wallet.getEthereumProvider();
       const walletClient = createWalletClient({
         account: getAddress(address),
-        chain: arbitrumSepolia,
+        chain: CHAIN,
         transport: custom(provider),
       });
-      const registry = new DataRegistryClient(REGISTRY_ADDRESS, publicClient, walletClient, USDC_ADDRESS);
-      await registry.register(); // approves + pulls the USDC fee, waits for the receipt
+      const registry = new DataRegistryClient(REGISTRY_ADDRESS, APP_ID, publicClient, walletClient);
+      // Reads the on-chain fee, attaches it as msg.value, waits for the receipt.
+      // It also sets gas/fee headroom itself, which an embedded wallet won't.
+      await registry.register();
       setStatus(await readStatus(address));
     } finally {
       setRegistering(false);
