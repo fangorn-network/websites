@@ -8,6 +8,7 @@ import { useUsage } from './usage';
 import { truncate, explorer, formatBytes, meterState } from './format';
 
 const INSTALL_CMD = 'npm i @fangorn-network/sdk';
+const DOCS_URL = 'https://deepwiki.com/fangorn-network/fangorn';
 
 // Enough ETH to cover the registration fee and its gas. Below this the wallet is
 // "Low" and the faucet is the thing to do next.
@@ -199,6 +200,8 @@ function WalletColumn({ wallet, balances, onFund, funding, refreshBalances }) {
         </div>
       </Field>
 
+      <br></br>
+
       <Field label="Balance">
         <div className={styles.fieldValue}>
           {balances ? `${Number(formatEther(balances.eth)).toFixed(4)} ETH` : '…'}
@@ -210,6 +213,8 @@ function WalletColumn({ wallet, balances, onFund, funding, refreshBalances }) {
           {funding ? 'Funding…' : 'Add funds'}
         </button>
       </Field>
+
+      <br></br>
 
       <FaucetField onClaimed={refreshBalances} />
     </Column>
@@ -433,82 +438,85 @@ export default function Home() {
         <span className={styles.logo}>Fangorn</span>
         <div className={styles.topRight}>
           {contact && <span className={styles.userChip}>{contact}</span>}
+          <a className={styles.topLink} href={DOCS_URL} target="_blank" rel="noreferrer">Docs</a>
           <button className={styles.logoutBtn} onClick={logout}>Log out</button>
         </div>
       </header>
 
       <main className={styles.main}>
-        <section className={styles.welcome}>
-          <span className={styles.eyebrow}>Home</span>
-          <h1 className={styles.h1}>Welcome, {name}.</h1>
-          <p className={styles.sub}>
-            Your account is ready. Here's where to go next to start building on Fangorn.
-          </p>
-        </section>
-
-        {/* The three columns are the setup order, and it's the contracts' order:
-            fund the wallet, register the publisher, then subscribe to upload past
-            the free tier. All three stay on screen in every state so the panel
-            never changes shape as registration lands. */}
-        <h2 className={styles.h2}>Account</h2>
-        <section className={styles.accountPanel}>
-          {wallet && (
-            <WalletColumn
-              wallet={wallet}
-              balances={balances}
-              onFund={addFunds}
-              funding={funding}
-              refreshBalances={refreshBalances}
+        {/* Account lives in a side panel: it's setup state you glance at, not the
+            thing you came to do. The apps and examples get the main column. */}
+        <aside className={styles.aside}>
+          <h2 className={styles.h2}>Account</h2>
+          {/* Wallet, publisher, storage stay in this order in every state — it's the
+              order the contracts enforce: fund, register, then subscribe. */}
+          <section className={styles.accountPanel}>
+            {wallet && (
+              <WalletColumn
+                wallet={wallet}
+                balances={balances}
+                onFund={addFunds}
+                funding={funding}
+                refreshBalances={refreshBalances}
+              />
+            )}
+            <PublisherColumn
+              registered={registered}
+              details={details}
+              loading={loading}
+              registering={registering}
+              register={register}
             />
-          )}
-          <PublisherColumn
-            registered={registered}
-            details={details}
-            loading={loading}
-            registering={registering}
-            register={register}
-          />
-          <StorageColumn registered={registered} />
-        </section>
+            <StorageColumn registered={registered} />
+          </section>
+        </aside>
 
-        {registered && (
+        <div className={styles.content}>
+          <section className={styles.welcome}>
+            <span className={styles.eyebrow}>Home</span>
+            <h1 className={styles.h1}>Welcome, {name}.</h1>
+            <p className={styles.sub}>
+              Your account is ready. Here's where to go next to start building on Fangorn.
+            </p>
+          </section>
+
           <section className={styles.section}>
             <h2 className={styles.h2}>Apps</h2>
             <div className={styles.grid}>
               {APPS.map((app) => <GetStartedCard key={app.title} {...app} />)}
             </div>
           </section>
-        )}
 
-        <section className={styles.section}>
-          <h2 className={styles.h2}>Built on Fangorn</h2>
-          <div className={styles.grid}>
-            {EXAMPLES.map((example) => (
-              <GetStartedCard key={example.title} action="Open" {...example} />
-            ))}
-          </div>
-        </section>
+          <section className={styles.section}>
+            <h2 className={styles.h2}>Built on Fangorn</h2>
+            <div className={styles.grid}>
+              {EXAMPLES.map((example) => (
+                <GetStartedCard key={example.title} action="Open" {...example} />
+              ))}
+            </div>
+          </section>
 
-        <section className={styles.section}>
-          <h2 className={styles.h2}>Build with the SDK</h2>
-          <div className={styles.sdkStrip}>
-            <div className={styles.installLine}>
-              <span className={styles.fieldValueMono}>{INSTALL_CMD}</span>
-              <CopyButton text={INSTALL_CMD} className={styles.ghostBtnSm} />
+          <section className={styles.section}>
+            <h2 className={styles.h2}>Build with the SDK</h2>
+            <div className={styles.sdkStrip}>
+              <div className={styles.installLine}>
+                <span className={styles.fieldValueMono}>{INSTALL_CMD}</span>
+                <CopyButton text={INSTALL_CMD} className={styles.ghostBtnSm} />
+              </div>
+              <div className={styles.sdkLinks}>
+                <a className={styles.resLink} href={DOCS_URL} target="_blank" rel="noreferrer">
+                  Documentation <span className={styles.resArrow}>→</span>
+                </a>
+                <a className={styles.resLink} href="https://github.com/fangorn-network/fangorn" target="_blank" rel="noreferrer">
+                  Source on GitHub <span className={styles.resArrow}>→</span>
+                </a>
+                <a className={styles.resLink} href="https://discord.gg/JDj8RdCVyU" target="_blank" rel="noreferrer">
+                  Discord <span className={styles.resArrow}>→</span>
+                </a>
+              </div>
             </div>
-            <div className={styles.sdkLinks}>
-              <a className={styles.resLink} href="https://deepwiki.com/fangorn-network/fangorn" target="_blank" rel="noreferrer">
-                Documentation <span className={styles.resArrow}>→</span>
-              </a>
-              <a className={styles.resLink} href="https://github.com/fangorn-network/fangorn" target="_blank" rel="noreferrer">
-                Source on GitHub <span className={styles.resArrow}>→</span>
-              </a>
-              <a className={styles.resLink} href="https://discord.gg/JDj8RdCVyU" target="_blank" rel="noreferrer">
-                Discord <span className={styles.resArrow}>→</span>
-              </a>
-            </div>
-          </div>
-        </section>
+          </section>
+        </div>
       </main>
     </div>
   );
