@@ -65,23 +65,9 @@
 .main {
   flex: 1;
   width: 100%;
-  max-width: 1180px;
+  max-width: 1080px;
   margin: 0 auto;
   padding: 56px 32px 80px;
-  display: grid;
-  grid-template-columns: 380px minmax(0, 1fr);
-  gap: 40px;
-  align-items: start;
-}
-
-/* Sticky so the account state stays readable while scrolling the app list. The
-   three stages stacked run taller than a short viewport, so the panel scrolls
-   inside its own sticky box rather than dragging its bottom off screen. */
-.aside {
-  position: sticky;
-  top: 96px;
-  max-height: calc(100vh - 120px);
-  overflow-y: auto;
 }
 
 .welcome { margin-bottom: 40px; }
@@ -421,25 +407,6 @@ a.fieldValueMono:hover { color: var(--hi); }
 .resLink:hover { color: var(--hi); }
 
 .resArrow { color: var(--hi); font-size: 12px; }
-
-/* Below this the side panel has nowhere to sit: stack it under the welcome, where
-   it reads as the first section rather than a column that lost its neighbour. */
-@media (max-width: 960px) {
-  .main {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 0;
-  }
-  .aside {
-    position: static;
-    max-height: none;
-    overflow: visible;
-    order: 2;
-    margin-top: 48px;
-  }
-  .content { display: contents; }
-  .welcome { order: 1; }
-  .section { order: 3; }
-}
 
 @media (max-width: 720px) {
   .topbar { padding: 0 20px; }
