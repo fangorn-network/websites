@@ -1,5 +1,7 @@
 # Fangorn Website
 
+https://fangorn.network
+
 ### The Faucet Worker
 
 The website allows for a cloudflare worker to be deployed so that it can act as a faucet for new publishers.
