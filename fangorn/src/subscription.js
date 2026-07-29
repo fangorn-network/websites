@@ -7,18 +7,34 @@
 // that does an ERC-20 approve. The upload gate (worker) enforces the active window;
 // here we compute the same window only to display "active until X".
 import { useCallback, useEffect, useState } from 'react';
-import {
-  createPublicClient,
-  createWalletClient,
-  custom,
-  http,
-  getAddress,
-  erc20Abi,
-} from 'viem';
-import { arbitrumSepolia } from 'viem/chains';
+import { createWalletClient, custom, getAddress, erc20Abi } from 'viem';
 import { useAuth } from './authContext.js';
 import { SUBSCRIPTION_ABI } from './subscriptionAbi.js';
-import { USDC_ADDRESS, writeFees } from './fangorn.js';
+import { CHAIN, USDC_ADDRESS, publicClient } from './fangorn.js';
+
+/**
+ * Fee overrides for the writes below.
+ *
+ * These are the only contract writes the site sends outside the SDK (the
+ * SubscriptionRegistry isn't part of it), so they're also the only ones that
+ * don't get the SDK's fee headroom. They use a JSON-RPC account (wallet address +
+ * `custom(provider)`), so viem forwards the tx to Privy and Privy fills the fee
+ * fields itself — at the base fee it saw a moment ago, with no headroom. Arbitrum
+ * Sepolia's base fee drifts up between estimate and inclusion, and the node then
+ * rejects the tx with "max fee per gas less than block base fee". Passing these
+ * explicitly takes the decision away from the wallet; 3x matches the SDK's
+ * executeWrite().
+ *
+ * Overpaying is free: EIP-1559 refunds the difference between maxFeePerGas and
+ * the actual base fee.
+ */
+async function writeFees() {
+  const fees = await publicClient.estimateFeesPerGas();
+  return {
+    maxFeePerGas: fees.maxFeePerGas * 3n,
+    maxPriorityFeePerGas: fees.maxPriorityFeePerGas,
+  };
+}
 
 // The deployed SubscriptionRegistry. import.meta.env is undefined under plain node
 // (the self-check), so guard it — same convention as REGISTRY_ADDRESS.
@@ -28,9 +44,6 @@ export const SUBSCRIPTION_ADDRESS = import.meta.env?.VITE_SUBSCRIPTION_ADDRESS;
 // (its SUBSCRIPTION_WINDOW_DAYS env is the source of truth; keep these in sync).
 export const SUBSCRIPTION_WINDOW_DAYS = 30;
 const WINDOW_SECS = BigInt(SUBSCRIPTION_WINDOW_DAYS * 86400);
-
-// Reads hit a dedicated Arbitrum Sepolia client, regardless of the wallet's network.
-const publicClient = createPublicClient({ chain: arbitrumSepolia, transport: http() });
 
 /**
  * The publisher's subscription state:
@@ -93,12 +106,12 @@ export function useSubscription() {
     if (!wallet || !address) throw new Error('Connect a wallet first.');
     setRenewing(true);
     try {
-      await wallet.switchChain(arbitrumSepolia.id);
+      await wallet.switchChain(CHAIN.id);
       const provider = await wallet.getEthereumProvider();
       const account = getAddress(address);
       const walletClient = createWalletClient({
         account,
-        chain: arbitrumSepolia,
+        chain: CHAIN,
         transport: custom(provider),
       });
 
@@ -126,7 +139,7 @@ export function useSubscription() {
           functionName: 'approve',
           args: [SUBSCRIPTION_ADDRESS, fee],
           account,
-          chain: arbitrumSepolia,
+          chain: CHAIN,
           ...fees,
         });
         await publicClient.waitForTransactionReceipt({ hash: approveHash });
@@ -137,7 +150,7 @@ export function useSubscription() {
         abi: SUBSCRIPTION_ABI,
         functionName: 'subscribe',
         account,
-        chain: arbitrumSepolia,
+        chain: CHAIN,
         ...fees,
       });
       await publicClient.waitForTransactionReceipt({ hash: subscribeHash });

@@ -11,8 +11,8 @@ importers:
   fangorn:
     dependencies:
       '@fangorn-network/sdk':
-        specifier: 2026.07.27
-        version: 2026.7.27(@types/snarkjs@0.7.9)(bufferutil@4.1.0)(encoding@0.1.13)(graphql@16.14.2)(react-dom@19.2.7(react@19.2.7))(react-native@0.86.0(@babel/core@7.29.7)(@types/react@19.2.16)(bufferutil@4.1.0)(react@19.2.7)(utf-8-validate@5.0.10))(react@19.2.7)(utf-8-validate@5.0.10)(zod@3.25.76)
+        specifier: 2026.07.29-dev
+        version: 2026.7.29-dev(@types/snarkjs@0.7.9)(bufferutil@4.1.0)(encoding@0.1.13)(graphql@16.14.2)(react-dom@19.2.7(react@19.2.7))(react-native@0.86.0(@babel/core@7.29.7)(@types/react@19.2.16)(bufferutil@4.1.0)(react@19.2.7)(utf-8-validate@5.0.10))(react@19.2.7)(utf-8-validate@5.0.10)(zod@3.25.76)
       '@privy-io/react-auth':
         specifier: ^3.33.1
         version: 3.33.1(@solana-program/system@0.10.0(@solana/kit@5.5.1(bufferutil@4.1.0)(utf-8-validate@5.0.10)))(@solana-program/token@0.9.0(@solana/kit@5.5.1(bufferutil@4.1.0)(utf-8-validate@5.0.10)))(@solana/kit@5.5.1(bufferutil@4.1.0)(utf-8-validate@5.0.10))(@solana/sysvars@5.5.1)(@tanstack/query-core@5.101.2)(@tanstack/react-query@5.101.2(react@19.2.7))(@types/react@19.2.16)(bufferutil@4.1.0)(encoding@0.1.13)(react-dom@19.2.7(react@19.2.7))(react-native@0.86.0(@babel/core@7.29.7)(@types/react@19.2.16)(bufferutil@4.1.0)(react@19.2.7)(utf-8-validate@5.0.10))(react@19.2.7)(use-sync-external-store@1.4.0(react@19.2.7))(utf-8-validate@5.0.10)(zod@3.25.76)
@@ -341,8 +341,8 @@ packages:
     resolution: {integrity: sha512-zQ0IqbdX8FZ9aw11vP+dZkKDkS+kgIvQPHnSAXzP9pLu+Rfu3D3XEeLbicvoXJTYnhZiPmsZUxgdzXwNKxRPbA==}
     engines: {node: '>=14'}
 
-  '@fangorn-network/sdk@2026.7.27':
-    resolution: {integrity: sha512-3PC7zjqv2cFBj4OIcLfdFQtCxJ7Z/jOQlDFVPYbgmN0bssJ3jSnK99k18I99uvWax9H+JRmuIJUy7B6Bf+hW2A==}
+  '@fangorn-network/sdk@2026.7.29-dev':
+    resolution: {integrity: sha512-u3yd/y3zhw92Nix9W499/n/8f4UmjZtnXXUdfgCLH9f/WjR0TKkkAmD60eNIAewvLrwh9Ln6Hf3k8jCjRtYMfQ==}
     engines: {node: '>=20.19.0'}
     hasBin: true
 
@@ -5866,7 +5866,7 @@ snapshots:
       ethereum-cryptography: 2.2.1
       micro-ftch: 0.3.1
 
-  '@fangorn-network/sdk@2026.7.27(@types/snarkjs@0.7.9)(bufferutil@4.1.0)(encoding@0.1.13)(graphql@16.14.2)(react-dom@19.2.7(react@19.2.7))(react-native@0.86.0(@babel/core@7.29.7)(@types/react@19.2.16)(bufferutil@4.1.0)(react@19.2.7)(utf-8-validate@5.0.10))(react@19.2.7)(utf-8-validate@5.0.10)(zod@3.25.76)':
+  '@fangorn-network/sdk@2026.7.29-dev(@types/snarkjs@0.7.9)(bufferutil@4.1.0)(encoding@0.1.13)(graphql@16.14.2)(react-dom@19.2.7(react@19.2.7))(react-native@0.86.0(@babel/core@7.29.7)(@types/react@19.2.16)(bufferutil@4.1.0)(react@19.2.7)(utf-8-validate@5.0.10))(react@19.2.7)(utf-8-validate@5.0.10)(zod@3.25.76)':
     dependencies:
       '@a2a-js/sdk': 0.3.14
       '@aztec/bb.js': 4.4.0
