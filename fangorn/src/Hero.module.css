@@ -1,8 +1,77 @@
 .hero {
-  padding: 88px 32px 80px;
+  padding: 88px 32px 72px;
   text-align: center;
-  border-bottom: 1px solid var(--line);
 }
+
+.kicker {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--hi);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  margin-bottom: 22px;
+}
+
+/* Matches the boxed sections around it: 5% gutter, hairline frame, two columns
+   split by a single rule. */
+.dev {
+  margin: 5%;
+  border: 1px solid var(--line);
+  display: grid;
+  grid-template-columns: 5fr 7fr;
+  align-items: start;
+}
+
+.devL {
+  padding: 56px;
+  border-right: 1px solid var(--line);
+}
+
+.devR { padding: 40px 56px; }
+
+.devTag {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--hi);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  margin-bottom: 20px;
+}
+
+.devH2 {
+  font-size: 20px;
+  font-weight: 500;
+  line-height: 1.3;
+  letter-spacing: -0.02em;
+  color: var(--text);
+  margin-bottom: 16px;
+}
+
+.devSub {
+  font-size: 13px;
+  font-weight: 300;
+  line-height: 1.85;
+  color: var(--sub);
+  margin-bottom: 28px;
+}
+
+.devLinks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px;
+  margin-top: 24px;
+}
+
+.devLink {
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--hi);
+  transition: opacity 0.15s;
+}
+
+.devLink::after { content: ' ↗'; font-size: 11px; }
+.devLink:hover { opacity: 0.7; }
 
 .h1 {
   font-size: clamp(28px, 4vw, 48px);
@@ -21,8 +90,8 @@
   font-weight: 300;
   line-height: 1.75;
   color: var(--sub);
-  max-width: 420px;
-  margin: 0 auto 24px;
+  max-width: 520px;
+  margin: 0 auto 32px;
 }
 
 .installWrap {
@@ -78,11 +147,13 @@
   background: var(--hi);
   color: #fff;
   padding: 10px 22px;
+  border: none;
   border-radius: 6px;
   transition: background 0.15s;
 }
 
-.btnA:hover { background: var(--hi2); }
+.btnA:hover:not(:disabled) { background: var(--hi2); }
+.btnA:disabled { opacity: 0.4; cursor: default; }
 
 .btnB {
   font-size: 13px;
@@ -101,5 +172,15 @@
 }
 
 @media (max-width: 860px) {
-  .hero { padding: 48px 20px; }
+  .hero { padding: 48px 20px 40px; }
+
+  .dev { grid-template-columns: 1fr; }
+
+  .devL {
+    border-right: none;
+    border-bottom: 1px solid var(--line);
+    padding: 32px 24px;
+  }
+
+  .devR { padding: 24px; }
 }

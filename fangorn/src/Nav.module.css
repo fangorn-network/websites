@@ -44,13 +44,19 @@
   background: var(--hi);
   color: #fff;
   padding: 7px 16px;
+  border: none;
   border-radius: 6px;
   margin-left: 8px;
   transition: background 0.15s;
 }
 
-.btn:hover {
+.btn:hover:not(:disabled) {
   background: var(--hi2);
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: default;
 }
 
 .ghostBtn {
