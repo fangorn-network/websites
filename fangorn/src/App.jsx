@@ -1,6 +1,7 @@
 import './index.css';
 import Nav from './Nav';
-import Hero from './Hero';
+import Hero, { DevStrip } from './Hero';
+import Drive from './Drive';
 import Products from './Products';
 import Team from './Team';
 import { Cta, Footer } from './Footer';
@@ -12,9 +13,11 @@ function Landing() {
     <>
       <Nav />
       <Hero />
+      <Drive />
+      <DevStrip />
       <Products />
-      <Team />
       <Cta />
+      <Team />
       <Footer />
     </>
   );

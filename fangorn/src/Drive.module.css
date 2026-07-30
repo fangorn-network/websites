@@ -1,0 +1,207 @@
+.section {
+  border: 1px solid var(--line);
+  margin: 5%;
+}
+
+.header {
+  padding: 64px 56px 52px;
+  border-bottom: 1px solid var(--line);
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 48px;
+  align-items: end;
+}
+
+.tag {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--hi);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  margin-bottom: 20px;
+}
+
+.h2 {
+  font-size: clamp(18px, 2vw, 26px);
+  font-weight: 500;
+  letter-spacing: -0.03em;
+  color: var(--text);
+  margin-bottom: 14px;
+  line-height: 1.25;
+}
+
+.lead {
+  font-size: 13px;
+  line-height: 1.85;
+  color: var(--sub);
+  font-weight: 300;
+  max-width: 620px;
+}
+
+.headerLink {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--hi);
+  white-space: nowrap;
+  transition: opacity 0.15s;
+}
+
+.headerLink::after {
+  content: ' ↗';
+  font-size: 11px;
+}
+
+.headerLink:hover { opacity: 0.7; }
+
+.stepsHead {
+  padding: 22px 56px;
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 16px;
+}
+
+.stepsTitle {
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text);
+}
+
+.stepsNote {
+  font-size: 12px;
+  font-weight: 300;
+  color: var(--sub);
+}
+
+.steps {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  list-style: none;
+}
+
+.step {
+  padding: 36px 40px 40px;
+  border-right: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+}
+
+.step:last-child { border-right: none; }
+
+/* The rail runs dot → number → hairline, and the hairline reaches the column
+   edge so the three steps read as one continuous track. Same dot as the account
+   panel you land on after signing in. */
+.stepRail {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 22px;
+}
+
+.stepRail::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--line2);
+}
+
+.stepDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--hi);
+  flex-shrink: 0;
+}
+
+.stepNum {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--dim);
+  letter-spacing: 0.05em;
+}
+
+.stepTitle {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text);
+  letter-spacing: -0.01em;
+  margin-bottom: 8px;
+}
+
+.stepBody {
+  font-size: 12px;
+  line-height: 1.8;
+  color: var(--sub);
+  font-weight: 300;
+  margin-bottom: 20px;
+}
+
+.stepCost {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--dim);
+  letter-spacing: 0.05em;
+  margin-top: auto;
+}
+
+.foot {
+  padding: 28px 56px;
+  border-top: 1px solid var(--line);
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 32px;
+  align-items: center;
+}
+
+.footNote {
+  font-size: 12px;
+  line-height: 1.8;
+  color: var(--sub);
+  font-weight: 300;
+  max-width: 620px;
+}
+
+.btnA {
+  font-size: 13px;
+  font-weight: 500;
+  background: var(--hi);
+  color: #fff;
+  padding: 10px 22px;
+  border-radius: 6px;
+  border: none;
+  white-space: nowrap;
+  transition: background 0.15s;
+}
+
+.btnA:hover:not(:disabled) { background: var(--hi2); }
+.btnA:disabled { opacity: 0.4; cursor: default; }
+
+@media (max-width: 860px) {
+  .header {
+    grid-template-columns: 1fr;
+    gap: 16px;
+    padding: 40px 24px 32px;
+    align-items: start;
+  }
+
+  .stepsHead { padding: 20px 24px; }
+
+  .steps { grid-template-columns: 1fr; }
+
+  .step {
+    border-right: none;
+    border-bottom: 1px solid var(--line);
+    padding: 28px 24px;
+  }
+
+  .step:last-child { border-bottom: none; }
+
+  .foot {
+    grid-template-columns: 1fr;
+    gap: 20px;
+    padding: 28px 24px;
+    justify-items: start;
+  }
+}

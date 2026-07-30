@@ -286,9 +286,11 @@ function PublisherColumn({ registered, details, loading, registering, register }
 // Usage and the subscription that lifts it, in one column: the lifetime free tier
 // (which a subscription removes the ceiling on) and the daily upload cap (which
 // applies to everyone). Both are metered by the worker, not the chain.
-function StorageColumn({ registered }) {
+// The subscription itself is read in Home (the Apps section gates on it too) and
+// passed down, so the page makes one lookup rather than one per consumer.
+function StorageColumn({ registered, subscription }) {
   const { usage, loading } = useUsage();
-  const { active, fee, expiresAt, loading: subLoading, renewing, renew } = useSubscription();
+  const { active, fee, expiresAt, loading: subLoading, renewing, renew } = subscription;
   const [error, setError] = useState(null);
 
   async function onRenew() {
@@ -370,15 +372,25 @@ function GetStartedCard({ title, body, action, href, onClick, soon }) {
   );
 }
 
-// Apps built on Fangorn, shown once the wallet is a registered publisher — Drive
-// is the first place a new publisher has something to do with their namespace.
-const APPS = [
-  {
+// Drive can't save anything for a wallet that isn't registered and subscribed, so
+// the card says which step is missing instead of handing over a link that fails
+// on the far side. `soon` renders it as an unclickable announcement — same shape,
+// no target.
+function driveCard(registered, subscribed) {
+  const base = {
     title: 'Fangorn Drive',
-    body: 'Browse, upload, and share the namespaces your wallet publishes.',
-    action: 'Open Drive',
-    href: 'https://drive.fangorn.network',
-  },
+    body: 'Write and publish markdown notes under the namespaces your wallet owns.',
+  };
+  if (!registered) {
+    return { ...base, action: 'Register your wallet first', soon: true };
+  }
+  if (!subscribed) {
+    return { ...base, action: 'Subscribe to storage first', soon: true };
+  }
+  return { ...base, action: 'Open Drive', href: 'https://drive.fangorn.network' };
+}
+
+const APPS = [
   {
     title: 'Builder guides',
     body: 'End-to-end walkthroughs for building your own app on a Fangorn namespace.',
@@ -411,14 +423,25 @@ const EXAMPLES = [
   },
 ];
 
+// The one thing to do next, in the order the contracts enforce. Named as an
+// action so the panel below it is findable, not as a status.
+function nextStep(loading, registered, subscription) {
+  if (loading || subscription.loading) return 'Checking where you left off…';
+  if (!registered) return 'Register your wallet below to claim a publisher namespace.';
+  if (!subscription.active) return 'Subscribe to storage below, then Drive can save for you.';
+  return "You're set up. Open Drive to start writing.";
+}
+
 export default function Home() {
   const { user, logout, fundWallet } = useAuth();
   const { registered, details, loading, registering, register } = usePublisher();
   const { balances, refresh: refreshBalances } = useBalances();
+  const subscription = useSubscription();
   const [funding, setFunding] = useState(false);
 
   const { name, contact } = readIdentity(user);
   const wallet = user?.wallet?.address;
+  const apps = [driveCard(registered, subscription.active), ...APPS];
 
   async function addFunds() {
     setFunding(true);
@@ -448,9 +471,7 @@ export default function Home() {
           <section className={styles.welcome}>
             <span className={styles.eyebrow}>Home</span>
             <h1 className={styles.h1}>Welcome, {name}.</h1>
-            <p className={styles.sub}>
-              Your account is ready. Here's where to go next to start building on Fangorn.
-            </p>
+            <p className={styles.sub}>{nextStep(loading, registered, subscription)}</p>
           </section>
 
           {/* Wallet, publisher, storage in the order the contracts enforce: fund,
@@ -475,14 +496,14 @@ export default function Home() {
                 registering={registering}
                 register={register}
               />
-              <StorageColumn registered={registered} />
+              <StorageColumn registered={registered} subscription={subscription} />
             </div>
           </section>
 
           <section className={styles.section}>
             <h2 className={styles.h2}>Apps</h2>
             <div className={styles.grid}>
-              {APPS.map((app) => <GetStartedCard key={app.title} {...app} />)}
+              {apps.map((app) => <GetStartedCard key={app.title} {...app} />)}
             </div>
           </section>
 
