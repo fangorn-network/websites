@@ -16,8 +16,8 @@ function Landing() {
       <Drive />
       <DevStrip />
       <Products />
-      <Team />
       <Cta />
+      <Team />
       <Footer />
     </>
   );
