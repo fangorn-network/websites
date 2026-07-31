@@ -1,5 +1,7 @@
+/* Bottom padding is small on purpose: the next section carries its own 5% top
+   margin, and the two used to stack into a canyon. */
 .hero {
-  padding: 88px 32px 72px;
+  padding: 88px 32px 24px;
   text-align: center;
 }
 
@@ -12,22 +14,27 @@
   margin-bottom: 22px;
 }
 
-/* Matches the boxed sections around it: 5% gutter, hairline frame, two columns
-   split by a single rule. */
+/* Matches the boxed sections around it: 5% gutter, hairline frame. Pitch on top,
+   code underneath — side by side left the snippet too cramped to read. */
 .dev {
   margin: 5%;
   border: 1px solid var(--line);
-  display: grid;
-  grid-template-columns: 5fr 7fr;
-  align-items: start;
 }
 
+/* min-width:0 — otherwise the CodeBox's longest code line widens the box past
+   the viewport instead of scrolling. */
 .devL {
   padding: 56px;
-  border-right: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  min-width: 0;
 }
 
-.devR { padding: 40px 56px; }
+.devR {
+  padding: 40px 56px;
+  min-width: 0;
+}
+
+.devH2, .devSub { max-width: 640px; }
 
 .devTag {
   font-family: var(--mono);
@@ -138,7 +145,6 @@
   gap: 10px;
   justify-content: center;
   flex-wrap: wrap;
-  margin-bottom: 48px;
 }
 
 .btnA {
@@ -172,15 +178,9 @@
 }
 
 @media (max-width: 860px) {
-  .hero { padding: 48px 20px 40px; }
+  .hero { padding: 48px 20px 8px; }
 
-  .dev { grid-template-columns: 1fr; }
-
-  .devL {
-    border-right: none;
-    border-bottom: 1px solid var(--line);
-    padding: 32px 24px;
-  }
+  .devL { padding: 32px 24px; }
 
   .devR { padding: 24px; }
 }

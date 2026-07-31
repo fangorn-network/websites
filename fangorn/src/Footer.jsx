@@ -31,6 +31,7 @@ export function Footer() {
         <a href="https://deepwiki.com/fangorn-network/fangorn" className={styles.flink}>Docs</a>
         <a href="https://github.com/fangorn-network" className={styles.flink}>GitHub</a>
         <a href="https://discord.gg/JDj8RdCVyU" className={styles.flink}>Discord</a>
+        <a href="/privacy.html" className={styles.flink}>Privacy</a>
       </div>
     </footer>
   );
