@@ -181,7 +181,68 @@ function FaucetField({ onClaimed }) {
   );
 }
 
-function WalletColumn({ wallet, balances, onFund, funding, refreshBalances }) {
+// Handing a user their embedded wallet's private key is irreversible and the one
+// action here that can lose them everything, so it is deliberately two clicks with
+// the consequences spelled out in between — not a one-tap button beside "Copy".
+// Privy renders the key itself in a cross-domain iframe; this app never sees it.
+function ExportKeyField({ exportKey }) {
+  const [confirming, setConfirming] = useState(false);
+  const [error, setError] = useState(null);
+
+  async function onExport() {
+    setError(null);
+    try {
+      await exportKey();
+      setConfirming(false);
+    } catch (err) {
+      setError(friendlyError(err));
+    }
+  }
+
+  return (
+    <Field label="Private key">
+      {!confirming ? (
+        <>
+          <div className={styles.fieldValue}>
+            Export your key for usage with Fangorn's SDK or another <b>TRUSTED</b> client. <b>NEVER</b> export this key under someone else's request.
+          </div>
+          <button className={styles.ghostBtn} onClick={() => setConfirming(true)} type="button">
+            Export private key
+          </button>
+        </>
+      ) : (
+        <div className={styles.warnBox} role="alert">
+          <div className={styles.warnTitle}>⚠ Anyone with this key owns this wallet</div>
+          <ul className={styles.warnList}>
+            <li>It <b>cannot be revoked or rotated</b> - exporting it is <b>permanent</b>.</li>
+            <li>Whoever sees it can <b>drain the funds</b> and <b>publish as you, forever</b>.</li>
+            <li><b>Never</b> paste it into a website, a chat, a support ticket, or email.</li>
+            <li>Fangorn staff will <b>never</b> ask for it. <b>Anyone</b> who does is <b>stealing</b> from <b>you</b>.</li>
+            <li>Make sure <b>nobody</b> can see your screen and you are not sharing it.</li>
+          </ul>
+          {error && <div className={styles.formError}>{error}</div>}
+          <div className={styles.warnActions}>
+            <button className={styles.dangerBtn} onClick={onExport} type="button">
+              I understand - show my key
+            </button>
+            <button
+              className={styles.ghostBtnSm}
+              onClick={() => {
+                setConfirming(false);
+                setError(null);
+              }}
+              type="button"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+    </Field>
+  );
+}
+
+function WalletColumn({ wallet, balances, onFund, funding, refreshBalances, exportKey }) {
   // Don't call it low until the balances actually land — an orange dot on a
   // still-loading wallet reads as a problem that isn't there.
   const low = balances && balances.eth < LOW_ETH;
@@ -223,6 +284,14 @@ function WalletColumn({ wallet, balances, onFund, funding, refreshBalances }) {
       <br></br>
 
       <FaucetField onClaimed={refreshBalances} />
+
+      {/* Only an email/social login has an embedded wallet to export. */}
+      {exportKey && (
+        <>
+          <br></br>
+          <ExportKeyField exportKey={exportKey} />
+        </>
+      )}
     </Column>
   );
 }
@@ -442,7 +511,7 @@ function nextStep(loading, registered, subscription) {
 }
 
 export default function Home() {
-  const { user, logout, fundWallet } = useAuth();
+  const { user, logout, fundWallet, exportKey } = useAuth();
   const { registered, details, loading, registering, register } = usePublisher();
   const { balances, refresh: refreshBalances } = useBalances();
   const subscription = useSubscription();
@@ -496,6 +565,7 @@ export default function Home() {
                   onFund={addFunds}
                   funding={funding}
                   refreshBalances={refreshBalances}
+                  exportKey={exportKey}
                 />
               )}
               <PublisherColumn
