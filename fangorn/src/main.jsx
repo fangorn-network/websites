@@ -39,8 +39,11 @@ const tree = privyAppId ? (
         privacyPolicyUrl: 'https://fangorn.network/privacy.html',
       },
       defaultChain: arbitrumSepolia,
+      // Email login has no wallet of its own, so Privy has to mint one or the
+      // user lands authenticated-but-wallet-less and every on-chain action
+      // fails. 'users-without-wallets' leaves an injected-wallet login alone.
       embeddedWallets: {
-        ethereum: { createOnLogin: 'off' },
+        ethereum: { createOnLogin: 'users-without-wallets' },
       },
       loginMethods: ['email', 'wallet'],
       supportedChains: [arbitrumSepolia]

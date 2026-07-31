@@ -43,8 +43,9 @@ export function PrivyAuthBridge({ children }) {
     else sessionStorage.removeItem(TAB_KEY);
   }, [ready, authenticated, logout]);
 
-  // The wallet the user signed in with (login is wallet-only). fangorn.js uses
-  // its EIP-1193 provider + switchChain to talk to the on-chain registry.
+  // The user's wallet: the one they signed in with, or the embedded wallet Privy
+  // mints for an email login. Briefly null on that path while Privy creates it.
+  // fangorn.js's walletClientFor() turns it into a viem client for chain writes.
   const wallet = useMemo(
     () => wallets.find((w) => w.address === user?.wallet?.address) ?? wallets[0] ?? null,
     [wallets, user?.wallet?.address],
