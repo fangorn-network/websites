@@ -1,5 +1,7 @@
+/* Bottom padding is small on purpose: the next section carries its own 5% top
+   margin, and the two used to stack into a canyon. */
 .hero {
-  padding: 88px 32px 72px;
+  padding: 88px 32px 24px;
   text-align: center;
 }
 
@@ -143,7 +145,6 @@
   gap: 10px;
   justify-content: center;
   flex-wrap: wrap;
-  margin-bottom: 48px;
 }
 
 .btnA {
@@ -177,7 +178,7 @@
 }
 
 @media (max-width: 860px) {
-  .hero { padding: 48px 20px 40px; }
+  .hero { padding: 48px 20px 8px; }
 
   .devL { padding: 32px 24px; }
 
