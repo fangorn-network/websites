@@ -36,6 +36,20 @@ async function writeFees() {
   };
 }
 
+/**
+ * The gas limit for a write, estimated here rather than left to the wallet.
+ *
+ * Leaving it out is what turns a revert into a confirmation screen quoting
+ * thousands of ETH: eth_estimateGas fails, and the embedded wallet falls back to
+ * Arbitrum's block gas limit (2^50) times the 3x maxFeePerGas above. Estimating
+ * up front means a revert throws here instead — with the real reason attached, so
+ * Home.jsx's friendlyError can say "Register before subscribing." The 30% buffer
+ * matches the SDK's executeWrite().
+ */
+async function writeGas(params) {
+  return ((await publicClient.estimateContractGas(params)) * 130n) / 100n;
+}
+
 // The deployed SubscriptionRegistry. import.meta.env is undefined under plain node
 // (the self-check), so guard it — same convention as REGISTRY_ADDRESS.
 export const SUBSCRIPTION_ADDRESS = import.meta.env?.VITE_SUBSCRIPTION_ADDRESS;
@@ -127,24 +141,34 @@ export function useSubscription() {
         args: [account, SUBSCRIPTION_ADDRESS],
       });
       if (allowance < fee) {
-        const approveHash = await walletClient.writeContract({
+        const approve = {
           address: USDC_ADDRESS,
           abi: erc20Abi,
           functionName: 'approve',
           args: [SUBSCRIPTION_ADDRESS, fee],
           account,
+        };
+        const approveHash = await walletClient.writeContract({
+          ...approve,
           chain: CHAIN,
+          gas: await writeGas(approve),
           ...fees,
         });
         await publicClient.waitForTransactionReceipt({ hash: approveHash });
       }
 
-      const subscribeHash = await walletClient.writeContract({
+      // Estimated after the approve is mined — subscribe() pulls via transferFrom,
+      // so estimating it beforehand would revert on the missing allowance.
+      const subscribe = {
         address: SUBSCRIPTION_ADDRESS,
         abi: SUBSCRIPTION_ABI,
         functionName: 'subscribe',
         account,
+      };
+      const subscribeHash = await walletClient.writeContract({
+        ...subscribe,
         chain: CHAIN,
+        gas: await writeGas(subscribe),
         ...fees,
       });
       await publicClient.waitForTransactionReceipt({ hash: subscribeHash });
