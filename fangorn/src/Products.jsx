@@ -124,10 +124,10 @@ export default function Products() {
       <div className={styles.header}>
         <div>
           <h2 className={styles.h2}>Your data shouldn't need a platform's permission to exist.</h2>
-          <p className={styles.headerP}>Publish data you still control. Let people find it by meaning. Sell access to it without handing a platform the keys first.</p>
+          <p className={styles.headerP}>Publish data that you control. Sell access without handing it to a platform.</p>
         </div>
         <div style={{ textAlign: 'right' }}>
-          <a href="https://github.com/fangorn-network" className={styles.ppLink} style={{ fontSize: 12 }}>All repos on GitHub</a>
+          <a href="https://github.com/fangorn-network" className={styles.ppLink} style={{ fontSize: 12 }}>All code is open-source on GitHub</a>
         </div>
       </div>
 

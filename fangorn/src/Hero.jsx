@@ -14,11 +14,10 @@ export default function Hero() {
           who already know the space — but it can't be the first thing a person
           reads and still leave them knowing what this is. */}
       <div className={styles.kicker}>Intent-bound data for the agentic web</div>
-      <h1 className={styles.h1}>Publish what you write. Keep what you publish.</h1>
+      {/* <h1 className={styles.h1}>Publish what you write. Keep what you publish.</h1> */}
+      <h1 className={styles.h1}>Your Data, Your Rules.</h1>
       <p className={styles.sub}>
-        Fangorn stores your data in an account only you control, and records just enough
-        on-chain for anyone to confirm it came from you and read every version you ever
-        pushed. Write in Drive, or build your own app on the SDK.
+        <b>Fangorn</b> helps builders and creators publish content once, control how it's accessed, and get paid when it's used.
       </p>
 
       <div className={styles.btns}>

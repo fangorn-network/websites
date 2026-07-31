@@ -33,6 +33,11 @@ const tree = privyAppId ? (
         accentColor: '#a78bfa',
         logo: '/favicon.svg',
       },
+      // Surfaces the privacy policy inside the login modal — the point where we
+      // actually collect the email/wallet address.
+      legal: {
+        privacyPolicyUrl: 'https://fangorn.network/privacy.html',
+      },
       defaultChain: arbitrumSepolia,
       embeddedWallets: {
         ethereum: { createOnLogin: 'off' },
