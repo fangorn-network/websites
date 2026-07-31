@@ -15,14 +15,20 @@ const DOCS_URL = 'https://deepwiki.com/fangorn-network/fangorn';
 const LOW_ETH = parseEther('0.005');
 
 // viem attaches .shortMessage to contract/RPC errors; fall back to .message.
+//
+// Match on both: a decoded custom error lands in .message ("Error: NotRegistered()")
+// while .shortMessage says only "The contract function ... reverted." — so matching
+// shortMessage alone never fires the revert-name branches below. Display still uses
+// the short one.
 function friendlyError(err) {
   const msg = err?.shortMessage || err?.message || String(err);
-  if (/rejected|denied/i.test(msg)) return 'Transaction cancelled.';
-  if (/insufficient funds/i.test(msg)) return 'Not enough ETH for gas. Add funds and try again.';
-  if (/AlreadyRegistered/i.test(msg)) return 'This wallet is already registered.';
-  if (/NotRegistered/i.test(msg)) return 'Register before subscribing.';
-  if (/cooldown/i.test(msg)) return 'Already claimed. Try again tomorrow.';
-  if (/max fee per gas less than block base fee/i.test(msg)) {
+  const text = `${msg}\n${err?.message ?? ''}`;
+  if (/rejected|denied/i.test(text)) return 'Transaction cancelled.';
+  if (/insufficient funds/i.test(text)) return 'Not enough ETH for gas. Add funds and try again.';
+  if (/AlreadyRegistered/i.test(text)) return 'This wallet is already registered.';
+  if (/NotRegistered/i.test(text)) return 'Register before subscribing.';
+  if (/cooldown/i.test(text)) return 'Already claimed. Try again tomorrow.';
+  if (/max fee per gas less than block base fee/i.test(text)) {
     return 'Network fees moved while confirming. Try again.';
   }
   return msg;

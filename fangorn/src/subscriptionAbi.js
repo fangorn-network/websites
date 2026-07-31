@@ -40,4 +40,12 @@ export const SUBSCRIPTION_ABI = [
     stateMutability: 'view',
     type: 'function',
   },
+  // The contract's custom errors (contracts/subscription_registry/abi.json). Without
+  // these viem can't decode a revert and surfaces the bare selector — "reverted with
+  // the following signature: 0xaba47339" — instead of a name Home.jsx's friendlyError
+  // can match. NotRegistered is the one users actually hit.
+  { inputs: [], name: 'NotRegistered', type: 'error' },
+  { inputs: [], name: 'SubscriptionFeeRequired', type: 'error' },
+  { inputs: [], name: 'TransferFailed', type: 'error' },
+  { inputs: [], name: 'Unauthorized', type: 'error' },
 ];
