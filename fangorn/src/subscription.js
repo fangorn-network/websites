@@ -7,10 +7,10 @@
 // that does an ERC-20 approve. The upload gate (worker) enforces the active window;
 // here we compute the same window only to display "active until X".
 import { useCallback, useEffect, useState } from 'react';
-import { createWalletClient, custom, getAddress, erc20Abi } from 'viem';
+import { getAddress, erc20Abi } from 'viem';
 import { useAuth } from './authContext.js';
 import { SUBSCRIPTION_ABI } from './subscriptionAbi.js';
-import { CHAIN, USDC_ADDRESS, publicClient } from './fangorn.js';
+import { CHAIN, USDC_ADDRESS, publicClient, walletClientFor } from './fangorn.js';
 
 /**
  * Fee overrides for the writes below.
@@ -106,14 +106,8 @@ export function useSubscription() {
     if (!wallet || !address) throw new Error('Connect a wallet first.');
     setRenewing(true);
     try {
-      await wallet.switchChain(CHAIN.id);
-      const provider = await wallet.getEthereumProvider();
       const account = getAddress(address);
-      const walletClient = createWalletClient({
-        account,
-        chain: CHAIN,
-        transport: custom(provider),
-      });
+      const walletClient = await walletClientFor(wallet, address);
 
       const fee = await publicClient.readContract({
         address: SUBSCRIPTION_ADDRESS,

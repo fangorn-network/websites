@@ -224,7 +224,9 @@ function WalletColumn({ wallet, balances, onFund, funding, refreshBalances }) {
 // One publisher per wallet, registered on-chain in the DataRegistry. The register
 // CTA lives here beside the balances that pay for it — registering costs a native
 // ETH fee plus gas.
-function PublisherColumn({ registered, details, loading, registering, register }) {
+// `wallet` gates the CTA: an email login is authenticated a beat before Privy
+// finishes minting its embedded wallet, and registering without one just throws.
+function PublisherColumn({ wallet, registered, details, loading, registering, register }) {
   const [error, setError] = useState(null);
 
   async function onRegister() {
@@ -254,7 +256,8 @@ function PublisherColumn({ registered, details, loading, registering, register }
           <button
             className={styles.primaryBtn}
             onClick={onRegister}
-            disabled={registering}
+            disabled={registering || !wallet}
+            title={wallet ? undefined : 'Setting up your wallet…'}
             type="button"
           >
             {registering ? 'Registering…' : 'Register'}
@@ -490,6 +493,7 @@ export default function Home() {
                 />
               )}
               <PublisherColumn
+                wallet={wallet}
                 registered={registered}
                 details={details}
                 loading={loading}

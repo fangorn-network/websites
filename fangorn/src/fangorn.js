@@ -70,6 +70,25 @@ export const publicClient = createPublicClient({ chain: CHAIN, transport: http(F
 // register() below builds its own client with a Privy-backed walletClient.
 const readRegistry = new DataRegistryClient(REGISTRY_ADDRESS, APP_ID, publicClient, publicClient);
 
+/**
+ * The Privy wallet (embedded or injected) as a viem WalletClient, switched to
+ * the SDK's chain first so the tx can't land on the wrong network.
+ *
+ * This is also exactly what the SDK wants for a browser signer — it takes
+ * `privateKey` OR `walletClient`, so a Privy user drives it without ever
+ * holding a key: `Fangorn.create({ walletClient, storage: { signedUrl: {} } })`.
+ * `account` must be set for that path: the signed-url backend signs the upload
+ * worker's ownership challenge through it.
+ */
+export async function walletClientFor(wallet, address) {
+  await wallet.switchChain(CHAIN.id);
+  return createWalletClient({
+    account: getAddress(address),
+    chain: CHAIN,
+    transport: custom(await wallet.getEthereumProvider()),
+  });
+}
+
 /** The publisher's lifecycle status: UNREGISTERED / ACTIVE / SUSPENDED. */
 export async function readStatus(publisher) {
   return readRegistry.getPublisherStatus(getAddress(publisher));
@@ -208,14 +227,7 @@ export function usePublisher() {
       if (eth < fee + parseEther('0.005') || usdc < 1_000_000n) {
         await dripFaucet(address).catch((err) => console.warn('Faucet drip failed:', err));
       }
-      // Make sure the wallet is on the SDK's chain so the tx lands on the right network.
-      await wallet.switchChain(CHAIN.id);
-      const provider = await wallet.getEthereumProvider();
-      const walletClient = createWalletClient({
-        account: getAddress(address),
-        chain: CHAIN,
-        transport: custom(provider),
-      });
+      const walletClient = await walletClientFor(wallet, address);
       const registry = new DataRegistryClient(REGISTRY_ADDRESS, APP_ID, publicClient, walletClient);
       // Reads the on-chain fee, attaches it as msg.value, waits for the receipt.
       // It also sets gas/fee headroom itself, which an embedded wallet won't.
