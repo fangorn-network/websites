@@ -306,6 +306,57 @@ a.fieldValueMono:hover { color: var(--hi); }
   margin-top: 6px;
 }
 
+/* ── Danger confirmation ───────────────────────────────────────────────────
+   Loud on purpose: the private-key export is the one irreversible action on
+   this page, so it gets the full-width orange frame nothing else here uses. */
+
+.warnBox {
+  margin-top: 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--orange);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--orange) 8%, transparent);
+}
+
+.warnTitle {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--orange);
+  line-height: 1.4;
+  margin-bottom: 8px;
+}
+
+.warnList {
+  margin: 0 0 12px;
+  padding-left: 16px;
+  font-size: 12px;
+  font-weight: 300;
+  line-height: 1.6;
+  color: var(--text);
+}
+
+.warnList li { margin-bottom: 4px; }
+
+.warnActions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.dangerBtn {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--bg);
+  background: var(--orange);
+  border: none;
+  padding: 7px 14px;
+  border-radius: 6px;
+  transition: opacity 0.15s;
+}
+
+.dangerBtn:hover { opacity: 0.85; }
+
 /* ── Cards ─────────────────────────────────────────────────────────────────*/
 
 .grid {

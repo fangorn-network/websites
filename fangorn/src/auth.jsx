@@ -1,5 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react';
-import { usePrivy, useFundWallet, useWallets } from '@privy-io/react-auth';
+import {
+  usePrivy,
+  useFundWallet,
+  useWallets,
+  useExportWallet,
+  getEmbeddedConnectedWallet,
+} from '@privy-io/react-auth';
 import { AuthContext } from './authContext';
 
 // sessionStorage is per-tab and cleared when the tab closes, but survives a
@@ -18,6 +24,7 @@ export function PrivyAuthBridge({ children }) {
   const { ready, authenticated, user, login, logout } = usePrivy();
   const { fundWallet } = useFundWallet();
   const { wallets } = useWallets();
+  const { exportWallet } = useExportWallet();
 
   // Decide synchronously at the first ready render whether the session Privy
   // restored belongs to this tab. Doing it in render (not an effect) means a
@@ -65,6 +72,18 @@ export function PrivyAuthBridge({ children }) {
     [fundWallet, user?.wallet?.address],
   );
 
+  // Only an embedded wallet has a key Privy can hand back — a user who signed in
+  // with MetaMask already holds theirs. `null` when there's nothing to export, so
+  // callers gate the UI on it rather than re-deriving "is this embedded?".
+  // The key is shown in Privy's own cross-domain iframe; this app never sees it.
+  const embedded = useMemo(() => getEmbeddedConnectedWallet(wallets), [wallets]);
+  const exportKey = useMemo(
+    // Not passing the click event straight through: exportWallet also accepts a
+    // MouseEvent, and handing it one skips the address argument.
+    () => (embedded ? () => exportWallet({ address: embedded.address }) : null),
+    [exportWallet, embedded],
+  );
+
   return (
     <AuthContext.Provider
       value={{
@@ -76,6 +95,7 @@ export function PrivyAuthBridge({ children }) {
         login,
         logout,
         fundWallet: fund,
+        exportKey,
       }}
     >
       {children}
@@ -98,6 +118,7 @@ export function DisabledAuthProvider({ children }) {
       console.warn('Funding unavailable: set VITE_PRIVY_APP_ID in .env.local.');
       return Promise.resolve();
     },
+    exportKey: null,
   };
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
