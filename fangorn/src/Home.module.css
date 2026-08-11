@@ -181,6 +181,9 @@
   color: var(--sub);
 }
 
+/* .pending as a note under a control, rather than as the column's whole body. */
+.pendingNote { margin-top: 10px; }
+
 /* ── Fields ────────────────────────────────────────────────────────────────
    Value under label, not opposite it. A column is ~340px at full width, and a
    space-between row there gets pushed apart by its own content. */
@@ -281,6 +284,209 @@ a.fieldValueMono:hover { color: var(--hi); }
 .ghostBtn:disabled {
   color: var(--sub);
   cursor: default;
+}
+
+/* Namespace entry. Mono because a namespace is an identifier, not prose — same
+   treatment as .fieldValueMono, which is what it becomes once it's saved. */
+.input {
+  /* The panel is full-page-wide; an address field that runs the whole 1000px
+     reads as a text area, so cap it. */
+  display: block;
+  width: 100%;
+  max-width: 420px;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--text);
+  background: var(--s2);
+  border: 1px solid var(--line2);
+  padding: 7px 11px;
+  border-radius: 6px;
+  transition: border-color 0.15s;
+}
+
+.input::placeholder { color: var(--dim); }
+.input:focus { outline: none; border-color: var(--hi); }
+.input:disabled { color: var(--sub); cursor: default; }
+
+/* ── Modal ─────────────────────────────────────────────────────────────────
+   A native <dialog>: showModal() gives the focus trap, Esc, page inertness and
+   top-layer stacking, so this only has to supply looks. */
+
+.modal {
+  /* Centred explicitly. A top-layer <dialog> is positioned by the UA stylesheet, and
+     once an explicit width is set it pins to the inline start instead of centring —
+     `inset: 0` + `margin: auto` centres it on both axes. */
+  position: fixed;
+  inset: 0;
+  margin: auto;
+
+  width: min(620px, calc(100vw - 32px));
+  /* The directory can be 40 namespaces long — cap the box and scroll inside it so
+     the modal never grows past the viewport. */
+  max-height: min(72vh, 720px);
+  padding: 0;
+  color: var(--text);
+  background: var(--s1);
+  border: 1px solid var(--line2);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.modal::backdrop {
+  background: rgba(8, 8, 10, 0.72);
+  backdrop-filter: blur(2px);
+}
+
+.modalHead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--line);
+  position: sticky;
+  top: 0;
+  background: var(--s1);
+}
+
+.modalHead .colTitle { margin-right: auto; }
+
+.modalBody {
+  padding: 20px;
+  /* 100% of the modal's max-height minus the header row. */
+  max-height: calc(min(72vh, 720px) - 53px);
+  overflow-y: auto;
+
+  /* The default scrollbar is a bright slab against a near-black panel. Thin it and
+     tint it to the panel's own lines. `scrollbar-*` covers Firefox and modern
+     Chromium; the ::-webkit rules below cover Safari and older Chromium. */
+  scrollbar-width: thin;
+  scrollbar-color: var(--line2) transparent;
+}
+
+.modalBody::-webkit-scrollbar {
+  width: 10px;
+}
+
+.modalBody::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.modalBody::-webkit-scrollbar-thumb {
+  background: var(--line2);
+  border-radius: 5px;
+  /* Inset the thumb from the track edge without a wrapper element. */
+  border: 3px solid var(--s1);
+}
+
+.modalBody::-webkit-scrollbar-thumb:hover {
+  background: var(--dim);
+}
+
+/* ── Publisher list ────────────────────────────────────────────────────────
+   One <details> per publisher: the platform supplies the toggle, the keyboard
+   behaviour and the open/closed state, so this is only styling. */
+
+.pubList {
+  margin-top: 16px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.pub + .pub { border-top: 1px solid var(--line); }
+
+.pubHead {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 14px;
+  cursor: pointer;
+  transition: background 0.15s;
+  /* Replace the default disclosure triangle with one that matches the type. */
+  list-style: none;
+}
+
+.pubHead::-webkit-details-marker { display: none; }
+
+.pubHead::before {
+  content: '▸';
+  color: var(--sub);
+  font-size: 10px;
+  transition: transform 0.15s;
+}
+
+.pub[open] > .pubHead::before { transform: rotate(90deg); }
+.pubHead:hover { background: var(--s2); }
+
+.pubCount {
+  margin-right: auto;
+  font-size: 12px;
+  color: var(--sub);
+}
+
+.pubBody {
+  padding: 0 14px 14px 32px;
+}
+
+/* Buttons that sit side by side under a field rather than stacked. */
+.btnRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.btnRow .ghostBtn { margin-top: 10px; }
+
+/* Namespace chips in the publisher directory. Wrap rather than scroll — a publisher
+   with many namespaces should get taller, not hide them behind a scrollbar. */
+.chipRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.chip {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--hi);
+  background: var(--s2);
+  border: 1px solid var(--line2);
+  padding: 4px 10px;
+  border-radius: 5px;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.chip:hover:not(:disabled) {
+  border-color: var(--hi);
+  background: var(--s3);
+}
+
+/* Unresolved namespaces show their hash and can't be picked — nothing to submit. */
+.chip:disabled {
+  color: var(--dim);
+  cursor: default;
+}
+
+/* Checkbox + label on one line. accent-color tints the native control, which keeps
+   the platform's focus ring and keyboard behaviour instead of rebuilding them. */
+.checkRow {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.checkRow input {
+  accent-color: var(--hi);
+  width: 14px;
+  height: 14px;
+  margin-top: 2px;
+  flex-shrink: 0;
+  cursor: pointer;
 }
 
 /* Sits beside a value rather than under it, so it must not be squeezed. */

@@ -66,9 +66,20 @@ export async function dripFaucet(address) {
 // network regardless of the wallet's current one.
 export const publicClient = createPublicClient({ chain: CHAIN, transport: http(FangornConfig.rpcUrl) });
 
+// Gateway for reading content-addressed blocks (the publisher directory resolves
+// namespace names through it). The SDK defaults to ipfs.io, which is unreliable for
+// this content and is DNS-filtered on plenty of networks, so point at the project's
+// gateway instead.
+//
+// ⚠️ NO trailing `/ipfs` — the SDK appends that itself, and a suffix here produces
+// `/ipfs/ipfs/<cid>` and a 400 from the gateway.
+export const IPFS_GATEWAY = (
+  import.meta.env?.VITE_IPFS_GATEWAY ?? 'https://green-reasonable-heron-957.mypinata.cloud'
+).replace(/\/(ipfs\/?)?$/, '');
+
 // A DataRegistryClient wired for reads. Writes need the user's wallet, so
 // register() below builds its own client with a Privy-backed walletClient.
-const readRegistry = new DataRegistryClient(REGISTRY_ADDRESS, APP_ID, publicClient, publicClient);
+export const readRegistry = new DataRegistryClient(REGISTRY_ADDRESS, APP_ID, publicClient, publicClient);
 
 /**
  * The Privy wallet (embedded or injected) as a viem WalletClient, switched to

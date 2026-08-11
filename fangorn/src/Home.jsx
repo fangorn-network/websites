@@ -1,10 +1,12 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { formatEther, formatUnits, parseEther } from 'viem';
 import styles from './Home.module.css';
 import { useAuth } from './authContext';
 import { usePublisher, useBalances, useFaucet, FAUCET_ETH, FAUCET_USDC } from './fangorn';
 import { useSubscription, SUBSCRIPTION_WINDOW_DAYS } from './subscription';
 import { useUsage } from './usage';
+import { useQuickbeam } from './quickbeam';
+import { useDirectory } from './directory';
 import { truncate, explorer, formatBytes, meterState } from './format';
 
 const INSTALL_CMD = 'npm i @fangorn-network/sdk';
@@ -13,6 +15,7 @@ const DOCS_URL = 'https://deepwiki.com/fangorn-network/fangorn';
 // Enough ETH to cover the registration fee and its gas. Below this the wallet is
 // "Low" and the faucet is the thing to do next.
 const LOW_ETH = parseEther('0.005');
+
 
 // viem attaches .shortMessage to contract/RPC errors; fall back to .message.
 //
@@ -82,6 +85,39 @@ function Field({ label, children }) {
       <div className={styles.fieldLabel}>{label}</div>
       {children}
     </div>
+  );
+}
+
+// A modal built on the native <dialog>. showModal() supplies the focus trap, Esc to
+// close, inertness of the page behind, and top-layer stacking — all the parts of a
+// modal that are easy to get subtly wrong by hand.
+// ponytail: no library. `close` fires for Esc too, so state syncs back through onClose.
+function Modal({ open, onClose, title, children }) {
+  const ref = useRef(null);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    if (open && !el.open) el.showModal();
+    if (!open && el.open) el.close();
+  }, [open]);
+
+  return (
+    <dialog
+      ref={ref}
+      className={styles.modal}
+      onClose={onClose}
+      // A click landing on the dialog element itself is a backdrop click — the
+      // content sits in children, so anything inside targets those instead.
+      onClick={(event) => event.target === ref.current && onClose()}
+      aria-label={title}
+    >
+      <div className={styles.modalHead}>
+        <span className={styles.colTitle}>{title}</span>
+        <button className={styles.ghostBtnSm} onClick={onClose} type="button">Close</button>
+      </div>
+      <div className={styles.modalBody}>{children}</div>
+    </dialog>
   );
 }
 
@@ -429,6 +465,298 @@ function StorageColumn({ registered, subscription }) {
   );
 }
 
+// Quickbeam watches a namespace's on-chain head and embeds every commit as it lands.
+// Sits in its own panel rather than as a fourth Account column: at 1080px the account
+// grid only fits three, and a fourth would wrap to a lone 3+1 row.
+//
+// What you create here is a VIEW: a named set of namespaces that gets its own search
+// URL and its own MCP catalog. Embeddings are not per requester — asking for a
+// namespace somebody else already watches returns the same points and costs no extra
+// indexing, so a view is a filter rather than a copy.
+//
+// A source is (publisher, namespace), not a bare namespace: namespaces are keys inside
+// one publisher's off-chain root map, so the same name under two publishers is two
+// different graphs. Any namespace on the network can be watched — you don't have to
+// own it — so the publisher field is a plain address input.
+//
+// The registry worker gates on the storage subscription this site already sells, so
+// there is no separate Quickbeam purchase — `subscribed` is that same state, passed
+// down rather than re-read.
+function QuickbeamPanel({ wallet, subscribed }) {
+  const [name, setName] = useState('');
+  const [publisher, setPublisher] = useState('');
+  const [namespace, setNamespace] = useState('');
+  const [hostedMcp, setHostedMcp] = useState(false);
+  // Mounted on first open and left mounted: the directory's name pass costs ~12s of
+  // gateway fetches, and reopening should not pay it again.
+  const [browsing, setBrowsing] = useState(false);
+  const [browsed, setBrowsed] = useState(false);
+  const [error, setError] = useState(null);
+  const [created, setCreated] = useState(null);
+
+  const { views, loading, creating, create } = useQuickbeam();
+  const ready = name.trim() && publisher.trim() && namespace.trim();
+
+  async function onCreate() {
+    setError(null);
+    try {
+      setCreated(await create({
+        name: name.trim(),
+        sources: [{ owner: publisher.trim(), namespace: namespace.trim() }],
+        hostedMcp,
+      }));
+    } catch (err) {
+      setError(friendlyError(err));
+    }
+  }
+
+  return (
+    <Column
+      title="Quickbeam"
+      state={views.length ? 'stateGood' : 'statePending'}
+      stateLabel={loading ? 'Checking' : views.length ? `${views.length} view(s)` : 'No views'}
+    >
+      <p className={styles.colText}>
+        Create a view over one or more namespaces and get a semantic search endpoint and
+        an MCP for them. Quickbeam follows each publisher's on-chain head and embeds
+        every commit as it lands, so the view stays current without you running the
+        server. Any namespace on the network can be watched, not only the ones your
+        wallet publishes.
+      </p>
+      <Field label="Included with">
+        <div className={styles.fieldValue}>
+          Your storage subscription
+          <span className={styles.fieldNote}> · no separate charge</span>
+        </div>
+      </Field>
+
+      <Field label="View name">
+        <input
+          className={styles.input}
+          value={name}
+          onChange={(event) => setName(event.target.value)}
+          placeholder="my-view"
+          aria-label="Name for this view"
+        />
+      </Field>
+
+      {/* Left empty on purpose — prefilling the signed-in wallet implies you can only
+          watch your own graph, which is the opposite of how this works. The button is
+          the shortcut for the case where you do own it. */}
+      <Field label="Publisher">
+        <input
+          className={styles.input}
+          value={publisher}
+          onChange={(event) => setPublisher(event.target.value)}
+          placeholder="0x… address of the publisher to watch"
+          aria-label="Publisher address to watch"
+        />
+        <div className={styles.btnRow}>
+          <button
+            className={styles.ghostBtn}
+            onClick={() => setPublisher(wallet)}
+            disabled={!wallet}
+            type="button"
+          >
+            My address
+          </button>
+          <button
+            className={styles.ghostBtn}
+            onClick={() => { setBrowsed(true); setBrowsing(true); }}
+            type="button"
+          >
+            Browse publishers
+          </button>
+        </div>
+      </Field>
+
+      <Field label="Namespace">
+        <input
+          className={styles.input}
+          value={namespace}
+          onChange={(event) => setNamespace(event.target.value)}
+          placeholder="my-namespace"
+          aria-label="Namespace to watch"
+        />
+        {/* Off by default: running the client yourself keeps the query on your own
+            machine, and a hosted MCP is a service we have to run. */}
+        <label className={`${styles.checkRow} ${styles.pendingNote}`}>
+          <input
+            type="checkbox"
+            checked={hostedMcp}
+            onChange={(event) => setHostedMcp(event.target.checked)}
+          />
+          <span>Host an MCP server for me, instead of running one locally.</span>
+        </label>
+        {error && <div className={styles.formError}>{error}</div>}
+        <div className={`${styles.pending} ${styles.pendingNote}`}>
+          Indexing starts within a minute. A namespace already being watched is ready
+          immediately.
+        </div>
+        <button
+          className={styles.ghostBtn}
+          onClick={onCreate}
+          disabled={creating || loading || !ready || !subscribed}
+          type="button"
+          // The worker refuses a wallet without an active subscription, so say why
+          // rather than letting the request fail.
+          title={subscribed ? undefined : 'Subscribe to storage first'}
+        >
+          {creating ? 'Creating…' : 'Create view'}
+        </button>
+      </Field>
+
+      {/* The two things a view actually hands you. Shown for the one just created, or
+          for the most recent existing view on load. */}
+      {(created ?? views[0]) && <ViewEndpoints view={created ?? views[0]} />}
+
+      <Modal open={browsing} onClose={() => setBrowsing(false)} title="Publishers">
+        {browsed && (
+          <PublisherDirectory
+            onPick={(owner, ns) => {
+              setPublisher(owner);
+              setNamespace(ns);
+              setBrowsing(false);
+            }}
+          />
+        )}
+      </Modal>
+    </Column>
+  );
+}
+
+// A view's search URL and the command that points an MCP client at it. The MCP is the
+// user's own `quickbeam mcp` process — the worker only serves it a catalog filtered to
+// this view's namespaces, so nothing is provisioned per requester.
+function ViewEndpoints({ view }) {
+  return (
+    <>
+      <Field label={`Search — ${view.name}`}>
+        <div className={styles.inlineValue}>
+          <span className={styles.fieldValueMono}>{view.searchUrl}?q=</span>
+          <CopyButton text={`${view.searchUrl}?q=`} className={styles.ghostBtnSm} />
+        </div>
+      </Field>
+      <Field label="MCP">
+        {/* A hosted MCP is a URL to paste into an agent; otherwise it is a command to
+            run. Show whichever this view actually has. */}
+        {view.mcp?.url ? (
+          <div className={styles.inlineValue}>
+            <span className={styles.fieldValueMono}>{view.mcp.url}/mcp</span>
+            <CopyButton text={`${view.mcp.url}/mcp`} className={styles.ghostBtnSm} />
+          </div>
+        ) : view.hostedMcp ? (
+          <div className={styles.fieldValue}>Starting up — refresh in a moment.</div>
+        ) : (
+          <div className={styles.inlineValue}>
+            <span className={styles.fieldValueMono}>{view.mcpCommand}</span>
+            <CopyButton text={view.mcpCommand} className={styles.ghostBtnSm} />
+          </div>
+        )}
+      </Field>
+    </>
+  );
+}
+
+// Who has published to this app, and what they called their namespaces.
+//
+// Two passes with very different costs (see directory.js): the chain pass is one
+// getLogs and gives every publisher instantly; namespaces arrive after, because the
+// event carries only keccak(name) and recovering the name costs a gateway fetch each.
+// So rows render immediately and fill in — a namespace that never resolves keeps its
+// hash, which usually means an orphaned head rather than a bug.
+//
+// Clicking a namespace fills the Quickbeam form above it: browsing and then watching
+// something is the actual path through this page.
+function PublisherDirectory({ onPick }) {
+  const { publishers, loading, resolving, error } = useDirectory();
+  const [query, setQuery] = useState('');
+
+  // Match on the address or any namespace name, so "robin" finds the publisher who
+  // owns `robinhood` even though the address says nothing.
+  const q = query.trim().toLowerCase();
+  const matches = q
+    ? publishers.filter((p) =>
+        p.owner.toLowerCase().includes(q)
+        || p.namespaces.some((ns) => (ns.name ?? '').toLowerCase().includes(q)))
+    : publishers;
+
+  return (
+    <>
+      <p className={styles.colText}>
+        Everyone who has committed to this app, newest first. Open a publisher and pick
+        a namespace to load it into the form — you don't have to own it to watch it.
+        {loading && ' Loading…'}
+        {resolving && ' Resolving namespace names…'}
+      </p>
+
+      <input
+        className={styles.input}
+        value={query}
+        onChange={(event) => setQuery(event.target.value)}
+        placeholder="Filter by address or namespace"
+        aria-label="Filter publishers"
+      />
+
+      {error && <div className={styles.formError}>{error}</div>}
+      {!loading && !error && !publishers.length && (
+        <div className={styles.pending}>Nothing published yet.</div>
+      )}
+      {!loading && !!publishers.length && !matches.length && (
+        <div className={styles.pending}>No publisher or namespace matches “{query}”.</div>
+      )}
+
+      <div className={styles.pubList}>
+        {matches.map((p) => (
+          <details
+            key={p.owner}
+            className={styles.pub}
+            // Searching expands the hits, so a match is never hidden one click away.
+            open={q ? true : undefined}
+          >
+            <summary className={styles.pubHead}>
+              <span className={styles.fieldValueMono}>{truncate(p.owner, 10, 8)}</span>
+              <span className={styles.pubCount}>
+                {p.namespaces.length} namespace{p.namespaces.length === 1 ? '' : 's'}
+              </span>
+              <span className={styles.fieldNote}>block {p.lastBlock.toString()}</span>
+            </summary>
+
+            <div className={styles.pubBody}>
+              <a
+                className={styles.resLink}
+                href={explorer(p.owner)}
+                target="_blank"
+                rel="noreferrer"
+              >
+                View on explorer <span className={styles.resArrow}>→</span>
+              </a>
+              <div className={styles.chipRow}>
+                {p.namespaces.map((ns) => (
+                  <button
+                    key={ns.key}
+                    className={styles.chip}
+                    type="button"
+                    onClick={() => onPick(p.owner, ns.name)}
+                    disabled={!ns.name}
+                    // An unresolved name is not clickable: there is nothing to put in
+                    // the form, and the API does not accept the hash.
+                    title={ns.name
+                      ? `Watch ${ns.name}`
+                      : 'Name unavailable — the head could not be resolved through the gateway'}
+                  >
+                    {ns.name ?? `${ns.subspaceId.slice(0, 10)}…`}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </details>
+        ))}
+      </div>
+    </>
+  );
+}
+
 // ── Cards ───────────────────────────────────────────────────────────────────
 
 function GetStartedCard({ title, body, action, href, onClick, soon }) {
@@ -577,6 +905,13 @@ export default function Home() {
                 register={register}
               />
               <StorageColumn registered={registered} subscription={subscription} />
+            </div>
+          </section>
+
+          <section className={styles.section}>
+            <h2 className={styles.h2}>Embeddings</h2>
+            <div className={styles.accountPanel}>
+              <QuickbeamPanel wallet={wallet} subscribed={subscription.active} />
             </div>
           </section>
 
