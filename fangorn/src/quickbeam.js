@@ -16,8 +16,13 @@ import { walletClientFor } from './fangorn.js';
 
 // The registry worker. import.meta.env is undefined under plain node (the
 // self-check), so guard it — same convention as SUBSCRIPTION_ADDRESS.
+//
+// The fallback must be a worker that actually exists: a dead default fails as an
+// opaque CORS error ("No 'Access-Control-Allow-Origin' header"), because Cloudflare's
+// 404 page for an unclaimed *.workers.dev subdomain carries no CORS headers — which
+// sends you debugging the wrong thing entirely.
 export const QUICKBEAM_WORKER_URL = (
-  import.meta.env?.VITE_QUICKBEAM_WORKER_URL ?? 'https://quickbeam-registry.fangorn-0be.workers.dev'
+  import.meta.env?.VITE_QUICKBEAM_WORKER_URL ?? 'https://quickbeam-registry.quickbeam.workers.dev'
 ).replace(/\/$/, '');
 
 /** Throw the worker's own error text — Home.jsx's friendlyError renders it. */
