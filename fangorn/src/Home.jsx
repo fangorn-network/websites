@@ -2,11 +2,11 @@ import { useEffect, useRef, useState } from 'react';
 import { formatEther, formatUnits, parseEther } from 'viem';
 import styles from './Home.module.css';
 import { useAuth } from './authContext';
-import { usePublisher, useBalances, useFaucet, FAUCET_ETH, FAUCET_USDC } from './fangorn';
+import { usePublisher, useBalances, useFaucet, APP_ID, FAUCET_ETH, FAUCET_USDC } from './fangorn';
 import { useSubscription, SUBSCRIPTION_WINDOW_DAYS } from './subscription';
 import { useUsage } from './usage';
 import { useQuickbeam } from './quickbeam';
-import { useDirectory } from './directory';
+import { useDirectory, appLabel } from './directory';
 import { truncate, explorer, formatBytes, meterState } from './format';
 
 const INSTALL_CMD = 'npm i @fangorn-network/sdk';
@@ -487,12 +487,15 @@ function QuickbeamPanel({ wallet, subscribed }) {
   const [publisher, setPublisher] = useState('');
   const [namespace, setNamespace] = useState('');
   const [hostedMcp, setHostedMcp] = useState(false);
+  // Which app the namespace in the form came from, when it was picked in the directory.
+  // Null after a hand-typed namespace: then we genuinely don't know, and guessing wrong
+  // would be worse than staying quiet.
+  const [pickedApp, setPickedApp] = useState(null);
   // Mounted on first open and left mounted: the directory's name pass costs ~12s of
   // gateway fetches, and reopening should not pay it again.
   const [browsing, setBrowsing] = useState(false);
   const [browsed, setBrowsed] = useState(false);
   const [error, setError] = useState(null);
-  const [created, setCreated] = useState(null);
 
   const { views, loading, creating, create } = useQuickbeam();
   const ready = name.trim() && publisher.trim() && namespace.trim();
@@ -500,11 +503,18 @@ function QuickbeamPanel({ wallet, subscribed }) {
   async function onCreate() {
     setError(null);
     try {
-      setCreated(await create({
+      await create({
         name: name.trim(),
         sources: [{ owner: publisher.trim(), namespace: namespace.trim() }],
         hostedMcp,
-      }));
+      });
+      // Empty the form. The view it produced is listed below, so nothing is lost by
+      // clearing, and leaving the values sitting there reads as "not submitted yet".
+      setName('');
+      setPublisher('');
+      setNamespace('');
+      setHostedMcp(false);
+      setPickedApp(null);
     } catch (err) {
       setError(friendlyError(err));
     }
@@ -514,14 +524,17 @@ function QuickbeamPanel({ wallet, subscribed }) {
     <Column
       title="Quickbeam"
       state={views.length ? 'stateGood' : 'statePending'}
-      stateLabel={loading ? 'Checking' : views.length ? `${views.length} view(s)` : 'No views'}
+      stateLabel={loading ? 'Checking' : views.length
+        ? `${views.length} view${views.length === 1 ? '' : 's'}`
+        : 'No views'}
     >
       <p className={styles.colText}>
-        Create a view over one or more namespaces and get a semantic search endpoint and
-        an MCP for them. Quickbeam follows each publisher's on-chain head and embeds
-        every commit as it lands, so the view stays current without you running the
-        server. Any namespace on the network can be watched, not only the ones your
-        wallet publishes.
+        Create a view over one or more namespaces and get four endpoints for them:
+        hosted search, a full download of the embeddings for searching offline, a live
+        stream telling you when they change, and an MCP. Quickbeam follows each
+        publisher's on-chain head and embeds every commit as it lands, so the view stays
+        current without you running the server. Any namespace on the network can be
+        watched, not only the ones your wallet publishes.
       </p>
       <Field label="Included with">
         <div className={styles.fieldValue}>
@@ -574,10 +587,20 @@ function QuickbeamPanel({ wallet, subscribed }) {
         <input
           className={styles.input}
           value={namespace}
-          onChange={(event) => setNamespace(event.target.value)}
+          onChange={(event) => { setNamespace(event.target.value); setPickedApp(null); }}
           placeholder="my-namespace"
           aria-label="Namespace to watch"
         />
+        {/* A view carries only owner + namespace; the app comes from whatever the
+            watcher was started with. So a namespace picked out of another app would be
+            accepted and then index nothing — say so instead of letting it fail quietly. */}
+        {pickedApp && pickedApp.toLowerCase() !== APP_ID.toLowerCase() && (
+          <div className={`${styles.pending} ${styles.pendingNote}`}>
+            This namespace is in the <strong>{appLabel(pickedApp)}</strong> app. The
+            watcher follows <strong>{appLabel(APP_ID)}</strong>, so a view over it will
+            stay empty until the deployment is pointed at that app.
+          </div>
+        )}
         {/* Off by default: running the client yourself keeps the query on your own
             machine, and a hosted MCP is a service we have to run. */}
         <label className={`${styles.checkRow} ${styles.pendingNote}`}>
@@ -606,16 +629,40 @@ function QuickbeamPanel({ wallet, subscribed }) {
         </button>
       </Field>
 
-      {/* The two things a view actually hands you. Shown for the one just created, or
-          for the most recent existing view on load. */}
-      {(created ?? views[0]) && <ViewEndpoints view={created ?? views[0]} />}
+      {/* Every view this wallet owns, newest first, loaded from the registry on each
+          visit — the URLs are worth nothing if they only exist in the session that
+          created them. Expandable because a wallet can hold several and only one is
+          usually of interest. */}
+      {!!views.length && (
+        <Field label={`Your views (${views.length})`}>
+          <div className={styles.pubList}>
+            {views.map((view, i) => (
+              <details key={view.id} className={styles.pub} open={i === 0}>
+                <summary className={styles.pubHead}>
+                  <span className={styles.fieldValueMono}>{view.name}</span>
+                  <span className={styles.pubCount}>
+                    {view.sources.length} namespace{view.sources.length === 1 ? '' : 's'}
+                  </span>
+                  <span className={styles.fieldNote}>
+                    {view.mcp?.url ? 'hosted MCP' : ''}
+                  </span>
+                </summary>
+                <div className={styles.pubBody}>
+                  <ViewEndpoints view={view} />
+                </div>
+              </details>
+            ))}
+          </div>
+        </Field>
+      )}
 
       <Modal open={browsing} onClose={() => setBrowsing(false)} title="Publishers">
         {browsed && (
           <PublisherDirectory
-            onPick={(owner, ns) => {
+            onPick={(owner, ns, appId) => {
               setPublisher(owner);
               setNamespace(ns);
+              setPickedApp(appId);
               setBrowsing(false);
             }}
           />
@@ -628,32 +675,67 @@ function QuickbeamPanel({ wallet, subscribed }) {
 // A view's search URL and the command that points an MCP client at it. The MCP is the
 // user's own `quickbeam mcp` process — the worker only serves it a catalog filtered to
 // this view's namespaces, so nothing is provisioned per requester.
+// One endpoint: what it is for, then the URL. The hint matters more than it looks —
+// four monospace URLs with only "Search"/"Download"/"Stream"/"MCP" over them tells a
+// user nothing about which one they want.
+function EndpointRow({ label, hint, value, copy }) {
+  return (
+    <Field label={label}>
+      <div className={styles.pending}>{hint}</div>
+      <div className={styles.inlineValue}>
+        <span className={styles.fieldValueMono}>{value}</span>
+        <CopyButton text={copy ?? value} className={styles.ghostBtnSm} />
+      </div>
+    </Field>
+  );
+}
+
+// Everything a view hands you. The three HTTP endpoints are all scoped to this view by
+// the registry worker; the MCP is either one we host or a command you run.
 function ViewEndpoints({ view }) {
+  // The worker returns these; derive them only for rows written before it did.
+  const exportUrl = view.exportUrl ?? view.searchUrl.replace(/\/search$/, '/export');
+  const streamUrl = view.streamUrl ?? view.searchUrl.replace(/\/search$/, '/stream');
+
   return (
     <>
-      <Field label={`Search — ${view.name}`}>
-        <div className={styles.inlineValue}>
-          <span className={styles.fieldValueMono}>{view.searchUrl}?q=</span>
-          <CopyButton text={`${view.searchUrl}?q=`} className={styles.ghostBtnSm} />
-        </div>
-      </Field>
-      <Field label="MCP">
-        {/* A hosted MCP is a URL to paste into an agent; otherwise it is a command to
-            run. Show whichever this view actually has. */}
-        {view.mcp?.url ? (
-          <div className={styles.inlineValue}>
-            <span className={styles.fieldValueMono}>{view.mcp.url}/mcp</span>
-            <CopyButton text={`${view.mcp.url}/mcp`} className={styles.ghostBtnSm} />
+      <EndpointRow
+        label="Search"
+        hint="Semantic search, hosted. Append your query."
+        value={`${view.searchUrl}?q=`}
+      />
+      <EndpointRow
+        label="Download"
+        hint="Every embedding as NDJSON — load it and search with no network."
+        value={exportUrl}
+      />
+      <EndpointRow
+        label="Stream"
+        hint="Server-sent events telling you when this view changed, so you re-download only then."
+        value={streamUrl}
+      />
+
+      {/* Three states: a hosted MCP is a URL to paste into an agent, an unhosted one is
+          a command to run, and a freshly-requested one is still starting. */}
+      {view.mcp?.url ? (
+        <EndpointRow
+          label="MCP"
+          hint="Hosted for you. Paste into an agent that speaks MCP."
+          value={`${view.mcp.url}/mcp`}
+        />
+      ) : view.hostedMcp ? (
+        <Field label="MCP">
+          <div className={styles.pending}>
+            Hosted MCP is starting up — refresh in a moment.
           </div>
-        ) : view.hostedMcp ? (
-          <div className={styles.fieldValue}>Starting up — refresh in a moment.</div>
-        ) : (
-          <div className={styles.inlineValue}>
-            <span className={styles.fieldValueMono}>{view.mcpCommand}</span>
-            <CopyButton text={view.mcpCommand} className={styles.ghostBtnSm} />
-          </div>
-        )}
-      </Field>
+        </Field>
+      ) : (
+        <EndpointRow
+          label="MCP"
+          hint="Run this yourself and the query never leaves your machine."
+          value={view.mcpCommand}
+        />
+      )}
     </>
   );
 }
@@ -666,26 +748,31 @@ function ViewEndpoints({ view }) {
 // So rows render immediately and fill in — a namespace that never resolves keeps its
 // hash, which usually means an orphaned head rather than a bug.
 //
-// Clicking a namespace fills the Quickbeam form above it: browsing and then watching
-// something is the actual path through this page.
+// Clicking a namespace fills the Quickbeam form: browsing and then watching something
+// is the actual path through this page.
 function PublisherDirectory({ onPick }) {
   const { publishers, loading, resolving, error } = useDirectory();
   const [query, setQuery] = useState('');
 
-  // Match on the address or any namespace name, so "robin" finds the publisher who
-  // owns `robinhood` even though the address says nothing.
+  // Match on the address, any namespace name, or the app (name or id) — "robin" finds
+  // the publisher who owns `robinhood` even though the address says nothing, and an app
+  // name finds everyone publishing under it.
   const q = query.trim().toLowerCase();
   const matches = q
     ? publishers.filter((p) =>
         p.owner.toLowerCase().includes(q)
-        || p.namespaces.some((ns) => (ns.name ?? '').toLowerCase().includes(q)))
+        || p.namespaces.some((ns) => (ns.name ?? '').toLowerCase().includes(q))
+        || p.apps.some((app) => app.label.toLowerCase().includes(q)
+          || app.appId.toLowerCase().includes(q)))
     : publishers;
 
   return (
     <>
       <p className={styles.colText}>
-        Everyone who has committed to this app, newest first. Open a publisher and pick
-        a namespace to load it into the form — you don't have to own it to watch it.
+        Everyone who has committed to the network, newest first. Open a publisher and
+        pick a namespace to load it into the form — you don't have to own it to watch it.
+        Namespaces are grouped by the app they were published under: the same name in two
+        apps is two different graphs.
         {loading && ' Loading…'}
         {resolving && ' Resolving namespace names…'}
       </p>
@@ -694,7 +781,7 @@ function PublisherDirectory({ onPick }) {
         className={styles.input}
         value={query}
         onChange={(event) => setQuery(event.target.value)}
-        placeholder="Filter by address or namespace"
+        placeholder="Filter by address, namespace or app"
         aria-label="Filter publishers"
       />
 
@@ -718,6 +805,7 @@ function PublisherDirectory({ onPick }) {
               <span className={styles.fieldValueMono}>{truncate(p.owner, 10, 8)}</span>
               <span className={styles.pubCount}>
                 {p.namespaces.length} namespace{p.namespaces.length === 1 ? '' : 's'}
+                {p.apps.length > 1 && ` in ${p.apps.length} apps`}
               </span>
               <span className={styles.fieldNote}>block {p.lastBlock.toString()}</span>
             </summary>
@@ -731,24 +819,37 @@ function PublisherDirectory({ onPick }) {
               >
                 View on explorer <span className={styles.resArrow}>→</span>
               </a>
-              <div className={styles.chipRow}>
-                {p.namespaces.map((ns) => (
-                  <button
-                    key={ns.key}
-                    className={styles.chip}
-                    type="button"
-                    onClick={() => onPick(p.owner, ns.name)}
-                    disabled={!ns.name}
-                    // An unresolved name is not clickable: there is nothing to put in
-                    // the form, and the API does not accept the hash.
-                    title={ns.name
-                      ? `Watch ${ns.name}`
-                      : 'Name unavailable — the head could not be resolved through the gateway'}
-                  >
-                    {ns.name ?? `${ns.subspaceId.slice(0, 10)}…`}
-                  </button>
-                ))}
-              </div>
+              {/* One block per app. The heading carries the full id in its title so it
+                  can be copied into `fangorn --app` / `quickbeam watch --app`, which is
+                  the only way to read a namespace outside the default app. */}
+              {p.apps.map((app) => (
+                <div key={app.appId}>
+                  <div className={styles.appHead} title={app.appId}>
+                    <span className={styles.appName}>{app.label}</span>
+                    <span>
+                      {app.namespaces.length} namespace{app.namespaces.length === 1 ? '' : 's'}
+                    </span>
+                  </div>
+                  <div className={styles.chipRow}>
+                    {app.namespaces.map((ns) => (
+                      <button
+                        key={ns.key}
+                        className={styles.chip}
+                        type="button"
+                        onClick={() => onPick(p.owner, ns.name, app.appId)}
+                        disabled={!ns.name}
+                        // An unresolved name is not clickable: there is nothing to put in
+                        // the form, and the API does not accept the hash.
+                        title={ns.name
+                          ? `Watch ${ns.name} in ${app.label}`
+                          : 'Name unavailable — the head could not be resolved through the gateway'}
+                      >
+                        {ns.name ?? `${ns.subspaceId.slice(0, 10)}…`}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ))}
             </div>
           </details>
         ))}

@@ -439,6 +439,23 @@ a.fieldValueMono:hover { color: var(--hi); }
 
 /* Namespace chips in the publisher directory. Wrap rather than scroll — a publisher
    with many namespaces should get taller, not hide them behind a scrollbar. */
+/* The app a group of namespaces belongs to. A heading rather than a suffix on each
+   chip: a publisher's namespaces are only unique *within* an app, so the app is the
+   thing you read first, and it would otherwise repeat on every chip. */
+.appHead {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-top: 14px;
+  font-size: 12px;
+  color: var(--sub);
+}
+
+.appName {
+  font-family: var(--mono);
+  color: var(--text);
+}
+
 .chipRow {
   display: flex;
   flex-wrap: wrap;

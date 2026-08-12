@@ -18,8 +18,9 @@ export const CHAIN = FangornConfig.chain;
 export const REGISTRY_ADDRESS = FangornConfig.dataRegistryContractAddress;
 
 // Every registry call is scoped to an app id. Publishers register app-agnostically,
-// but the client requires one, so use the SDK's default app.
-const APP_ID = toAppId(DEFAULT_APP);
+// but the client requires one, so use the SDK's default app. Exported because the
+// Quickbeam panel has to say when a picked namespace lives in a *different* app.
+export const APP_ID = toAppId(DEFAULT_APP);
 
 // USDC, for the balance display and the subscription fee (subscription.js). The
 // registration fee is native ETH, paid by the SDK's register().
@@ -80,6 +81,16 @@ export const IPFS_GATEWAY = (
 // A DataRegistryClient wired for reads. Writes need the user's wallet, so
 // register() below builds its own client with a Privy-backed walletClient.
 export const readRegistry = new DataRegistryClient(REGISTRY_ADDRESS, APP_ID, publicClient, publicClient);
+
+// The same client with the app left open. A namespace is an `app:publisher:subspace`
+// triple and all three are indexed topics on StateCommitted, so the client's appId is
+// simply topic 2 of the log filter — leaving it undefined makes that a null topic and
+// the node returns every app's commits. That is what lets the directory show which app
+// each namespace belongs to instead of only the one this site publishes under.
+//
+// Reads only. Anything that derives a namespaceKey — a write, or a filter naming one
+// exact namespace — hashes the app id in and needs a real one.
+export const allAppsRegistry = new DataRegistryClient(REGISTRY_ADDRESS, undefined, publicClient, publicClient);
 
 /**
  * The Privy wallet (embedded or injected) as a viem WalletClient, switched to

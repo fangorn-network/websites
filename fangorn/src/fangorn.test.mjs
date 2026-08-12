@@ -48,6 +48,30 @@ assert.ok(cid.toString().startsWith('bafyrei'));
 const sibling = CID.createV1(0x55, cid.multihash);
 assert.equal(sibling.multihash.digest.join(), cid.multihash.digest.join());
 
+// The directory spans every app, which rests on one subtlety: the client's appId is
+// topic 2 of the StateCommitted filter, so an UNDEFINED one is a wildcard. Setting it
+// to APP_ID "for consistency" would silently narrow the directory back to one app.
+const { readRegistry, allAppsRegistry, APP_ID } = await import('./fangorn.js');
+assert.equal(readRegistry.getAppId(), APP_ID, 'the app-scoped client keeps its app');
+assert.equal(allAppsRegistry.getAppId(), undefined, 'the directory client must stay app-wildcard');
+
+// Namespaces group by app under each publisher, and a name is only unique inside one:
+// the same subspace committed in two apps is two rows, never one.
+const { groupByApp, appLabel } = await import('./directory.js');
+const APP_B = toAppId('other.app');
+const rows = [
+  { key: 'k1', appId: APP_ID, name: 'media', blockNumber: 10n },
+  { key: 'k2', appId: APP_B, name: 'media', blockNumber: 30n },
+  { key: 'k3', appId: APP_ID, name: 'notes', blockNumber: 20n },
+];
+const apps = groupByApp(rows);
+assert.equal(apps.length, 2, 'one group per app');
+assert.equal(apps[0].appId, APP_B, 'most recently active app first');
+assert.deepEqual(apps[1].namespaces.map((n) => n.name), ['media', 'notes']);
+assert.equal(apps[1].lastBlock, 20n, 'group carries its newest block');
+assert.equal(appLabel(APP_ID), DEFAULT_APP, 'a known app id resolves to its name');
+assert.equal(appLabel(APP_B), `${APP_B.slice(0, 10)}…`, 'an unknown one shows its hex');
+
 // The storage meters: the worker's KV counters are eventually consistent and are
 // debited on grant, so `used` can legitimately exceed the cap. The bar must clamp
 // and the headroom note must never go negative.

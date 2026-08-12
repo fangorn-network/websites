@@ -1,6 +1,11 @@
-// Publisher directory: who has published to this app, and what they called their
-// namespaces. Mirrors the fangorn.js / quickbeam.js shape (read functions + a use*
-// hook consumed by a panel in Home).
+// Publisher directory: who has published to the network, under which app, and what
+// they called their namespaces. Mirrors the fangorn.js / quickbeam.js shape (read
+// functions + a use* hook consumed by a panel in Home).
+//
+// A namespace is an `app:publisher:subspace` triple, so a publisher can hold several
+// unrelated graphs that only differ by app — showing subspaces alone would silently
+// merge them. The chain pass therefore leaves the app topic open (allAppsRegistry) and
+// the result is grouped publisher → app → namespaces.
 //
 // Two passes, because they cost wildly different amounts:
 //
@@ -16,19 +21,34 @@
 // keep their subspaceId and the rest of the table is unaffected.
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Fangorn } from '@fangorn-network/sdk';
-import { FangornConfig } from '@fangorn-network/sdk/lib/config.js';
+import { DEFAULT_APP, FangornConfig, toAppId } from '@fangorn-network/sdk/lib/config.js';
 import { useAuth } from './authContext.js';
-import { IPFS_GATEWAY, readRegistry, walletClientFor } from './fangorn.js';
+import { IPFS_GATEWAY, allAppsRegistry, walletClientFor } from './fangorn.js';
 
-/** Newest-first list of `{owner, subspaceId, root, blockNumber}`, latest per timeline. */
+// An app id is keccak256 of the app's name and nothing on-chain stores the preimage —
+// `registerApp` claims the hash alone. So a name can only ever be recognised, never
+// recovered: this is the site's phrasebook of the apps we know about. Anything else
+// shows as its short hex, which is still exactly what `fangorn --app` accepts.
+const KNOWN_APPS = [DEFAULT_APP, 'sond3r.test.0', 'sond3r.test.1'];
+const APP_NAMES = new Map(KNOWN_APPS.map((name) => [toAppId(name).toLowerCase(), name]));
+
+/** A human label for an app id — its name if we know it, else its short hex. */
+export function appLabel(appId) {
+  return APP_NAMES.get(appId.toLowerCase()) ?? `${appId.slice(0, 10)}…`;
+}
+
+/** Newest-first list of `{owner, appId, subspaceId, root, blockNumber}`, latest per timeline. */
 export async function readTimelines() {
-  const logs = await readRegistry.getStateCommittedLogs({}, 0n);
+  const logs = await allAppsRegistry.getStateCommittedLogs({}, 0n);
   const latest = new Map();
   for (const log of logs) {
-    // Logs arrive oldest-first, so the last write per timeline wins.
+    // Logs arrive oldest-first, so the last write per timeline wins. The key is the
+    // contract's own `namespaceKey` — keccak over app+publisher+subspace — so the same
+    // subspace name in two apps stays two timelines, as it is on-chain.
     latest.set(log.namespaceKey, {
       key: log.namespaceKey,
       owner: log.publisher,
+      appId: log.appId,
       subspaceId: log.subspaceId,
       root: log.newRoot,
       blockNumber: log.blockNumber,
@@ -50,9 +70,30 @@ export function groupByOwner(timelines) {
   return [...byOwner.values()].sort((a, b) => Number(b.lastBlock - a.lastBlock));
 }
 
+/** One publisher's namespaces split by app, newest app first. */
+export function groupByApp(namespaces) {
+  const byApp = new Map();
+  for (const ns of namespaces) {
+    if (!byApp.has(ns.appId)) {
+      byApp.set(ns.appId, {
+        appId: ns.appId,
+        label: appLabel(ns.appId),
+        namespaces: [],
+        lastBlock: 0n,
+      });
+    }
+    const entry = byApp.get(ns.appId);
+    entry.namespaces.push(ns);
+    if (ns.blockNumber > entry.lastBlock) entry.lastBlock = ns.blockNumber;
+  }
+  return [...byApp.values()].sort((a, b) => Number(b.lastBlock - a.lastBlock));
+}
+
 /**
  * The directory.
- *   publishers – [{ owner, namespaces: [{ key, subspaceId, root, blockNumber, name? }], lastBlock }]
+ *   publishers – [{ owner, lastBlock,
+ *                   namespaces: [{ key, appId, subspaceId, root, blockNumber, name? }],
+ *                   apps: [{ appId, label, namespaces, lastBlock }] }]
  *   loading    – true during the chain pass
  *   resolving  – true while names are still being fetched
  *   error      – the chain pass failed (the name pass never surfaces as an error)
@@ -125,10 +166,12 @@ export function useDirectory() {
     resolveNames(pending);
   }, [timelines, resolveNames]);
 
-  const publishers = groupByOwner(timelines).map((p) => ({
-    ...p,
-    namespaces: p.namespaces.map((n) => ({ ...n, name: names[n.key] ?? undefined })),
-  }));
+  // Names land asynchronously, so the app grouping is derived here rather than in the
+  // chain pass — it has to be rebuilt from the enriched namespaces on every fill.
+  const publishers = groupByOwner(timelines).map((p) => {
+    const namespaces = p.namespaces.map((n) => ({ ...n, name: names[n.key] ?? undefined }));
+    return { ...p, namespaces, apps: groupByApp(namespaces) };
+  });
 
   return { publishers, loading, resolving, error };
 }
