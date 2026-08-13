@@ -505,7 +505,14 @@ function QuickbeamPanel({ wallet, subscribed }) {
     try {
       await create({
         name: name.trim(),
-        sources: [{ owner: publisher.trim(), namespace: namespace.trim() }],
+        // The app the namespace actually lives in — picked from the directory, else
+        // this build's. The watcher follows whatever app the source names, so a
+        // namespace in another app is now watchable rather than a dead end.
+        sources: [{
+          app: pickedApp || APP_ID,
+          owner: publisher.trim(),
+          namespace: namespace.trim(),
+        }],
         hostedMcp,
       });
       // Empty the form. The view it produced is listed below, so nothing is lost by
@@ -591,14 +598,13 @@ function QuickbeamPanel({ wallet, subscribed }) {
           placeholder="my-namespace"
           aria-label="Namespace to watch"
         />
-        {/* A view carries only owner + namespace; the app comes from whatever the
-            watcher was started with. So a namespace picked out of another app would be
-            accepted and then index nothing — say so instead of letting it fail quietly. */}
+        {/* A source carries its own app, and the instance watches many — so a namespace
+            from another app is watched under that app rather than silently indexing
+            nothing. Still worth naming, since it is easy to pick by accident. */}
         {pickedApp && pickedApp.toLowerCase() !== APP_ID.toLowerCase() && (
           <div className={`${styles.pending} ${styles.pendingNote}`}>
-            This namespace is in the <strong>{appLabel(pickedApp)}</strong> app. The
-            watcher follows <strong>{appLabel(APP_ID)}</strong>, so a view over it will
-            stay empty until the deployment is pointed at that app.
+            This namespace is in the <strong>{appLabel(pickedApp)}</strong> app, not{' '}
+            <strong>{appLabel(APP_ID)}</strong>. The view will be created against it.
           </div>
         )}
         {/* Off by default: running the client yourself keeps the query on your own

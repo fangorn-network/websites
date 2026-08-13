@@ -23,7 +23,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Fangorn } from '@fangorn-network/sdk';
 import { DEFAULT_APP, FangornConfig, toAppId } from '@fangorn-network/sdk/lib/config.js';
 import { useAuth } from './authContext.js';
-import { IPFS_GATEWAY, allAppsRegistry, walletClientFor } from './fangorn.js';
+import { IPFS_GATEWAY, allAppsRegistry, publicClient, walletClientFor } from './fangorn.js';
 
 // An app id is keccak256 of the app's name and nothing on-chain stores the preimage —
 // `registerApp` claims the hash alone. So a name can only ever be recognised, never
@@ -37,9 +37,40 @@ export function appLabel(appId) {
   return APP_NAMES.get(appId.toLowerCase()) ?? `${appId.slice(0, 10)}…`;
 }
 
+// How far behind the chain head to stop reading logs when `latest` is refused.
+//
+// The public Arbitrum Sepolia endpoint answers eth_getLogs with `-32000 internal server
+// errror` for any range reaching into its most recent few thousand blocks, while the
+// very same query bounded a little further back returns the whole history fine.
+// Measured 2026-08-12: the boundary sat ~3,100 blocks behind head, so this is ~2x
+// margin. Arbitrum runs ~4 blocks/s, so the fallback costs about half an hour of
+// recency — a just-published namespace shows up on the next load.
+//
+// This is NOT a block-range limit: `fromBlock: 0n` across the whole chain is fine, only
+// the recent tail is refused. Do not "fix" it by paginating the range.
+const HEAD_LAG = 8000n;
+
+/**
+ * Every StateCommitted log, preferring a live read. `latest` is tried first so a healthy
+ * RPC gives fresh data and this degrades on its own if the endpoint is repaired; the
+ * lagged retry is what keeps the directory rendering when it is not.
+ */
+async function readAllLogs() {
+  try {
+    return await allAppsRegistry.getStateCommittedLogs({}, 0n);
+  } catch (err) {
+    const head = await publicClient.getBlockNumber();
+    const safe = head > HEAD_LAG ? head - HEAD_LAG : head;
+    console.warn(
+      `Directory: getLogs to "latest" failed (${err.shortMessage || err.message}); `
+      + `retrying to block ${safe} — entries newer than that are not listed.`);
+    return allAppsRegistry.getStateCommittedLogs({}, 0n, safe);
+  }
+}
+
 /** Newest-first list of `{owner, appId, subspaceId, root, blockNumber}`, latest per timeline. */
 export async function readTimelines() {
-  const logs = await allAppsRegistry.getStateCommittedLogs({}, 0n);
+  const logs = await readAllLogs();
   const latest = new Map();
   for (const log of logs) {
     // Logs arrive oldest-first, so the last write per timeline wins. The key is the
