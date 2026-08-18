@@ -442,6 +442,8 @@ a.fieldValueMono:hover { color: var(--hi); }
 /* The app a group of namespaces belongs to. A heading rather than a suffix on each
    chip: a publisher's namespaces are only unique *within* an app, so the app is the
    thing you read first, and it would otherwise repeat on every chip. */
+/* A button since picking an app is how a view is made — the browser's own button
+   styling is reset away so it still reads as the heading it was. */
 .appHead {
   display: flex;
   align-items: baseline;
@@ -449,6 +451,16 @@ a.fieldValueMono:hover { color: var(--hi); }
   margin-top: 14px;
   font-size: 12px;
   color: var(--sub);
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+}
+
+.appHead:hover .appName {
+  text-decoration: underline;
 }
 
 .appName {
@@ -464,6 +476,7 @@ a.fieldValueMono:hover { color: var(--hi); }
 }
 
 .chip {
+  display: inline-block;
   font-family: var(--mono);
   font-size: 11px;
   color: var(--hi);
@@ -474,16 +487,8 @@ a.fieldValueMono:hover { color: var(--hi); }
   transition: border-color 0.15s, background 0.15s;
 }
 
-.chip:hover:not(:disabled) {
-  border-color: var(--hi);
-  background: var(--s3);
-}
-
-/* Unresolved namespaces show their hash and can't be picked — nothing to submit. */
-.chip:disabled {
-  color: var(--dim);
-  cursor: default;
-}
+/* Namespaces are listed to say what an app contains, not to be selected — a view
+   watches the app at large, so the chips are labels rather than controls. */
 
 /* Checkbox + label on one line. accent-color tints the native control, which keeps
    the platform's focus ring and keyboard behaviour instead of rebuilding them. */

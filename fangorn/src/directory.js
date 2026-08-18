@@ -29,7 +29,7 @@ import { IPFS_GATEWAY, allAppsRegistry, publicClient, walletClientFor } from './
 // `registerApp` claims the hash alone. So a name can only ever be recognised, never
 // recovered: this is the site's phrasebook of the apps we know about. Anything else
 // shows as its short hex, which is still exactly what `fangorn --app` accepts.
-const KNOWN_APPS = [DEFAULT_APP, 'sond3r.test.0', 'sond3r.test.1'];
+const KNOWN_APPS = [DEFAULT_APP, 'sond3r', 'sond3r.test.0', 'sond3r.test.1', 'sond3r.test.2'];
 const APP_NAMES = new Map(KNOWN_APPS.map((name) => [toAppId(name).toLowerCase(), name]));
 
 /** A human label for an app id — its name if we know it, else its short hex. */

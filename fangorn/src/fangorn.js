@@ -92,6 +92,32 @@ export const readRegistry = new DataRegistryClient(REGISTRY_ADDRESS, APP_ID, pub
 // exact namespace — hashes the app id in and needs a real one.
 export const allAppsRegistry = new DataRegistryClient(REGISTRY_ADDRESS, undefined, publicClient, publicClient);
 
+/** The zero address, which is what an unclaimed app id reads back as. */
+export const ZERO_ADDRESS = `0x${'0'.repeat(40)}`;
+
+/**
+ * Who owns an app id — an address, or ZERO_ADDRESS when nobody has claimed it.
+ *
+ * `registerApp` claims a hash and nothing on-chain stores the preimage, so this is the
+ * only way to tell "nobody has taken this name" from "this is someone else's app". It
+ * matters before a publish, not before a watch: committing under an unregistered app
+ * reverts, while watching one is a read and works either way.
+ */
+export function readAppOwner(nameOrId) {
+  const client = new DataRegistryClient(REGISTRY_ADDRESS, toAppId(nameOrId), publicClient, publicClient);
+  return client.getAppOwner();
+}
+
+/**
+ * Claim an app id for this wallet. First come, first served, and irreversible — the
+ * registry has no transfer and no release.
+ */
+export async function registerApp(wallet, address, nameOrId) {
+  const walletClient = await walletClientFor(wallet, address);
+  const registry = new DataRegistryClient(REGISTRY_ADDRESS, toAppId(nameOrId), publicClient, walletClient);
+  return registry.registerApp();
+}
+
 /**
  * The Privy wallet (embedded or injected) as a viem WalletClient, switched to
  * the SDK's chain first so the tx can't land on the wrong network.
