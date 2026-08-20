@@ -9,7 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@fangorn-network/sdk": "2026.07.29",
+    "@fangorn-network/sdk": "2026.8.18-dev",
     "@privy-io/react-auth": "^3.33.1",
     "buffer": "^6.0.3",
     "multiformats": "^14.0.0",

@@ -10,6 +10,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { getAddress, erc20Abi } from 'viem';
 import { useAuth } from './authContext.js';
 import { SUBSCRIPTION_ABI } from './subscriptionAbi.js';
+import { FangornConfig } from '@fangorn-network/sdk/lib/config.js';
 import { CHAIN, USDC_ADDRESS, publicClient, walletClientFor } from './fangorn.js';
 
 /**
@@ -50,9 +51,12 @@ async function writeGas(params) {
   return ((await publicClient.estimateContractGas(params)) * 130n) / 100n;
 }
 
-// The deployed SubscriptionRegistry. import.meta.env is undefined under plain node
-// (the self-check), so guard it — same convention as REGISTRY_ADDRESS.
-export const SUBSCRIPTION_ADDRESS = import.meta.env?.VITE_SUBSCRIPTION_ADDRESS;
+// The deployed SubscriptionRegistry — from the SDK, like REGISTRY_ADDRESS, and NOT from
+// an env var. This contract is only usable if its dataRegistry() equals the registry the
+// SDK publishes to; pinning it separately is precisely how the two drift, and a mismatch
+// reverts subscribe() with NotRegistered for every wallet registered after a redeploy.
+// One source of truth means a version bump moves both together or neither.
+export const SUBSCRIPTION_ADDRESS = FangornConfig.subscriptionRegistryContractAddress;
 
 // Active window, in days. Display-only here — the worker enforces the real gate
 // (its SUBSCRIPTION_WINDOW_DAYS env is the source of truth; keep these in sync).
