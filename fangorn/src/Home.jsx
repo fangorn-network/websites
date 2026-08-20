@@ -2,11 +2,12 @@ import { useEffect, useRef, useState } from 'react';
 import { formatEther, formatUnits, parseEther } from 'viem';
 import styles from './Home.module.css';
 import { useAuth } from './authContext';
-import { usePublisher, useBalances, useFaucet, APP_ID, FAUCET_ETH, FAUCET_USDC } from './fangorn';
+import { usePublisher, useBalances, useFaucet, FAUCET_ETH, FAUCET_USDC } from './fangorn';
+import { DEFAULT_APP } from '@fangorn-network/sdk/lib/config.js';
 import { useSubscription, SUBSCRIPTION_WINDOW_DAYS } from './subscription';
 import { useUsage } from './usage';
-import { useQuickbeam } from './quickbeam';
-import { useDirectory, appLabel } from './directory';
+import { useQuickbeam, buildSources, describeSources } from './quickbeam';
+import { useDirectory, appName } from './directory';
 import { truncate, explorer, formatBytes, meterState } from './format';
 
 const INSTALL_CMD = 'npm i @fangorn-network/sdk';
@@ -29,6 +30,11 @@ function friendlyError(err) {
   if (/rejected|denied/i.test(text)) return 'Transaction cancelled.';
   if (/insufficient funds/i.test(text)) return 'Not enough ETH for gas. Add funds and try again.';
   if (/AlreadyRegistered/i.test(text)) return 'This wallet is already registered.';
+  // Before the bare NotRegistered branch — that pattern is a prefix of this one, so the
+  // order is what keeps app membership from being reported as missing registration.
+  if (/NotRegisteredForApp/i.test(text)) return 'This wallet has not joined the app yet. Register again to finish.';
+  if (/TermsMismatch/i.test(text)) return 'The app published new terms while this was confirming. Try again.';
+  if (/AppSuspended/i.test(text)) return 'This app is suspended. Nothing can be published under it right now.';
   if (/NotRegistered/i.test(text)) return 'Register before subscribing.';
   if (/cooldown/i.test(text)) return 'Already claimed. Try again tomorrow.';
   if (/max fee per gas less than block base fee/i.test(text)) {
@@ -474,23 +480,30 @@ function StorageColumn({ registered, subscription }) {
 // namespace somebody else already watches returns the same points and costs no extra
 // indexing, so a view is a filter rather than a copy.
 //
-// A source is (publisher, namespace), not a bare namespace: namespaces are keys inside
-// one publisher's off-chain root map, so the same name under two publishers is two
-// different graphs. Any namespace on the network can be watched — you don't have to
-// own it — so the publisher field is a plain address input.
+// TWO inputs on screen, not five: a name, and a source you pick from the directory.
+// A source is the whole `app:publisher:subspace` triple — a subspace name is only
+// unique inside one publisher inside one app — but every watchable triple already
+// exists in the directory behind "Choose from the network", so the three fields that
+// spell one out sit in a disclosure for the cases browsing can't reach (a namespace
+// whose name the gateway won't resolve, or one committed seconds ago).
+//
+// There is no scope switch. Leaving publisher and namespace blank IS the whole-app
+// source (`owner:'*', namespace:'*'`), so the same three fields express both shapes
+// and buildSources derives which one you meant — no radio to drift out of sync with
+// the inputs it enables.
 //
 // The registry worker gates on the storage subscription this site already sells, so
 // there is no separate Quickbeam purchase — `subscribed` is that same state, passed
 // down rather than re-read.
 function QuickbeamPanel({ wallet, subscribed }) {
   const [name, setName] = useState('');
+  // The source triple. `app` starts EMPTY rather than at DEFAULT_APP: with a blank
+  // publisher/namespace meaning "the whole app", a prefilled app would make the
+  // untouched form a valid view over every namespace on it, one click from Create.
+  const [app, setApp] = useState('');
   const [publisher, setPublisher] = useState('');
   const [namespace, setNamespace] = useState('');
   const [hostedMcp, setHostedMcp] = useState(false);
-  // Which app the namespace in the form came from, when it was picked in the directory.
-  // Null after a hand-typed namespace: then we genuinely don't know, and guessing wrong
-  // would be worse than staying quiet.
-  const [pickedApp, setPickedApp] = useState(null);
   // Mounted on first open and left mounted: the directory's name pass costs ~12s of
   // gateway fetches, and reopening should not pay it again.
   const [browsing, setBrowsing] = useState(false);
@@ -498,30 +511,35 @@ function QuickbeamPanel({ wallet, subscribed }) {
   const [error, setError] = useState(null);
 
   const { views, loading, creating, create } = useQuickbeam();
-  const ready = name.trim() && publisher.trim() && namespace.trim();
+  const wholeApp = !publisher.trim() && !namespace.trim();
+  // A half-filled triple is neither shape, so Create stays off until it resolves to
+  // one namespace or to all of them.
+  const ready = name.trim() && app.trim()
+    && (wholeApp || (publisher.trim() && namespace.trim()));
+
+  function openBrowser() {
+    setBrowsed(true);
+    setBrowsing(true);
+  }
 
   async function onCreate() {
     setError(null);
     try {
       await create({
         name: name.trim(),
-        // The app the namespace actually lives in — picked from the directory, else
-        // this build's. The watcher follows whatever app the source names, so a
-        // namespace in another app is now watchable rather than a dead end.
-        sources: [{
-          app: pickedApp || APP_ID,
-          owner: publisher.trim(),
-          namespace: namespace.trim(),
-        }],
-        hostedMcp,
+        sources: buildSources({ app, publisher, namespace }),
+        // A whole-app view has no CDN domains to pull from, so a hosted MCP would come
+        // up serving an empty catalog. The checkbox is hidden in that mode; force the
+        // flag too, so a box ticked before clearing the namespace can't leak through.
+        hostedMcp: wholeApp ? false : hostedMcp,
       });
       // Empty the form. The view it produced is listed below, so nothing is lost by
       // clearing, and leaving the values sitting there reads as "not submitted yet".
+      // `app` survives: creating two views over one app is the common case.
       setName('');
       setPublisher('');
       setNamespace('');
       setHostedMcp(false);
-      setPickedApp(null);
     } catch (err) {
       setError(friendlyError(err));
     }
@@ -541,14 +559,9 @@ function QuickbeamPanel({ wallet, subscribed }) {
         stream telling you when they change, and an MCP. Quickbeam follows each
         publisher's on-chain head and embeds every commit as it lands, so the view stays
         current without you running the server. Any namespace on the network can be
-        watched, not only the ones your wallet publishes.
+        watched, not only the ones your wallet publishes — and it is included with your
+        storage subscription, at no separate charge.
       </p>
-      <Field label="Included with">
-        <div className={styles.fieldValue}>
-          Your storage subscription
-          <span className={styles.fieldNote}> · no separate charge</span>
-        </div>
-      </Field>
 
       <Field label="View name">
         <input
@@ -560,80 +573,136 @@ function QuickbeamPanel({ wallet, subscribed }) {
         />
       </Field>
 
-      {/* Left empty on purpose — prefilling the signed-in wallet implies you can only
-          watch your own graph, which is the opposite of how this works. The button is
-          the shortcut for the case where you do own it. */}
-      <Field label="Publisher">
-        <input
-          className={styles.input}
-          value={publisher}
-          onChange={(event) => setPublisher(event.target.value)}
-          placeholder="0x… address of the publisher to watch"
-          aria-label="Publisher address to watch"
-        />
-        <div className={styles.btnRow}>
-          <button
-            className={styles.ghostBtn}
-            onClick={() => setPublisher(wallet)}
-            disabled={!wallet}
-            type="button"
-          >
-            My address
-          </button>
-          <button
-            className={styles.ghostBtn}
-            onClick={() => { setBrowsed(true); setBrowsing(true); }}
-            type="button"
-          >
-            Browse publishers
-          </button>
+      {/* One control for the whole source. The summary is the readback — the triple as
+          the worker will receive it — so what gets watched is legible without reading
+          three fields back to yourself. */}
+      <Field label="Watching">
+        <div className={styles.fieldValue}>
+          {app.trim() ? (
+            <span className={styles.fieldValueMono}>
+              {app.trim()}
+              {wholeApp ? (
+                <span className={styles.fieldNote}> · every publisher · every namespace</span>
+              ) : (
+                ` · ${publisher.trim() ? truncate(publisher.trim(), 8, 6) : '…'} · ${namespace.trim() || '…'}`
+              )}
+            </span>
+          ) : (
+            <span className={styles.fieldNote}>Nothing chosen yet.</span>
+          )}
         </div>
-      </Field>
 
-      <Field label="Namespace">
-        <input
-          className={styles.input}
-          value={namespace}
-          onChange={(event) => { setNamespace(event.target.value); setPickedApp(null); }}
-          placeholder="my-namespace"
-          aria-label="Namespace to watch"
-        />
-        {/* A source carries its own app, and the instance watches many — so a namespace
-            from another app is watched under that app rather than silently indexing
-            nothing. Still worth naming, since it is easy to pick by accident. */}
-        {pickedApp && pickedApp.toLowerCase() !== APP_ID.toLowerCase() && (
+        <div className={styles.btnRow}>
+          <button className={styles.ghostBtn} onClick={openBrowser} type="button">
+            Choose from the network
+          </button>
+          {!!app.trim() && (
+            <button
+              className={styles.ghostBtn}
+              onClick={() => { setApp(''); setPublisher(''); setNamespace(''); }}
+              type="button"
+            >
+              Clear
+            </button>
+          )}
+        </div>
+
+        {wholeApp && !!app.trim() && (
           <div className={`${styles.pending} ${styles.pendingNote}`}>
-            This namespace is in the <strong>{appLabel(pickedApp)}</strong> app, not{' '}
-            <strong>{appLabel(APP_ID)}</strong>. The view will be created against it.
+            The whole application — every publisher in it, including ones who arrive
+            later. Search and Download cover all of it; Stream and MCP are per-namespace
+            and stay empty for a view like this.
           </div>
         )}
-        {/* Off by default: running the client yourself keeps the query on your own
-            machine, and a hosted MCP is a service we have to run. */}
-        <label className={`${styles.checkRow} ${styles.pendingNote}`}>
-          <input
-            type="checkbox"
-            checked={hostedMcp}
-            onChange={(event) => setHostedMcp(event.target.checked)}
-          />
-          <span>Host an MCP server for me, instead of running one locally.</span>
-        </label>
+
+        {/* The escape hatch, closed by default. An app id is a hash with no on-chain
+            preimage and a namespace name the gateway can't resolve never becomes a
+            chip, so typing a triple has to stay possible — it just isn't the path. */}
+        <details className={styles.more}>
+          <summary>Type it in instead</summary>
+
+          <Field label="Application">
+            <input
+              className={styles.input}
+              value={app}
+              onChange={(event) => setApp(event.target.value)}
+              placeholder="fangorn, or 0x… app id"
+              aria-label="Application to watch"
+            />
+          </Field>
+
+          {/* Not prefilled with the signed-in wallet: that implies you can only watch
+              your own graph, which is the opposite of how this works. */}
+          <Field label="Publisher">
+            <input
+              className={styles.input}
+              value={publisher}
+              onChange={(event) => setPublisher(event.target.value)}
+              placeholder="0x… — blank means every publisher"
+              aria-label="Publisher address to watch"
+            />
+            <div className={styles.btnRow}>
+              <button
+                className={styles.ghostBtn}
+                onClick={() => { setPublisher(wallet); if (!app.trim()) setApp(DEFAULT_APP); }}
+                disabled={!wallet}
+                type="button"
+              >
+                My address
+              </button>
+            </div>
+          </Field>
+
+          <Field label="Namespace">
+            <input
+              className={styles.input}
+              value={namespace}
+              onChange={(event) => setNamespace(event.target.value)}
+              placeholder="my-namespace — blank means every namespace"
+              aria-label="Namespace to watch"
+            />
+          </Field>
+        </details>
+      </Field>
+
+      {/* Off by default: running the client yourself keeps the query on your own
+          machine, and a hosted MCP is a service we have to run. Hidden for a whole-app
+          view — an MCP is a pull-client over the view's CDN catalog, and a wildcard
+          source ships no CDN shards, so it would provision a server that answers every
+          question with nothing. */}
+      {!wholeApp && (
+        <Field label="MCP">
+          <label className={styles.checkRow}>
+            <input
+              type="checkbox"
+              checked={hostedMcp}
+              onChange={(event) => setHostedMcp(event.target.checked)}
+            />
+            <span>Host an MCP server for me, instead of running one locally.</span>
+          </label>
+        </Field>
+      )}
+
+      <div className={styles.field}>
         {error && <div className={styles.formError}>{error}</div>}
-        <div className={`${styles.pending} ${styles.pendingNote}`}>
+        <div className={styles.pending}>
           Indexing starts within a minute. A namespace already being watched is ready
           immediately.
         </div>
-        <button
-          className={styles.ghostBtn}
-          onClick={onCreate}
-          disabled={creating || loading || !ready || !subscribed}
-          type="button"
-          // The worker refuses a wallet without an active subscription, so say why
-          // rather than letting the request fail.
-          title={subscribed ? undefined : 'Subscribe to storage first'}
-        >
-          {creating ? 'Creating…' : 'Create view'}
-        </button>
-      </Field>
+        <div className={styles.btnRow}>
+          <button
+            className={styles.ghostBtn}
+            onClick={onCreate}
+            disabled={creating || loading || !ready || !subscribed}
+            type="button"
+            // The worker refuses a wallet without an active subscription, so say why
+            // rather than letting the request fail.
+            title={subscribed ? undefined : 'Subscribe to storage first'}
+          >
+            {creating ? 'Creating…' : 'Create view'}
+          </button>
+        </div>
+      </div>
 
       {/* Every view this wallet owns, newest first, loaded from the registry on each
           visit — the URLs are worth nothing if they only exist in the session that
@@ -646,9 +715,10 @@ function QuickbeamPanel({ wallet, subscribed }) {
               <details key={view.id} className={styles.pub} open={i === 0}>
                 <summary className={styles.pubHead}>
                   <span className={styles.fieldValueMono}>{view.name}</span>
-                  <span className={styles.pubCount}>
-                    {view.sources.length} namespace{view.sources.length === 1 ? '' : 's'}
-                  </span>
+                  {/* Not a source count: a wildcard source covers however many
+                      namespaces the app holds, so counting sources would read
+                      "1 namespace" for a view over forty. */}
+                  <span className={styles.pubCount}>{describeSources(view.sources)}</span>
                   <span className={styles.fieldNote}>
                     {view.mcp?.url ? 'hosted MCP' : ''}
                   </span>
@@ -662,13 +732,22 @@ function QuickbeamPanel({ wallet, subscribed }) {
         </Field>
       )}
 
-      <Modal open={browsing} onClose={() => setBrowsing(false)} title="Publishers">
+      <Modal open={browsing} onClose={() => setBrowsing(false)} title="Browse the network">
         {browsed && (
-          <PublisherDirectory
+          <NetworkDirectory
             onPick={(owner, ns, appId) => {
+              setApp(appName(appId) ?? appId);
               setPublisher(owner);
               setNamespace(ns);
-              setPickedApp(appId);
+              setBrowsing(false);
+            }}
+            // The id is authoritative, but a name is what a person can read back and
+            // check — so prefer it when the phrasebook has one. Never `appLabel`: it
+            // truncates an unknown id, and the worker would hash the ellipsis.
+            onPickApp={(appId) => {
+              setApp(appName(appId) ?? appId);
+              setPublisher('');
+              setNamespace('');
               setBrowsing(false);
             }}
           />
@@ -746,6 +825,154 @@ function ViewEndpoints({ view }) {
   );
 }
 
+// The two ways into the same data: by application, or by publisher.
+//
+// ONE useDirectory() for both. The name pass behind it is ~12s of gateway fetches (the
+// StateCommitted event carries keccak(name), never the name), so a second hook call
+// would pay for it twice and the two lists could disagree while they filled in.
+//
+// Applications open first: the app is the outer part of the `app:publisher:subspace`
+// triple, so it is the part you have to settle either way, and this tab drills into a
+// single namespace as well as offering the whole app. Publishers is one click away.
+function NetworkDirectory({ onPick, onPickApp }) {
+  const { apps, publishers, loading, resolving, error } = useDirectory();
+  const [tab, setTab] = useState('apps');
+
+  return (
+    <>
+      <div className={styles.btnRow} role="tablist" aria-label="Browse by">
+        <button
+          className={`${styles.ghostBtn} ${tab === 'apps' ? styles.tabActive : ''}`}
+          type="button"
+          role="tab"
+          aria-selected={tab === 'apps'}
+          onClick={() => setTab('apps')}
+        >
+          Applications{apps.length ? ` (${apps.length})` : ''}
+        </button>
+        <button
+          className={`${styles.ghostBtn} ${tab === 'publishers' ? styles.tabActive : ''}`}
+          type="button"
+          role="tab"
+          aria-selected={tab === 'publishers'}
+          onClick={() => setTab('publishers')}
+        >
+          Publishers{publishers.length ? ` (${publishers.length})` : ''}
+        </button>
+      </div>
+
+      {tab === 'apps' ? (
+        <AppDirectory
+          apps={apps}
+          loading={loading}
+          resolving={resolving}
+          error={error}
+          onPick={onPick}
+          onPickApp={onPickApp}
+        />
+      ) : (
+        <PublisherDirectory
+          publishers={publishers}
+          loading={loading}
+          resolving={resolving}
+          error={error}
+          onPick={onPick}
+        />
+      )}
+    </>
+  );
+}
+
+// What applications exist, and what is in them.
+//
+// An app id is keccak256 of a name with NO on-chain preimage, so the set of apps can
+// only ever be recovered from who has committed under one — there is no registry to
+// list and no name to read back. That is exactly why this view has to exist: without
+// it, naming an app in the form is guesswork, and a wrong guess watches nothing and
+// says nothing about why.
+//
+// Rows are `<details>` so the choice can be made on evidence — how many publishers,
+// how many namespaces, and what they are called — rather than on recognising a name.
+// The full id sits in the body because it is what `fangorn --app` takes, and for an
+// app we have no name for it is the only usable value.
+function AppDirectory({ apps, loading, resolving, error, onPick, onPickApp }) {
+  return (
+    <>
+      <p className={styles.colText}>
+        Every application anyone has published under, most recently active first. Watch
+        one whole — that follows every publisher in it, including ones who arrive later —
+        or open it and take a single namespace.
+        {loading && ' Loading…'}
+        {/* App names and counts need no wallet and no gateway — only the namespace
+            names inside do, so the list is useful the moment it loads. */}
+        {resolving && ' Resolving namespace names…'}
+      </p>
+
+      {error && <div className={styles.formError}>{error}</div>}
+      {!loading && !error && !apps.length && (
+        <div className={styles.pending}>Nothing published yet.</div>
+      )}
+
+      <div className={styles.pubList}>
+        {apps.map((app, i) => (
+          <details key={app.appId} className={styles.pub} open={i === 0}>
+            <summary className={styles.pubHead}>
+              <span className={styles.fieldValueMono}>{app.label}</span>
+              <span className={styles.pubCount}>
+                {app.publishers} publisher{app.publishers === 1 ? '' : 's'}
+                {' · '}
+                {app.namespaces.length} namespace{app.namespaces.length === 1 ? '' : 's'}
+              </span>
+              <span className={styles.fieldNote}>block {app.lastBlock.toString()}</span>
+            </summary>
+
+            <div className={styles.pubBody}>
+              {/* The id, always — it is the value the form falls back to for an app
+                  with no known name, and what you paste into `fangorn --app`. */}
+              <Field label="App id">
+                <div className={styles.inlineValue}>
+                  <span className={styles.fieldValueMono}>{truncate(app.appId, 12, 8)}</span>
+                  <CopyButton text={app.appId} className={styles.ghostBtnSm} />
+                </div>
+              </Field>
+
+              <button
+                className={styles.ghostBtn}
+                type="button"
+                onClick={() => onPickApp(app.appId)}
+                title={`Watch every namespace in ${app.label}, across all publishers`}
+              >
+                Watch all of {app.label}
+              </button>
+
+              {/* A preview of what is inside, and a shortcut to just one of them. Two
+                  publishers can both name a namespace `media`, so the owner rides in
+                  the title rather than the label — it would double the width of every
+                  chip to disambiguate a case that is usually absent. */}
+              <div className={styles.chipRow}>
+                {app.namespaces.map((ns) => (
+                  <button
+                    key={ns.key}
+                    className={styles.chip}
+                    type="button"
+                    onClick={() => onPick(ns.owner, ns.name, app.appId)}
+                    disabled={!ns.name}
+                    title={ns.name
+                      ? `Watch only ${ns.name}, from ${truncate(ns.owner, 8, 6)}`
+                      : 'Name unavailable — the head could not be resolved through the gateway'}
+                  >
+                    {ns.name ?? `${ns.subspaceId.slice(0, 10)}…`}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </details>
+        ))}
+      </div>
+    </>
+  );
+}
+
 // Who has published to this app, and what they called their namespaces.
 //
 // Two passes with very different costs (see directory.js): the chain pass is one
@@ -756,8 +983,7 @@ function ViewEndpoints({ view }) {
 //
 // Clicking a namespace fills the Quickbeam form: browsing and then watching something
 // is the actual path through this page.
-function PublisherDirectory({ onPick }) {
-  const { publishers, loading, resolving, error } = useDirectory();
+function PublisherDirectory({ publishers, loading, resolving, error, onPick }) {
   const [query, setQuery] = useState('');
 
   // Match on the address, any namespace name, or the app (name or id) — "robin" finds

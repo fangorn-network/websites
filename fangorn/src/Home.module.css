@@ -456,6 +456,15 @@ a.fieldValueMono:hover { color: var(--hi); }
   color: var(--text);
 }
 
+/* Selected tab in the browse modal. Border + text only, no fill: these sit in a
+   .btnRow beside ordinary ghost buttons, and a filled one would outrank the actual
+   actions in the panel behind it. */
+.tabActive {
+  color: var(--text);
+  border-color: var(--hi);
+  background: var(--s3);
+}
+
 .chipRow {
   display: flex;
   flex-wrap: wrap;
@@ -484,6 +493,38 @@ a.fieldValueMono:hover { color: var(--hi); }
   color: var(--dim);
   cursor: default;
 }
+
+/* "Type it in instead" — the manual source triple, closed by default. The directory
+   holds every watchable triple, so hand-typing one is the exception; a native <details>
+   keeps it one click away instead of three more inputs on screen. Marker is drawn here
+   because list-style is off, same as .pubHead. */
+.more {
+  margin-top: 14px;
+}
+
+.more > summary {
+  list-style: none;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--sub);
+  transition: color 0.15s;
+}
+
+.more > summary::-webkit-details-marker { display: none; }
+.more > summary:hover { color: var(--text); }
+
+.more > summary::before {
+  content: '▸';
+  display: inline-block;
+  margin-right: 6px;
+  font-size: 10px;
+  transition: transform 0.15s;
+}
+
+.more[open] > summary::before { transform: rotate(90deg); }
+
+/* The fields inside sit under the summary, not beside it. */
+.more[open] > summary { margin-bottom: 16px; }
 
 /* Checkbox + label on one line. accent-color tints the native control, which keeps
    the platform's focus ring and keyboard behaviour instead of rebuilding them. */

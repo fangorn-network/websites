@@ -37,6 +37,16 @@ export function appLabel(appId) {
   return APP_NAMES.get(appId.toLowerCase()) ?? `${appId.slice(0, 10)}…`;
 }
 
+/**
+ * The app's real name, or null if it isn't in the phrasebook. Distinct from `appLabel`
+ * because that one truncates an unknown id for display — and a truncated id is not a
+ * value you can send anywhere: the worker would keccak the ellipsis and watch an app
+ * that doesn't exist. Anything filling a form field wants this, not the label.
+ */
+export function appName(appId) {
+  return APP_NAMES.get(appId.toLowerCase()) ?? null;
+}
+
 // How far behind the chain head to stop reading logs when `latest` is refused.
 //
 // The public Arbitrum Sepolia endpoint answers eth_getLogs with `-32000 internal server
@@ -121,7 +131,45 @@ export function groupByApp(namespaces) {
 }
 
 /**
+ * Every app on the network, most recently active first — the same timelines the
+ * publisher list groups the other way round.
+ *
+ * This is the app-FIRST view, and it exists because the other one cannot answer
+ * "what can I watch?": apps only appear nested under each publisher there, so
+ * discovering one means opening publishers until you recognise something. An app id
+ * has no on-chain preimage, so there is nowhere else to learn the set from — it can
+ * only be recovered from who has committed under it.
+ */
+export function groupApps(namespaces) {
+  const byApp = new Map();
+  for (const ns of namespaces) {
+    if (!byApp.has(ns.appId)) {
+      byApp.set(ns.appId, {
+        appId: ns.appId,
+        label: appLabel(ns.appId),
+        // The value a form field can hold: the name if we know it, else null (the
+        // caller falls back to the full id). Never `label`, which truncates.
+        name: appName(ns.appId),
+        owners: new Set(),
+        namespaces: [],
+        lastBlock: 0n,
+      });
+    }
+    const entry = byApp.get(ns.appId);
+    entry.owners.add(ns.owner.toLowerCase());
+    entry.namespaces.push(ns);
+    if (ns.blockNumber > entry.lastBlock) entry.lastBlock = ns.blockNumber;
+  }
+  return [...byApp.values()]
+    // Collapse the Set to a count on the way out — callers want "how many publishers",
+    // and handing them a live Set invites someone to mutate the grouping.
+    .map(({ owners, ...app }) => ({ ...app, publishers: owners.size }))
+    .sort((a, b) => Number(b.lastBlock - a.lastBlock));
+}
+
+/**
  * The directory.
+ *   apps       – [{ appId, label, name, publishers, namespaces, lastBlock }]
  *   publishers – [{ owner, lastBlock,
  *                   namespaces: [{ key, appId, subspaceId, root, blockNumber, name? }],
  *                   apps: [{ appId, label, namespaces, lastBlock }] }]
@@ -197,12 +245,13 @@ export function useDirectory() {
     resolveNames(pending);
   }, [timelines, resolveNames]);
 
-  // Names land asynchronously, so the app grouping is derived here rather than in the
-  // chain pass — it has to be rebuilt from the enriched namespaces on every fill.
-  const publishers = groupByOwner(timelines).map((p) => {
-    const namespaces = p.namespaces.map((n) => ({ ...n, name: names[n.key] ?? undefined }));
-    return { ...p, namespaces, apps: groupByApp(namespaces) };
-  });
+  // Names land asynchronously, so both groupings are derived here rather than in the
+  // chain pass — they have to be rebuilt from the enriched namespaces on every fill.
+  // Enrich once and group twice: the two views are the same rows read along different
+  // axes, and building the names into each separately would let them drift.
+  const enriched = timelines.map((t) => ({ ...t, name: names[t.key] ?? undefined }));
+  const publishers = groupByOwner(enriched).map((p) => ({ ...p, apps: groupByApp(p.namespaces) }));
+  const apps = groupApps(enriched);
 
-  return { publishers, loading, resolving, error };
+  return { apps, publishers, loading, resolving, error };
 }
