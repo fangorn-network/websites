@@ -45,7 +45,11 @@ const tree = privyAppId ? (
       embeddedWallets: {
         ethereum: { createOnLogin: 'users-without-wallets' },
       },
-      loginMethods: ['email', 'wallet'],
+      // 'telegram' is not a fourth account type — it is the SAME Privy user the
+      // sond3r bot's mini app creates, on the same app id, holding the same
+      // embedded wallet. Without it, someone who signed up through the bot has
+      // no door into this site and looks to themselves like a new person.
+      loginMethods: ['email', 'wallet', 'telegram'],
       supportedChains: [arbitrumSepolia]
     }}
   >
