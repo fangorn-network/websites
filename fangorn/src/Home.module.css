@@ -418,6 +418,11 @@ a.fieldValueMono:hover { color: var(--hi); }
 .pub[open] > .pubHead::before { transform: rotate(90deg); }
 .pubHead:hover { background: var(--s2); }
 
+/* A control in the row is not the row. Hovering Remove (or its confirm pair) must not
+   light the header up as if the click will expand it — that tint is the affordance for
+   the disclosure, and it lies here. */
+.pubHead:has(button:hover) { background: transparent; }
+
 .pubCount {
   margin-right: auto;
   font-size: 12px;
@@ -562,6 +567,35 @@ a.fieldValueMono:hover { color: var(--hi); }
 }
 
 .ghostBtnSm:hover { border-color: var(--dim); color: var(--text); }
+
+/* The destructive twin of .ghostBtnSm, for a confirm that sits in a list row: same
+   size, in the orange this page already spends on "this cannot be undone". */
+.dangerBtnSm {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--orange);
+  background: color-mix(in srgb, var(--orange) 10%, transparent);
+  border: 1px solid var(--orange);
+  padding: 3px 9px;
+  border-radius: 5px;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: opacity 0.15s;
+}
+
+.dangerBtnSm:hover { opacity: 0.85; }
+.dangerBtnSm:disabled, .ghostBtnSm:disabled { opacity: 0.55; }
+
+/* An error raised by a row's own control, kept on that row. Clipped rather than
+   wrapped: a long message must not push the buttons it belongs to off the end. */
+.headError {
+  font-size: 11px;
+  color: var(--orange);
+  max-width: 45%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 
 .formError {
   font-size: 12px;

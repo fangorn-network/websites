@@ -11,6 +11,7 @@
 // already sells (one access() call on the SubscriptionRegistry).
 import { useCallback, useEffect, useState } from 'react';
 import { getAddress } from 'viem';
+import { DEFAULT_APP, toAppId } from '@fangorn-network/sdk/lib/config.js';
 import { useAuth } from './authContext.js';
 import { walletClientFor } from './fangorn.js';
 
@@ -66,6 +67,28 @@ export function buildSources({ app, publisher, namespace }) {
 }
 
 /**
+ * The view already covering exactly these sources, if this wallet has one.
+ *
+ * The worker refuses a second name over one source set anyway (409) — a view is a
+ * filter, so the duplicate would be the same search under a second URL. Checking here
+ * too is only about *when* the user is told: before the wallet prompt, rather than
+ * after signing a message that was never going to be accepted.
+ *
+ * Compared as a set of canonical triples, mirroring `sameSources` in the worker, so
+ * order and the name-vs-id spelling of an app cannot hide a duplicate. `DEFAULT_APP`
+ * stands in for views stored before sources carried an app, exactly as it does there.
+ */
+const sourceSetKey = (sources) => [...new Set((sources ?? []).map((s) => {
+  const app = toAppId(s.app || DEFAULT_APP).toLowerCase();
+  return `${app}:${String(s.owner || '*').toLowerCase()}:${s.namespace || '*'}`;
+}))].sort().join('|');
+
+export function findDuplicate(views, sources) {
+  const key = sourceSetKey(sources);
+  return views.find((v) => sourceSetKey(v.sources) === key) ?? null;
+}
+
+/**
  * How many namespaces a view covers, for its one-line summary. A wildcard source has
  * no count — the set is whatever the app holds today — so counting sources would
  * report "1 namespace" for a view over forty.
@@ -91,17 +114,17 @@ export async function readViews(requester) {
 }
 
 /**
- * Create (or replace) a view. Two-step by design: the first POST comes back with the
- * exact challenge to sign, the second carries the signature. Nothing is stored until
- * the second call passes both the signature check and the subscription check.
+ * A write to the registry, proving the wallet. Two-step by design: the first POST comes
+ * back with the exact challenge to sign, the second carries the signature. Nothing is
+ * written until that second call passes the worker's checks.
  */
-export async function createView({ wallet, address, name, sources, hostedMcp = false }) {
+async function signedPost(path, { wallet, address }, payload) {
   const account = getAddress(address);
   const post = (extra) =>
-    fetch(`${QUICKBEAM_WORKER_URL}/views`, {
+    fetch(`${QUICKBEAM_WORKER_URL}${path}`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ address: account, name, sources, hostedMcp, ...extra }),
+      body: JSON.stringify({ address: account, ...payload, ...extra }),
     });
 
   // Step 1 — collect the challenge. A 401 carrying one is the expected path here, not
@@ -116,12 +139,26 @@ export async function createView({ wallet, address, name, sources, hostedMcp = f
   return unwrap(await post({ message: challenge, signature }));
 }
 
+/** Create (or replace) a view. Gated on the wallet's active storage subscription. */
+export const createView = ({ wallet, address, name, sources, hostedMcp = false }) =>
+  signedPost('/views', { wallet, address }, { name, sources, hostedMcp });
+
 /**
- * The signed-in wallet's views, plus the action that creates one.
+ * Stop watching: delete one of your own views. The worker allows this to the view's
+ * requester only — not to an admin — and does not check the subscription, so a lapsed
+ * wallet can still take its namespaces off the watch list.
+ */
+export const removeView = ({ wallet, address, id }) =>
+  signedPost('/views/remove', { wallet, address }, { id });
+
+/**
+ * The signed-in wallet's views, plus the actions over them.
  *   views     – [{ id, name, sources, searchUrl, mcpCommand }]
  *   loading   – true during the initial lookup
  *   creating  – true while a signature/POST is in flight
+ *   removing  – the id currently being removed, or null
  *   create()  – sign and create a view
+ *   remove(id)– sign and delete one of your own views
  */
 export function useQuickbeam() {
   const { user, wallet } = useAuth();
@@ -130,6 +167,7 @@ export function useQuickbeam() {
   const [views, setViews] = useState([]);
   const [loading, setLoading] = useState(Boolean(address));
   const [creating, setCreating] = useState(false);
+  const [removing, setRemoving] = useState(null);
 
   useEffect(() => {
     if (!address) return;
@@ -154,5 +192,16 @@ export function useQuickbeam() {
     }
   }, [wallet, address]);
 
-  return { views, loading, creating, create };
+  const remove = useCallback(async (id) => {
+    if (!wallet || !address) throw new Error('Connect a wallet first.');
+    setRemoving(id);
+    try {
+      await removeView({ wallet, address, id });
+      setViews((prev) => prev.filter((v) => v.id !== id));
+    } finally {
+      setRemoving(null);
+    }
+  }, [wallet, address]);
+
+  return { views, loading, creating, removing, create, remove };
 }

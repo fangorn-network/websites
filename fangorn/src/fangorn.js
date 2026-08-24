@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { createPublicClient, createWalletClient, custom, http, getAddress, parseEther, erc20Abi } from 'viem';
 import { DataRegistryClient } from '@fangorn-network/sdk/lib/contracts/data-registry/index.js';
-import { AppRegistryClient } from '@fangorn-network/sdk/lib/contracts/app-registry/index.js';
 // PublisherStatus lives in contracts/types.js, NOT in the data-registry client it used
 // to be re-exported from. Importing it from the old path is a link-time SyntaxError that
 // takes down every module importing this one — i.e. a blank page.
@@ -19,14 +18,10 @@ export { PublisherStatus };
 export const CHAIN = FangornConfig.chain;
 export const REGISTRY_ADDRESS = FangornConfig.dataRegistryContractAddress;
 
-// The AppRegistry, which owns what an "app" is: its terms, its join fee and its
-// membership. `DataRegistry.commitStateRoot` cross-calls `isRegisteredForApp` here, so
-// registering as a publisher is no longer enough to publish — a wallet has to join the
-// app too, or every commit reverts NotRegisteredForApp.
-export const APP_REGISTRY_ADDRESS = FangornConfig.appRegistryContractAddress;
-
 // Every registry call is scoped to an app id. Publishers register app-agnostically,
-// but the client requires one, so use the SDK's default app. Exported because the
+// and this site registers them on the DataRegistry ONLY — joining an app is that app's
+// business, not the account dashboard's. The client still requires an app id for the
+// namespace keys it derives, so use the SDK's default app. Exported because the
 // Quickbeam panel has to say when a picked namespace lives in a *different* app.
 export const APP_ID = toAppId(DEFAULT_APP);
 
@@ -89,7 +84,6 @@ export const IPFS_GATEWAY = (
 // A DataRegistryClient wired for reads. Writes need the user's wallet, so
 // register() below builds its own client with a Privy-backed walletClient.
 export const readRegistry = new DataRegistryClient(REGISTRY_ADDRESS, APP_ID, publicClient, publicClient);
-export const readAppRegistry = new AppRegistryClient(APP_REGISTRY_ADDRESS, APP_ID, publicClient, publicClient);
 
 // The same client with the app left open. A namespace is an `app:publisher:subspace`
 // triple and all three are indexed topics on StateCommitted, so the client's appId is
@@ -123,15 +117,6 @@ export async function walletClientFor(wallet, address) {
 /** The publisher's lifecycle status: UNREGISTERED / ACTIVE / SUSPENDED. */
 export async function readStatus(publisher) {
   return readRegistry.getPublisherStatus(getAddress(publisher));
-}
-
-/**
- * May this wallet commit under this site's app? Exactly the question
- * `DataRegistry.commitStateRoot` asks on-chain, so a false here means a publish would
- * revert — which is why the dashboard's "Active" badge waits on it too.
- */
-export async function readAppMembership(publisher) {
-  return readAppRegistry.isRegisteredForApp(getAddress(publisher));
 }
 
 /** The wallet's native ETH (wei) and USDC (6-decimal base units) balances, raw. */
@@ -221,38 +206,36 @@ export function useFaucet() {
 /**
  * The signed-in publisher's on-chain identity.
  *   status       – PublisherStatus (UNREGISTERED until they register)
- *   joined       – has this wallet joined APP_ID on the AppRegistry
- *   registered   – ACTIVE *and* joined; see below
+ *   registered   – status is ACTIVE
  *   publisher    – the wallet address (its own namespace owner), or null
  *   details      – { owner, registry }, derived (no chain read), or null
  *   loading      – true while the initial lookups are in flight
  *   registering  – true while register() is sending
- *   register()   – whichever of the two on-chain steps this wallet still needs
+ *   register()   – DataRegistry.register(), and nothing else
  *
- * Registration is TWO steps now, and the badge waits on both. Publisher standing
- * (DataRegistry) and app membership (AppRegistry) are separate registrations, and
- * `commitStateRoot` requires both — so a wallet with only the first reads "Active"
- * here while every publish reverts NotRegisteredForApp. Both fees are 0.
+ * Registering here is publisher standing on the DataRegistry ONLY. App membership
+ * (AppRegistry) is a separate registration that `commitStateRoot` also requires, so a
+ * wallet that never joins an app will read "Active" here and still revert on publish —
+ * joining is the app's own onboarding step, deliberately not this dashboard's.
  */
 export function usePublisher() {
   const { user, wallet } = useAuth();
   const address = user?.wallet?.address;
 
   const [status, setStatus] = useState(PublisherStatus.UNREGISTERED);
-  const [joined, setJoined] = useState(false);
   // address is stable for the hook's lifetime: App keys Home by wallet, so a
   // wallet switch remounts this fresh.
   const [loading, setLoading] = useState(Boolean(address));
   const [registering, setRegistering] = useState(false);
 
-  const registered = status === PublisherStatus.ACTIVE && joined;
+  const registered = status === PublisherStatus.ACTIVE;
   const details = registered ? { owner: address, registry: REGISTRY_ADDRESS } : null;
 
   useEffect(() => {
     if (!address) return;
     let cancelled = false;
-    Promise.all([readStatus(address), readAppMembership(address)])
-      .then(([s, j]) => { if (!cancelled) { setStatus(s); setJoined(j); } })
+    readStatus(address)
+      .then((s) => !cancelled && setStatus(s))
       .catch((err) => !cancelled && console.warn('Status lookup failed:', err))
       .finally(() => !cancelled && setLoading(false));
     return () => { cancelled = true; };
@@ -262,14 +245,12 @@ export function usePublisher() {
     if (!wallet || !address) throw new Error('Connect a wallet first.');
     setRegistering(true);
     try {
-      // Send only the step that is missing: both contracts revert for a wallet that
-      // already has the thing, so a half-finished registration (first tx landed, second
-      // rejected) must be resumable rather than a dead end.
-      const [{ eth, usdc }, fee, currentStatus, alreadyJoined] = await Promise.all([
+      // Re-read status first: register() reverts AlreadyRegistered, so a wallet that
+      // is already active must fall through to the refresh instead of a dead end.
+      const [{ eth, usdc }, fee, currentStatus] = await Promise.all([
         readBalances(address),
         readRegistry.registrationFee(),
         readStatus(address),
-        readAppMembership(address),
       ]);
       // Registration costs a native fee plus gas, and the subscription panel needs
       // USDC right after, so a brand-new wallet can't pay for either. Auto-claim
@@ -286,24 +267,11 @@ export function usePublisher() {
         // It also sets gas/fee headroom itself, which an embedded wallet won't.
         await registry.register();
       }
-      if (!alreadyJoined) {
-        const apps = new AppRegistryClient(APP_REGISTRY_ADDRESS, APP_ID, publicClient, walletClient);
-        // Same shape: reads the app's current terms hash and join fee on-chain and
-        // sends them itself. Passing the terms hash is what makes the tx valid only
-        // against the version the user was shown — a mid-flight change reverts
-        // TermsMismatch instead of silently agreeing to something else.
-        await apps.registerForApp();
-      }
-      const [nextStatus, nextJoined] = await Promise.all([
-        readStatus(address),
-        readAppMembership(address),
-      ]);
-      setStatus(nextStatus);
-      setJoined(nextJoined);
+      setStatus(await readStatus(address));
     } finally {
       setRegistering(false);
     }
   }, [wallet, address]);
 
-  return { status, joined, registered, publisher: registered ? address : null, details, loading, registering, register };
+  return { status, registered, publisher: registered ? address : null, details, loading, registering, register };
 }
