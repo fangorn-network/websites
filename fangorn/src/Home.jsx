@@ -512,15 +512,6 @@ function QuickbeamPanel({ wallet, subscribed }) {
   const ready = name.trim() && app.trim()
     && (wholeApp || (publisher.trim() && namespace.trim()));
 
-  // Two different accidents, two different answers.
-  //
-  // Re-using one of your own view names REPLACES that view — the worker keys a view on
-  // (wallet, name) — so the button says so rather than reading as "create" and quietly
-  // overwriting the sources behind a URL somebody is already using.
-  //
-  // A second name over the SAME sources is refused (the worker 409s): a view is a
-  // filter, so it would be the same search twice, under two URLs and two catalogs.
-  // Caught here as well as there, so it costs no signature.
   const replacing = views.find((v) => v.name.toLowerCase() === name.trim().toLowerCase());
   const covering = app.trim()
     ? findDuplicate(views, buildSources({ app, publisher, namespace }))
