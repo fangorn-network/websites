@@ -204,19 +204,16 @@ export function useFaucet() {
 }
 
 /**
- * The signed-in publisher's on-chain identity.
- *   status       – PublisherStatus (UNREGISTERED until they register)
+ * The signed-in wallet's global publisher standing (DataRegistry):
  *   registered   – status is ACTIVE
- *   publisher    – the wallet address (its own namespace owner), or null
- *   details      – { owner, registry }, derived (no chain read), or null
- *   loading      – true while the initial lookups are in flight
+ *   loading      – true while the initial lookup is in flight
  *   registering  – true while register() is sending
- *   register()   – DataRegistry.register(), and nothing else
+ *   register()   – register this wallet, if it isn't already
  *
- * Registering here is publisher standing on the DataRegistry ONLY. App membership
- * (AppRegistry) is a separate registration that `commitStateRoot` also requires, so a
- * wallet that never joins an app will read "Active" here and still revert on publish —
- * joining is the app's own onboarding step, deliberately not this dashboard's.
+ * Only the global step. SubscriptionRegistry.subscribe() requires it, which is
+ * why the site does it at all. Joining an app (AppRegistry.registerForApp) is per
+ * app and belongs to the build: `westmarch-ship` runs `fangorn register` for the
+ * owner's own app, so the site joins nothing.
  */
 export function usePublisher() {
   const { user, wallet } = useAuth();
@@ -227,9 +224,6 @@ export function usePublisher() {
   // wallet switch remounts this fresh.
   const [loading, setLoading] = useState(Boolean(address));
   const [registering, setRegistering] = useState(false);
-
-  const registered = status === PublisherStatus.ACTIVE;
-  const details = registered ? { owner: address, registry: REGISTRY_ADDRESS } : null;
 
   useEffect(() => {
     if (!address) return;
@@ -245,23 +239,22 @@ export function usePublisher() {
     if (!wallet || !address) throw new Error('Connect a wallet first.');
     setRegistering(true);
     try {
-      // Re-read status first: register() reverts AlreadyRegistered, so a wallet that
-      // is already active must fall through to the refresh instead of a dead end.
-      const [{ eth, usdc }, fee, currentStatus] = await Promise.all([
+      const [{ eth, usdc }, fee, current] = await Promise.all([
         readBalances(address),
         readRegistry.registrationFee(),
         readStatus(address),
       ]);
-      // Registration costs a native fee plus gas, and the subscription panel needs
-      // USDC right after, so a brand-new wallet can't pay for either. Auto-claim
-      // only when the wallet is actually short, so a funded user doesn't burn their
-      // 24h drip here. A faucet failure (outage, cooldown already spent) must not
-      // block a wallet with its own funds — let register() surface the real error.
-      if (eth < fee + parseEther('0.005') || usdc < 1_000_000n) {
-        await dripFaucet(address).catch((err) => console.warn('Faucet drip failed:', err));
-      }
-      const walletClient = await walletClientFor(wallet, address);
-      if (currentStatus !== PublisherStatus.ACTIVE) {
+      // The contract reverts for a wallet that's already registered.
+      if (current !== PublisherStatus.ACTIVE) {
+        // Registration costs a native fee plus gas, and the subscription right after
+        // needs USDC, so a brand-new wallet can't pay for either. Auto-claim only
+        // when the wallet is actually short, so a funded user doesn't burn their 24h
+        // drip here. A faucet failure (outage, cooldown already spent) must not block
+        // a wallet with its own funds — let register() surface the real error.
+        if (eth < fee + parseEther('0.005') || usdc < 1_000_000n) {
+          await dripFaucet(address).catch((err) => console.warn('Faucet drip failed:', err));
+        }
+        const walletClient = await walletClientFor(wallet, address);
         const registry = new DataRegistryClient(REGISTRY_ADDRESS, APP_ID, publicClient, walletClient);
         // Reads the on-chain fee, attaches it as msg.value, waits for the receipt.
         // It also sets gas/fee headroom itself, which an embedded wallet won't.
@@ -273,5 +266,5 @@ export function usePublisher() {
     }
   }, [wallet, address]);
 
-  return { status, registered, publisher: registered ? address : null, details, loading, registering, register };
+  return { registered: status === PublisherStatus.ACTIVE, loading, registering, register };
 }

@@ -608,52 +608,12 @@ a.fieldValueMono:hover { color: var(--hi); }
    Loud on purpose: the private-key export is the one irreversible action on
    this page, so it gets the full-width orange frame nothing else here uses. */
 
-.warnBox {
-  margin-top: 10px;
-  padding: 12px 14px;
-  border: 1px solid var(--orange);
-  border-radius: 6px;
-  background: color-mix(in srgb, var(--orange) 8%, transparent);
-}
 
-.warnTitle {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--orange);
-  line-height: 1.4;
-  margin-bottom: 8px;
-}
 
-.warnList {
-  margin: 0 0 12px;
-  padding-left: 16px;
-  font-size: 12px;
-  font-weight: 300;
-  line-height: 1.6;
-  color: var(--text);
-}
 
-.warnList li { margin-bottom: 4px; }
 
-.warnActions {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-}
 
-.dangerBtn {
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--bg);
-  background: var(--orange);
-  border: none;
-  padding: 7px 14px;
-  border-radius: 6px;
-  transition: opacity 0.15s;
-}
 
-.dangerBtn:hover { opacity: 0.85; }
 
 /* ── Cards ─────────────────────────────────────────────────────────────────*/
 
@@ -762,3 +722,54 @@ a.fieldValueMono:hover { color: var(--hi); }
   .userChip { display: none; }
   .main { padding: 40px 20px 64px; }
 }
+
+/* ── hub ─────────────────────────────────────────────────────────────────── */
+
+.cmd {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  background: var(--s1);
+  border: 1px solid var(--line2);
+  border-radius: 6px;
+  padding: 10px 12px;
+  margin: 10px 0;
+}
+
+.cmd pre {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.onboard {
+  display: grid;
+  gap: 28px;
+  padding-left: 20px;
+  max-width: 720px;
+}
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin: 14px 0 4px;
+}
+
+.cardLinks { display: flex; flex-wrap: wrap; gap: 16px; }
+
+
+.badgeWarn {
+  font-size: 10px;
+  color: var(--orange);
+  border: 1px solid var(--orange);
+  border-radius: 4px;
+  padding: 0 6px;
+  margin-left: 8px;
+}
+
+details > summary.h2 { cursor: pointer; }
