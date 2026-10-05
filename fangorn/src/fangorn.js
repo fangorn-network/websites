@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { createPublicClient, createWalletClient, custom, http, getAddress, parseEther, erc20Abi } from 'viem';
 import { DataRegistryClient } from '@fangorn-network/sdk/lib/contracts/data-registry/index.js';
-import { AppRegistryClient } from '@fangorn-network/sdk/lib/contracts/app-registry/index.js';
 // PublisherStatus lives in contracts/types.js, NOT in the data-registry client it used
 // to be re-exported from. Importing it from the old path is a link-time SyntaxError that
 // takes down every module importing this one — i.e. a blank page.
@@ -89,7 +88,6 @@ export const IPFS_GATEWAY = (
 // A DataRegistryClient wired for reads. Writes need the user's wallet, so
 // register() below builds its own client with a Privy-backed walletClient.
 export const readRegistry = new DataRegistryClient(REGISTRY_ADDRESS, APP_ID, publicClient, publicClient);
-export const readAppRegistry = new AppRegistryClient(APP_REGISTRY_ADDRESS, APP_ID, publicClient, publicClient);
 
 // The same client with the app left open. A namespace is an `app:publisher:subspace`
 // triple and all three are indexed topics on StateCommitted, so the client's appId is
@@ -123,15 +121,6 @@ export async function walletClientFor(wallet, address) {
 /** The publisher's lifecycle status: UNREGISTERED / ACTIVE / SUSPENDED. */
 export async function readStatus(publisher) {
   return readRegistry.getPublisherStatus(getAddress(publisher));
-}
-
-/**
- * May this wallet commit under this site's app? Exactly the question
- * `DataRegistry.commitStateRoot` asks on-chain, so a false here means a publish would
- * revert — which is why the dashboard's "Active" badge waits on it too.
- */
-export async function readAppMembership(publisher) {
-  return readAppRegistry.isRegisteredForApp(getAddress(publisher));
 }
 
 /** The wallet's native ETH (wei) and USDC (6-decimal base units) balances, raw. */
@@ -219,40 +208,32 @@ export function useFaucet() {
 }
 
 /**
- * The signed-in publisher's on-chain identity.
- *   status       – PublisherStatus (UNREGISTERED until they register)
- *   joined       – has this wallet joined APP_ID on the AppRegistry
- *   registered   – ACTIVE *and* joined; see below
- *   publisher    – the wallet address (its own namespace owner), or null
- *   details      – { owner, registry }, derived (no chain read), or null
- *   loading      – true while the initial lookups are in flight
+ * The signed-in wallet's global publisher standing (DataRegistry):
+ *   registered   – status is ACTIVE
+ *   loading      – true while the initial lookup is in flight
  *   registering  – true while register() is sending
- *   register()   – whichever of the two on-chain steps this wallet still needs
+ *   register()   – register this wallet, if it isn't already
  *
- * Registration is TWO steps now, and the badge waits on both. Publisher standing
- * (DataRegistry) and app membership (AppRegistry) are separate registrations, and
- * `commitStateRoot` requires both — so a wallet with only the first reads "Active"
- * here while every publish reverts NotRegisteredForApp. Both fees are 0.
+ * Only the global step. SubscriptionRegistry.subscribe() requires it, which is
+ * why the site does it at all. Joining an app (AppRegistry.registerForApp) is per
+ * app and belongs to the build: `westmarch-ship` runs `fangorn register` for the
+ * owner's own app, so the site joins nothing.
  */
 export function usePublisher() {
   const { user, wallet } = useAuth();
   const address = user?.wallet?.address;
 
   const [status, setStatus] = useState(PublisherStatus.UNREGISTERED);
-  const [joined, setJoined] = useState(false);
   // address is stable for the hook's lifetime: App keys Home by wallet, so a
   // wallet switch remounts this fresh.
   const [loading, setLoading] = useState(Boolean(address));
   const [registering, setRegistering] = useState(false);
 
-  const registered = status === PublisherStatus.ACTIVE && joined;
-  const details = registered ? { owner: address, registry: REGISTRY_ADDRESS } : null;
-
   useEffect(() => {
     if (!address) return;
     let cancelled = false;
-    Promise.all([readStatus(address), readAppMembership(address)])
-      .then(([s, j]) => { if (!cancelled) { setStatus(s); setJoined(j); } })
+    readStatus(address)
+      .then((s) => !cancelled && setStatus(s))
       .catch((err) => !cancelled && console.warn('Status lookup failed:', err))
       .finally(() => !cancelled && setLoading(false));
     return () => { cancelled = true; };
@@ -262,48 +243,32 @@ export function usePublisher() {
     if (!wallet || !address) throw new Error('Connect a wallet first.');
     setRegistering(true);
     try {
-      // Send only the step that is missing: both contracts revert for a wallet that
-      // already has the thing, so a half-finished registration (first tx landed, second
-      // rejected) must be resumable rather than a dead end.
-      const [{ eth, usdc }, fee, currentStatus, alreadyJoined] = await Promise.all([
+      const [{ eth, usdc }, fee, current] = await Promise.all([
         readBalances(address),
         readRegistry.registrationFee(),
         readStatus(address),
-        readAppMembership(address),
       ]);
-      // Registration costs a native fee plus gas, and the subscription panel needs
-      // USDC right after, so a brand-new wallet can't pay for either. Auto-claim
-      // only when the wallet is actually short, so a funded user doesn't burn their
-      // 24h drip here. A faucet failure (outage, cooldown already spent) must not
-      // block a wallet with its own funds — let register() surface the real error.
-      if (eth < fee + parseEther('0.005') || usdc < 1_000_000n) {
-        await dripFaucet(address).catch((err) => console.warn('Faucet drip failed:', err));
-      }
-      const walletClient = await walletClientFor(wallet, address);
-      if (currentStatus !== PublisherStatus.ACTIVE) {
+      // The contract reverts for a wallet that's already registered.
+      if (current !== PublisherStatus.ACTIVE) {
+        // Registration costs a native fee plus gas, and the subscription right after
+        // needs USDC, so a brand-new wallet can't pay for either. Auto-claim only
+        // when the wallet is actually short, so a funded user doesn't burn their 24h
+        // drip here. A faucet failure (outage, cooldown already spent) must not block
+        // a wallet with its own funds — let register() surface the real error.
+        if (eth < fee + parseEther('0.005') || usdc < 1_000_000n) {
+          await dripFaucet(address).catch((err) => console.warn('Faucet drip failed:', err));
+        }
+        const walletClient = await walletClientFor(wallet, address);
         const registry = new DataRegistryClient(REGISTRY_ADDRESS, APP_ID, publicClient, walletClient);
         // Reads the on-chain fee, attaches it as msg.value, waits for the receipt.
         // It also sets gas/fee headroom itself, which an embedded wallet won't.
         await registry.register();
       }
-      if (!alreadyJoined) {
-        const apps = new AppRegistryClient(APP_REGISTRY_ADDRESS, APP_ID, publicClient, walletClient);
-        // Same shape: reads the app's current terms hash and join fee on-chain and
-        // sends them itself. Passing the terms hash is what makes the tx valid only
-        // against the version the user was shown — a mid-flight change reverts
-        // TermsMismatch instead of silently agreeing to something else.
-        await apps.registerForApp();
-      }
-      const [nextStatus, nextJoined] = await Promise.all([
-        readStatus(address),
-        readAppMembership(address),
-      ]);
-      setStatus(nextStatus);
-      setJoined(nextJoined);
+      setStatus(await readStatus(address));
     } finally {
       setRegistering(false);
     }
   }, [wallet, address]);
 
-  return { status, joined, registered, publisher: registered ? address : null, details, loading, registering, register };
+  return { registered: status === PublisherStatus.ACTIVE, loading, registering, register };
 }

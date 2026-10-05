@@ -14,24 +14,19 @@ export default function Nav() {
     <nav className={styles.nav}>
       <a href="#" className={styles.logo}>Fangorn</a>
       <div className={styles.right}>
-        <a href="#drive" className={styles.link}>Drive</a>
-        <a href="#products" className={styles.link}>Products</a>
+        <a href="https://explorer.fangorn.network" className={styles.link}>Explorer ↗</a>
         <a href="https://deepwiki.com/fangorn-network/fangorn" className={styles.link}>Docs</a>
+        <a href="https://github.com/fangorn-network" className={styles.link}>GitHub</a>
         <a href="https://discord.gg/JDj8RdCVyU" className={styles.link} aria-label="Discord">
           <DiscordIcon />
         </a>
         {authenticated ? (
           <>
             <button className={styles.ghostBtn} onClick={logout}>Log out</button>
-            <a href="https://drive.fangorn.network" className={styles.btn}>Open Drive</a>
+            <a href="#/account" className={styles.btn}>Account</a>
           </>
         ) : (
-          <>
-            {/* Same Privy modal behind both. Returning publishers look for "Log
-                in"; first-timers look for the primary button. */}
-            <button className={styles.ghostBtn} onClick={login} disabled={!ready}>Log in</button>
-            <button className={styles.btn} onClick={login} disabled={!ready}>Get started</button>
-          </>
+          <button className={styles.btn} onClick={login} disabled={!ready}>Log in</button>
         )}
       </div>
     </nav>

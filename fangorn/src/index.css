@@ -1,24 +1,25 @@
-@import url('https://fonts.googleapis.com/css2?family=Fragment+Mono&family=Geist:wght@300;400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Geist:wght@300;400;500;600;700&display=swap');
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
-  --bg: #08080a;
-  --s1: #0d0d10;
-  --s2: #121215;
-  --s3: #18181c;
-  --line: #1e1e24;
-  --line2: #28282f;
-  --text: #dddbe8;
-  --sub: #6b6880;
-  --dim: #3a3848;
+  --bg: #09090b;
+  --s1: #0c0c0e;
+  --s2: #111113;
+  --s3: #18181b;
+  --line: #1f1f23;
+  --line2: #2e2e33;
+  --text: #fafafa;
+  --sub: #a1a1aa;
+  --dim: #52525b;
   --hi: #a78bfa;
   --hi2: #7c5de8;
   --g1: #22c55e;
   --orange: #f97316;
   --blue: #60a5fa;
   --pink: #f472b6;
-  --mono: 'Fragment Mono', monospace;
+  --glow: rgba(167, 139, 250, 0.18);
+  --mono: 'JetBrains Mono', monospace;
   --sans: 'Geist', 'Inter', sans-serif;
 }
 
@@ -44,4 +45,14 @@ button { cursor: pointer; font-family: var(--sans); }
   justify-content: center;
   color: var(--sub);
   font-size: 14px;
+}
+
+.appSplashBtn {
+  font-size: 13px;
+  font-weight: 500;
+  background: var(--hi);
+  color: #fff;
+  padding: 10px 22px;
+  border: none;
+  border-radius: 6px;
 }

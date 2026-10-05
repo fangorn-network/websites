@@ -9,6 +9,7 @@ import { useUsage } from './usage';
 import { useQuickbeam, buildSources, describeSources } from './quickbeam';
 import { useDirectory, appName } from './directory';
 import { truncate, explorer, formatBytes, meterState } from './format';
+import { useOwnedApps } from './account';
 
 const INSTALL_CMD = 'npm i @fangorn-network/sdk';
 const DOCS_URL = 'https://deepwiki.com/fangorn-network/fangorn';
@@ -30,11 +31,6 @@ function friendlyError(err) {
   if (/rejected|denied/i.test(text)) return 'Transaction cancelled.';
   if (/insufficient funds/i.test(text)) return 'Not enough ETH for gas. Add funds and try again.';
   if (/AlreadyRegistered/i.test(text)) return 'This wallet is already registered.';
-  // Before the bare NotRegistered branch — that pattern is a prefix of this one, so the
-  // order is what keeps app membership from being reported as missing registration.
-  if (/NotRegisteredForApp/i.test(text)) return 'This wallet has not joined the app yet. Register again to finish.';
-  if (/TermsMismatch/i.test(text)) return 'The app published new terms while this was confirming. Try again.';
-  if (/AppSuspended/i.test(text)) return 'This app is suspended. Nothing can be published under it right now.';
   if (/NotRegistered/i.test(text)) return 'Register before subscribing.';
   if (/cooldown/i.test(text)) return 'Already claimed. Try again tomorrow.';
   if (/max fee per gas less than block base fee/i.test(text)) {
@@ -223,68 +219,7 @@ function FaucetField({ onClaimed }) {
   );
 }
 
-// Handing a user their embedded wallet's private key is irreversible and the one
-// action here that can lose them everything, so it is deliberately two clicks with
-// the consequences spelled out in between — not a one-tap button beside "Copy".
-// Privy renders the key itself in a cross-domain iframe; this app never sees it.
-function ExportKeyField({ exportKey }) {
-  const [confirming, setConfirming] = useState(false);
-  const [error, setError] = useState(null);
-
-  async function onExport() {
-    setError(null);
-    try {
-      await exportKey();
-      setConfirming(false);
-    } catch (err) {
-      setError(friendlyError(err));
-    }
-  }
-
-  return (
-    <Field label="Private key">
-      {!confirming ? (
-        <>
-          <div className={styles.fieldValue}>
-            Export your key for usage with Fangorn's SDK or another <b>TRUSTED</b> client. <b>NEVER</b> export this key under someone else's request.
-          </div>
-          <button className={styles.ghostBtn} onClick={() => setConfirming(true)} type="button">
-            Export private key
-          </button>
-        </>
-      ) : (
-        <div className={styles.warnBox} role="alert">
-          <div className={styles.warnTitle}>⚠ Anyone with this key owns this wallet</div>
-          <ul className={styles.warnList}>
-            <li>It <b>cannot be revoked or rotated</b> - exporting it is <b>permanent</b>.</li>
-            <li>Whoever sees it can <b>drain the funds</b> and <b>publish as you, forever</b>.</li>
-            <li><b>Never</b> paste it into a website, a chat, a support ticket, or email.</li>
-            <li>Fangorn staff will <b>never</b> ask for it. <b>Anyone</b> who does is <b>stealing</b> from <b>you</b>.</li>
-            <li>Make sure <b>nobody</b> can see your screen and you are not sharing it.</li>
-          </ul>
-          {error && <div className={styles.formError}>{error}</div>}
-          <div className={styles.warnActions}>
-            <button className={styles.dangerBtn} onClick={onExport} type="button">
-              I understand - show my key
-            </button>
-            <button
-              className={styles.ghostBtnSm}
-              onClick={() => {
-                setConfirming(false);
-                setError(null);
-              }}
-              type="button"
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      )}
-    </Field>
-  );
-}
-
-function WalletColumn({ wallet, balances, onFund, funding, refreshBalances, exportKey }) {
+function WalletColumn({ wallet, balances, onFund, funding, refreshBalances }) {
   // Don't call it low until the balances actually land — an orange dot on a
   // still-loading wallet reads as a problem that isn't there.
   const low = balances && balances.eth < LOW_ETH;
@@ -327,78 +262,6 @@ function WalletColumn({ wallet, balances, onFund, funding, refreshBalances, expo
 
       <FaucetField onClaimed={refreshBalances} />
 
-      {/* Only an email/social login has an embedded wallet to export. */}
-      {exportKey && (
-        <>
-          <br></br>
-          <ExportKeyField exportKey={exportKey} />
-        </>
-      )}
-    </Column>
-  );
-}
-
-// One publisher per wallet, registered on-chain in the DataRegistry. The register
-// CTA lives here beside the balances that pay for it — registering costs a native
-// ETH fee plus gas.
-// `wallet` gates the CTA: an email login is authenticated a beat before Privy
-// finishes minting its embedded wallet, and registering without one just throws.
-function PublisherColumn({ wallet, registered, details, loading, registering, register }) {
-  const [error, setError] = useState(null);
-
-  async function onRegister() {
-    setError(null);
-    try {
-      await register();
-    } catch (err) {
-      setError(friendlyError(err));
-    }
-  }
-
-  return (
-    <Column
-      title="Publisher"
-      state={loading ? 'statePending' : registered ? 'stateGood' : 'statePending'}
-      stateLabel={loading ? 'Checking' : registered ? 'Active' : 'Not registered'}
-    >
-      {loading && <div className={styles.pending}>Checking your registration…</div>}
-
-      {!loading && !registered && (
-        <>
-          <p className={styles.colText}>
-            Registering records your wallet as a publisher, giving it a state root you
-            can commit and push to.
-          </p>
-          {error && <div className={styles.formError}>{error}</div>}
-          <button
-            className={styles.primaryBtn}
-            onClick={onRegister}
-            disabled={registering || !wallet}
-            title={wallet ? undefined : 'Setting up your wallet…'}
-            type="button"
-          >
-            {registering ? 'Registering…' : 'Register'}
-          </button>
-        </>
-      )}
-
-      {!loading && registered && (
-        <>
-          <Field label="Network">
-            <div className={styles.fieldValue}>Arbitrum Sepolia</div>
-          </Field>
-          <Field label="Registry">
-            <a
-              className={styles.fieldValueMono}
-              href={explorer(details?.registry)}
-              target="_blank"
-              rel="noreferrer"
-            >
-              {truncate(details?.registry, 8, 6)}
-            </a>
-          </Field>
-        </>
-      )}
     </Column>
   );
 }
@@ -408,7 +271,10 @@ function PublisherColumn({ wallet, registered, details, loading, registering, re
 // applies to everyone). Both are metered by the worker, not the chain.
 // The subscription itself is read in Home (the Apps section gates on it too) and
 // passed down, so the page makes one lookup rather than one per consumer.
-function StorageColumn({ registered, subscription }) {
+// subscribe() reverts NotRegistered for a wallet that isn't a publisher yet, so
+// Subscribe runs the registration first when it's missing (register() sends only
+// the step still needed, and tops up from the faucet if the wallet is short).
+function StorageColumn({ publisher, subscription }) {
   const { usage, loading } = useUsage();
   const { active, fee, expiresAt, loading: subLoading, renewing, renew } = subscription;
   const [error, setError] = useState(null);
@@ -416,6 +282,7 @@ function StorageColumn({ registered, subscription }) {
   async function onRenew() {
     setError(null);
     try {
+      if (!publisher.registered) await publisher.register();
       await renew();
     } catch (err) {
       setError(friendlyError(err));
@@ -457,13 +324,10 @@ function StorageColumn({ registered, subscription }) {
           <button
             className={styles.ghostBtn}
             onClick={onRenew}
-            disabled={renewing || !registered}
+            disabled={renewing || publisher.registering || publisher.loading}
             type="button"
-            // subscribe() cross-calls isRegistered and reverts NotRegistered, so
-            // say why it's unavailable rather than letting the tx fail.
-            title={registered ? undefined : 'Register first'}
           >
-            {renewing ? 'Confirming…' : active ? 'Renew' : 'Subscribe'}
+            {publisher.registering ? 'Registering…' : renewing ? 'Confirming…' : active ? 'Renew' : 'Subscribe'}
           </button>
         </Field>
       )}
@@ -1090,97 +954,146 @@ function PublisherDirectory({ publishers, loading, resolving, error, onPick }) {
   );
 }
 
-// ── Cards ───────────────────────────────────────────────────────────────────
+// The one thing to do next, in the order the contracts enforce.
+function nextStep(subscription) {
+  if (subscription.loading) return 'Checking where you left off…';
+  if (!subscription.active) return 'Start by subscribing to storage below.';
+  return "You're set up. Configure the CLI below and ask Claude to build your app.";
+}
 
-function GetStartedCard({ title, body, action, href, onClick, soon }) {
-  const inner = (
+// ── The hub ─────────────────────────────────────────────────────────────────
+
+const SDK_INSTALL = 'npm i -g @fangorn-network/sdk@2026.9.22-dev';
+const MCP_CMD = `claude mcp add fangorn -e FANGORN_LOG_WINDOW=100000 -- \\
+  npx -y -p @fangorn-network/westmarch -p @huggingface/transformers fangorn-mcp`;
+// Slash commands, typed inside Claude Code rather than the terminal. The plugin
+// carries the skill that builds the app (fangorn-app).
+const PLUGIN_CMD = `/plugin marketplace add fangorn-network/westmarch
+/plugin install fangorn-index@fangorn-index`;
+const BUILD_PROMPT = 'Build a Fangorn app from <your data>.';
+
+// A command with a copy button. Wraps instead of scrolling: a command you can't
+// see the end of gets pasted wrong.
+function Cmd({ text }) {
+  return (
+    <div className={styles.cmd}>
+      <pre>{text}</pre>
+      <CopyButton text={text} className={styles.ghostBtnSm} />
+    </div>
+  );
+}
+
+// The key is copied from Privy's export dialog, not from this page: Privy rebuilds
+// it inside its own iframe on its own origin, and the SDK gives us no way to read
+// it (by design — nothing on fangorn.network can leak what it never holds).
+// `exportKey` is null for an external wallet (MetaMask etc.), which holds its own.
+function CopyKey({ exportKey }) {
+  const [error, setError] = useState(null);
+  if (!exportKey) {
+    return (
+      <p className={styles.colText}>
+        You signed in with your own wallet: export the key from it (in MetaMask, Account
+        details › Show private key).
+      </p>
+    );
+  }
+  return (
     <>
-      <div className={styles.cardTitle}>{title}</div>
-      <p className={styles.cardBody}>{body}</p>
-      <span className={styles.cardAction}>{soon ? action : `${action} →`}</span>
+      <button
+        className={styles.primaryBtn}
+        type="button"
+        onClick={() => { setError(null); exportKey().catch((err) => setError(friendlyError(err))); }}
+      >
+        Copy my private key
+      </button>
+      {error && <div className={styles.formError}>{error}</div>}
     </>
   );
-  // `soon` cards are announcements, not links — no target to click yet.
-  if (soon) {
-    return <div className={`${styles.card} ${styles.cardSoon}`} aria-disabled="true">{inner}</div>;
-  }
-  return href ? (
-    <a className={styles.card} href={href} target="_blank" rel="noreferrer">{inner}</a>
-  ) : (
-    <button className={styles.card} onClick={onClick} type="button">{inner}</button>
+}
+
+// The CLI signs as this same wallet: the key exported above goes into
+// `fangorn init`, so the registration and storage paid for here cover
+// everything Claude publishes from the terminal.
+function CliSetup({ wallet, exportKey }) {
+  return (
+    <ol className={styles.onboard}>
+      <li>
+        <div className={styles.cardTitle}>Install the Fangorn CLI</div>
+        <Cmd text={SDK_INSTALL} />
+      </li>
+      <li>
+        <div className={styles.cardTitle}>Configure it with your key</div>
+        <Cmd text="fangorn init" />
+        <p className={styles.colText}>
+          At the first prompt, paste your private key. Press Enter to accept the defaults
+          for the rest.
+        </p>
+        <CopyKey exportKey={exportKey} />
+        <p className={styles.colText}>
+          Anyone with this key controls your wallet. Paste it only into your own terminal,
+          never into a chat (including with Claude), a website or an email.
+        </p>
+      </li>
+      <li>
+        <div className={styles.cardTitle}>Check it's the same wallet</div>
+        <Cmd text="fangorn wallet" />
+        {wallet && (
+          <p className={styles.colText}>
+            The address should be <span className={styles.fieldValueMono}>{wallet}</span>.
+          </p>
+        )}
+      </li>
+      <li>
+        <div className={styles.cardTitle}>Install the Fangorn tools in Claude Code</div>
+        <Cmd text={MCP_CMD} />
+        <p className={styles.colText}>Then, inside Claude Code, add the skills:</p>
+        <Cmd text={PLUGIN_CMD} />
+      </li>
+      <li>
+        <div className={styles.cardTitle}>Ask Claude to build it</div>
+        <Cmd text={BUILD_PROMPT} />
+        <p className={styles.colText}>
+          You'll need a free Cloudflare account for the site. Your app shows up on this page
+          once it publishes.
+        </p>
+      </li>
+    </ol>
   );
 }
 
-// Drive can't save anything for a wallet that isn't registered and subscribed, so
-// the card says which step is missing instead of handing over a link that fails
-// on the far side. `soon` renders it as an unclickable announcement — same shape,
-// no target.
-function driveCard(registered, subscribed) {
-  const base = {
-    title: 'Fangorn Drive',
-    body: 'Write and publish markdown notes under the namespaces your wallet owns.',
-  };
-  if (!registered) {
-    return { ...base, action: 'Register your wallet first', soon: true };
-  }
-  if (!subscribed) {
-    return { ...base, action: 'Subscribe to storage first', soon: true };
-  }
-  return { ...base, action: 'Open Drive', href: 'https://drive.fangorn.network' };
-}
-
-const APPS = [
-  {
-    title: 'Builder guides',
-    body: 'End-to-end walkthroughs for building your own app on a Fangorn namespace.',
-    action: 'Coming soon',
-    soon: true,
-  },
-];
-
-// Live namespaces to look at.
-const EXAMPLES = [
-  {
-    title: 'Eagle River',
-    body: "What's on this week in Eagle River, published as a namespace anyone can subscribe to.",
-    href: 'https://eagleriver.sond3r.com',
-  },
-  {
-    title: 'Jackson',
-    body: 'The same events graph, run by a different publisher for Jackson.',
-    href: 'https://jackson.sond3r.com',
-  },
-  {
-    title: 'Sherwood',
-    body: 'Sherwood venues and listings, kept current by whoever owns the namespace.',
-    href: 'https://sherwood.sond3r.com',
-  },
-  {
-    title: 'SurgeXT manual',
-    body: 'A product manual you can query instead of scroll through.',
-    href: 'https://surgext-manual.fangorn.network',
-  },
-];
-
-// The one thing to do next, in the order the contracts enforce. Named as an
-// action so the panel below it is findable, not as a status.
-function nextStep(loading, registered, subscription) {
-  if (loading || subscription.loading) return 'Checking where you left off…';
-  if (!registered) return 'Register your wallet below to claim a publisher namespace.';
-  if (!subscription.active) return 'Subscribe to storage below, then Drive can save for you.';
-  return "You're set up. Open Drive to start writing.";
+function AppCard({ app }) {
+  return (
+    <div className={styles.card}>
+      <div className={styles.cardTitle}>
+        {app.name ?? truncate(app.appId, 10, 6)}
+        {app.suspended && <span className={styles.badgeWarn}>Suspended</span>}
+      </div>
+      <div className={styles.stats}>
+        <Field label="Namespaces"><div className={styles.fieldValue}>{app.namespaces}</div></Field>
+        <Field label="Price">
+          <div className={styles.fieldValue}>{app.price != null ? `${formatUnits(app.price, 6)} USDC / record` : 'Free'}</div>
+        </Field>
+      </div>
+      <div className={styles.cardLinks}>
+        {app.site && <a className={styles.resLink} href={app.site} target="_blank" rel="noreferrer">Site ↗</a>}
+        <a className={styles.resLink} href="https://explorer.fangorn.network" target="_blank" rel="noreferrer">Explorer ↗</a>
+      </div>
+    </div>
+  );
 }
 
 export default function Home() {
-  const { user, logout, fundWallet, exportKey } = useAuth();
-  const { registered, details, loading, registering, register } = usePublisher();
+  const { user, fundWallet, exportKey } = useAuth();
+  const publisher = usePublisher();
   const { balances, refresh: refreshBalances } = useBalances();
   const subscription = useSubscription();
   const [funding, setFunding] = useState(false);
 
-  const { name, contact } = readIdentity(user);
+  const { name } = readIdentity(user);
   const wallet = user?.wallet?.address;
-  const apps = [driveCard(registered, subscription.active), ...APPS];
+  const { apps, received, error: appsError } = useOwnedApps(wallet);
+  const listed = apps?.filter((a) => a.listed);
+  const unlisted = apps ? apps.length - listed.length : 0;
 
   async function addFunds() {
     setFunding(true);
@@ -1196,95 +1109,65 @@ export default function Home() {
 
   return (
     <div className={styles.page}>
-      <header className={styles.topbar}>
-        <span className={styles.logo}>Fangorn</span>
-        <div className={styles.topRight}>
-          {contact && <span className={styles.userChip}>{contact}</span>}
-          <a className={styles.topLink} href={DOCS_URL} target="_blank" rel="noreferrer">Docs</a>
-          <button className={styles.logoutBtn} onClick={logout}>Log out</button>
-        </div>
-      </header>
-
       <main className={styles.main}>
-        <>
-          <section className={styles.welcome}>
-            <span className={styles.eyebrow}>Home</span>
-            <h1 className={styles.h1}>Welcome, {name}.</h1>
-            <p className={styles.sub}>{nextStep(loading, registered, subscription)}</p>
-          </section>
+        <section className={styles.welcome}>
+          <span className={styles.eyebrow}>Account</span>
+          <h1 className={styles.h1}>Welcome, {name}.</h1>
+          <p className={styles.sub}>{nextStep(subscription)}</p>
+        </section>
 
-          {/* Wallet, publisher, storage in the order the contracts enforce: fund,
-              register, then subscribe. All three stay on screen in every state so
-              the panel never changes shape as registration lands. */}
-          <section className={styles.section}>
-            <h2 className={styles.h2}>Account</h2>
-            <div className={styles.accountPanel}>
-              {wallet && (
-                <WalletColumn
-                  wallet={wallet}
-                  balances={balances}
-                  onFund={addFunds}
-                  funding={funding}
-                  refreshBalances={refreshBalances}
-                  exportKey={exportKey}
-                />
-              )}
-              <PublisherColumn
+        <section className={styles.section}>
+          <h2 className={styles.h2}>Your apps</h2>
+          {appsError && <div className={styles.formError}>{appsError}</div>}
+          {apps === null && <div className={styles.pending}>Reading your apps from the chain…</div>}
+          {listed?.length === 0 && (
+            <p className={styles.colText}>No apps yet. Set up below, then ask Claude to build one.</p>
+          )}
+          {listed?.length > 0 && received != null && (
+            <p className={styles.colText}>
+              Earned across your apps: <b>{formatUnits(received, 6)} USDC</b>
+            </p>
+          )}
+          <div className={styles.grid}>
+            {listed?.map((app) => <AppCard key={app.appId} app={app} />)}
+          </div>
+          {unlisted > 0 && (
+            <p className={styles.colText}>
+              {unlisted} more {unlisted === 1 ? 'app is' : 'apps are'} claimed by this wallet but not
+              on the explorer: no reachable agent card is bound to {unlisted === 1 ? 'it' : 'them'} yet.
+            </p>
+          )}
+        </section>
+
+        {/* Wallet, then storage: fund, then subscribe. Publisher registration has no
+            panel of its own — Subscribe does it first when it's missing. */}
+        <section className={styles.section}>
+          <h2 className={styles.h2}>1. Set up your account</h2>
+          <div className={styles.accountPanel}>
+            {wallet && (
+              <WalletColumn
                 wallet={wallet}
-                registered={registered}
-                details={details}
-                loading={loading}
-                registering={registering}
-                register={register}
+                balances={balances}
+                onFund={addFunds}
+                funding={funding}
+                refreshBalances={refreshBalances}
               />
-              <StorageColumn registered={registered} subscription={subscription} />
-            </div>
-          </section>
+            )}
+            <StorageColumn publisher={publisher} subscription={subscription} />
+          </div>
+        </section>
 
-          <section className={styles.section}>
-            <h2 className={styles.h2}>Embeddings</h2>
-            <div className={styles.accountPanel}>
-              <QuickbeamPanel wallet={wallet} subscribed={subscription.active} />
-            </div>
-          </section>
+        <section className={styles.section}>
+          <h2 className={styles.h2}>2. Set up Claude Code</h2>
+          <CliSetup wallet={wallet} exportKey={exportKey} />
+        </section>
 
-          <section className={styles.section}>
-            <h2 className={styles.h2}>Apps</h2>
-            <div className={styles.grid}>
-              {apps.map((app) => <GetStartedCard key={app.title} {...app} />)}
-            </div>
-          </section>
-
-          <section className={styles.section}>
-            <h2 className={styles.h2}>Built on Fangorn</h2>
-            <div className={styles.grid}>
-              {EXAMPLES.map((example) => (
-                <GetStartedCard key={example.title} action="Open" {...example} />
-              ))}
-            </div>
-          </section>
-
-          <section className={styles.section}>
-            <h2 className={styles.h2}>Build with the SDK</h2>
-            <div className={styles.sdkStrip}>
-              <div className={styles.installLine}>
-                <span className={styles.fieldValueMono}>{INSTALL_CMD}</span>
-                <CopyButton text={INSTALL_CMD} className={styles.ghostBtnSm} />
-              </div>
-              <div className={styles.sdkLinks}>
-                <a className={styles.resLink} href={DOCS_URL} target="_blank" rel="noreferrer">
-                  Documentation <span className={styles.resArrow}>→</span>
-                </a>
-                <a className={styles.resLink} href="https://github.com/fangorn-network/fangorn" target="_blank" rel="noreferrer">
-                  Source on GitHub <span className={styles.resArrow}>→</span>
-                </a>
-                <a className={styles.resLink} href="https://discord.gg/JDj8RdCVyU" target="_blank" rel="noreferrer">
-                  Discord <span className={styles.resArrow}>→</span>
-                </a>
-              </div>
-            </div>
-          </section>
-        </>
+        {/* <details className={styles.section}>
+          <summary className={styles.h2}>Hosted embeddings (Quickbeam)</summary>
+          <div className={styles.accountPanel}>
+            <QuickbeamPanel wallet={wallet} subscribed={subscription.active} />
+          </div>
+        </details> */}
       </main>
     </div>
   );

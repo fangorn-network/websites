@@ -7,3 +7,6 @@ export function useAuth() {
   if (!ctx) throw new Error('useAuth must be used within an auth provider');
   return ctx;
 }
+
+// Account hub is "coming soon" unless VITE_ENABLE_ACCOUNT=true at build time.
+export const ACCOUNT_ENABLED = import.meta.env?.VITE_ENABLE_ACCOUNT === 'true';
