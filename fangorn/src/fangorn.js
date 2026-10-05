@@ -18,6 +18,10 @@ export { PublisherStatus };
 export const CHAIN = FangornConfig.chain;
 export const REGISTRY_ADDRESS = FangornConfig.dataRegistryContractAddress;
 
+// The AppRegistry, which owns what an "app" is. Read-only here: the account hub
+// (account.js) looks up each app's owner and agent URI.
+export const APP_REGISTRY_ADDRESS = FangornConfig.appRegistryContractAddress;
+
 // Every registry call is scoped to an app id. Publishers register app-agnostically,
 // and this site registers them on the DataRegistry ONLY — joining an app is that app's
 // business, not the account dashboard's. The client still requires an app id for the
