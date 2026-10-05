@@ -6,7 +6,7 @@ import { usePublisher, useBalances, useFaucet, FAUCET_ETH, FAUCET_USDC } from '.
 import { DEFAULT_APP } from '@fangorn-network/sdk/lib/config.js';
 import { useSubscription, SUBSCRIPTION_WINDOW_DAYS } from './subscription';
 import { useUsage } from './usage';
-import { useQuickbeam, buildSources, describeSources } from './quickbeam';
+import { useQuickbeam, buildSources, describeSources, findDuplicate } from './quickbeam';
 import { useDirectory, appName } from './directory';
 import { truncate, explorer, formatBytes, meterState } from './format';
 import { useOwnedApps } from './account';
@@ -374,12 +374,18 @@ function QuickbeamPanel({ wallet, subscribed }) {
   const [browsed, setBrowsed] = useState(false);
   const [error, setError] = useState(null);
 
-  const { views, loading, creating, create } = useQuickbeam();
+  const { views, loading, creating, removing, create, remove } = useQuickbeam();
   const wholeApp = !publisher.trim() && !namespace.trim();
   // A half-filled triple is neither shape, so Create stays off until it resolves to
   // one namespace or to all of them.
   const ready = name.trim() && app.trim()
     && (wholeApp || (publisher.trim() && namespace.trim()));
+
+  const replacing = views.find((v) => v.name.toLowerCase() === name.trim().toLowerCase());
+  const covering = app.trim()
+    ? findDuplicate(views, buildSources({ app, publisher, namespace }))
+    : null;
+  const duplicate = covering && covering.id !== replacing?.id ? covering : null;
 
   function openBrowser() {
     setBrowsed(true);
@@ -550,20 +556,25 @@ function QuickbeamPanel({ wallet, subscribed }) {
       <div className={styles.field}>
         {error && <div className={styles.formError}>{error}</div>}
         <div className={styles.pending}>
-          Indexing starts within a minute. A namespace already being watched is ready
-          immediately.
+          {duplicate
+            ? `Your view "${duplicate.name}" already covers these sources — use it, or `
+              + `name this one "${duplicate.name}" to change what it watches.`
+            : replacing
+              ? `This replaces your existing view "${replacing.name}", keeping its URLs.`
+              : 'Indexing starts within a minute. A namespace already being watched is '
+                + 'ready immediately.'}
         </div>
         <div className={styles.btnRow}>
           <button
             className={styles.ghostBtn}
             onClick={onCreate}
-            disabled={creating || loading || !ready || !subscribed}
+            disabled={creating || loading || !ready || !subscribed || !!duplicate}
             type="button"
             // The worker refuses a wallet without an active subscription, so say why
             // rather than letting the request fail.
             title={subscribed ? undefined : 'Subscribe to storage first'}
           >
-            {creating ? 'Creating…' : 'Create view'}
+            {creating ? 'Creating…' : replacing ? 'Replace view' : 'Create view'}
           </button>
         </div>
       </div>
@@ -583,9 +594,12 @@ function QuickbeamPanel({ wallet, subscribed }) {
                       namespaces the app holds, so counting sources would read
                       "1 namespace" for a view over forty. */}
                   <span className={styles.pubCount}>{describeSources(view.sources)}</span>
-                  <span className={styles.fieldNote}>
-                    {view.mcp?.url ? 'hosted MCP' : ''}
-                  </span>
+                  {view.mcp?.url && <span className={styles.fieldNote}>hosted MCP</span>}
+                  <RemoveView
+                    name={view.name}
+                    busy={removing === view.id}
+                    onRemove={() => remove(view.id)}
+                  />
                 </summary>
                 <div className={styles.pubBody}>
                   <ViewEndpoints view={view} />
@@ -685,6 +699,76 @@ function ViewEndpoints({ view }) {
           value={view.mcpCommand}
         />
       )}
+    </>
+  );
+}
+
+// Stop watching — the control lives in the view's own header row, not inside the
+// disclosure. A button you have to expand a view to find reads as a button that isn't
+// there, and "how do I turn this off" is the one question a list of endpoints must
+// answer without a hunt.
+//
+// Still two clicks: the signature that follows may not prompt at all with a Privy
+// embedded wallet, so this confirm is the only thing standing between a stray click and
+// a deleted view. It confirms in place rather than opening the row, so the answer is
+// wherever the question was asked.
+function RemoveView({ name, busy, onRemove }) {
+  const [confirming, setConfirming] = useState(false);
+  const [error, setError] = useState(null);
+
+  // Every one of these clicks lands inside a <summary>, which would otherwise toggle
+  // the view open underneath the buttons.
+  const inHead = (fn) => (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    fn();
+  };
+
+  async function onConfirm() {
+    setError(null);
+    try {
+      await onRemove();
+    } catch (err) {
+      // Stay in confirm mode: the message sits beside the button that produced it, and
+      // a cancelled signature is one click from being retried.
+      setError(friendlyError(err));
+    }
+  }
+
+  if (!confirming) {
+    return (
+      <button
+        className={styles.ghostBtnSm}
+        onClick={inHead(() => setConfirming(true))}
+        type="button"
+        title={`Stop watching ${name}`}
+      >
+        Remove
+      </button>
+    );
+  }
+
+  return (
+    <>
+      {error
+        ? <span className={styles.headError} title={error}>{error}</span>
+        : <span className={styles.fieldNote}>Remove this view?</span>}
+      <button
+        className={styles.dangerBtnSm}
+        onClick={inHead(onConfirm)}
+        disabled={busy}
+        type="button"
+      >
+        {busy ? 'Removing…' : 'Remove'}
+      </button>
+      <button
+        className={styles.ghostBtnSm}
+        onClick={inHead(() => { setError(null); setConfirming(false); })}
+        disabled={busy}
+        type="button"
+      >
+        Cancel
+      </button>
     </>
   );
 }

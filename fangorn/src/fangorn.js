@@ -18,14 +18,10 @@ export { PublisherStatus };
 export const CHAIN = FangornConfig.chain;
 export const REGISTRY_ADDRESS = FangornConfig.dataRegistryContractAddress;
 
-// The AppRegistry, which owns what an "app" is: its terms, its join fee and its
-// membership. `DataRegistry.commitStateRoot` cross-calls `isRegisteredForApp` here, so
-// registering as a publisher is no longer enough to publish — a wallet has to join the
-// app too, or every commit reverts NotRegisteredForApp.
-export const APP_REGISTRY_ADDRESS = FangornConfig.appRegistryContractAddress;
-
 // Every registry call is scoped to an app id. Publishers register app-agnostically,
-// but the client requires one, so use the SDK's default app. Exported because the
+// and this site registers them on the DataRegistry ONLY — joining an app is that app's
+// business, not the account dashboard's. The client still requires an app id for the
+// namespace keys it derives, so use the SDK's default app. Exported because the
 // Quickbeam panel has to say when a picked namespace lives in a *different* app.
 export const APP_ID = toAppId(DEFAULT_APP);
 

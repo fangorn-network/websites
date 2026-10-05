@@ -192,6 +192,7 @@ function Cartridge() {
           </div>
         </div>
       </div>
+      <br></br>
       <figcaption className={styles.cartCaption}>
         Your data, as a cartridge. Plug it in: people search it, agents call it.
         <span className={styles.hint}> Click to swap.</span>
