@@ -1,0 +1,6 @@
+{
+  "name": "fangorn-website",
+  "compatibility_date": "2026-10-05",
+  // Static assets only, no Worker script. No SPA fallback: the app has no client-side routes.
+  "assets": { "directory": "./dist" }
+}
