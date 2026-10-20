@@ -14,7 +14,7 @@ export default function Nav() {
     <nav className={styles.nav}>
       <a href="#" className={styles.logo}>Fangorn</a>
       <div className={styles.right}>
-        <a href="https://explorer.fangorn.network" className={styles.link}>Explorer ↗</a>
+        <a href="#/explorer" className={styles.link}>Explorer</a>
         <a href="https://deepwiki.com/fangorn-network/fangorn" className={styles.link}>Docs</a>
         <a href="https://github.com/fangorn-network" className={styles.link}>GitHub</a>
         <a href="https://discord.gg/JDj8RdCVyU" className={styles.link} aria-label="Discord">

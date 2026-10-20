@@ -75,136 +75,6 @@
   color: var(--sub);
 }
 
-/* ── cartridge ───────────────────────────────────────────────────────────── */
-
-.cart { max-width: 640px; margin: 0 auto; }
-
-.rig {
-  display: flex;
-  align-items: flex-end;
-  justify-content: center;
-  gap: 8px;
-}
-
-.cartBtn {
-  flex: 0 1 320px;
-  background: none;
-  border: none;
-  border-radius: 12px;
-  padding: 0;
-}
-
-.cartBtn:focus-visible { outline: 2px solid var(--hi); outline-offset: 4px; }
-.cartBtn svg { width: 100%; overflow: visible; display: block; }
-.cartBtn:hover .shell { stroke: var(--sub); }
-
-/* ── screen: idle until the LED comes on, then shows the cartridge's demo ── */
-
-.screen {
-  position: relative;
-  flex: 0 0 220px;
-  height: 132px;
-  margin-bottom: 14px;
-  border: 1px solid var(--line2);
-  border-radius: 10px;
-  background: var(--bg);
-  box-shadow: inset 0 0 24px rgba(0, 0, 0, 0.6);
-  text-align: left;
-  font-family: var(--mono);
-  font-size: 12px;
-}
-
-/* Cable from the console to the screen. */
-.screen::before {
-  content: '';
-  position: absolute;
-  right: 100%;
-  bottom: 28px;
-  width: 24px;
-  border-top: 1.5px solid var(--line2);
-}
-
-.idle, .result { position: absolute; inset: 0; padding: 16px; }
-.idle { color: var(--dim); animation: idle 4.5s step-end infinite; }
-.cursor { animation: blink 1s step-end infinite; }
-
-.result { opacity: 0; animation: show 4.5s step-end infinite; }
-.prompt { color: var(--sub); }
-.hit { font-family: var(--sans); font-size: 14px; font-weight: 500; color: var(--text); margin: 14px 0 4px; }
-.via { font-size: 10px; color: var(--tint); }
-
-@keyframes idle { 0% { opacity: 1; } 34% { opacity: 0; } 78% { opacity: 1; } }
-@keyframes show { 0% { opacity: 0; } 34% { opacity: 1; } 78% { opacity: 0; } }
-@keyframes blink { 50% { opacity: 0; } }
-
-.cartBody { animation: insert 4.5s cubic-bezier(0.5, 0, 0.2, 1) infinite; }
-
-/* Drop in, small seat bounce, hold, eject. Iteration boundary = cartridge out. */
-@keyframes insert {
-  0%, 8%   { transform: translateY(-34px); }
-  28%      { transform: translateY(62px); }
-  31%      { transform: translateY(57px); }
-  34%, 78% { transform: translateY(62px); }
-  94%, 100% { transform: translateY(-34px); }
-}
-
-.shell { fill: var(--s3); stroke: var(--line2); stroke-width: 1.5; }
-
-.label {
-  fill: var(--s1);
-  stroke: var(--tint);
-  stroke-opacity: 0.6;
-  transition: stroke 0.3s;
-}
-
-.labelTag { font: 500 8px var(--mono); letter-spacing: 0.14em; fill: var(--tint, var(--sub)); }
-.labelName { font: 600 17px var(--sans); letter-spacing: -0.02em; fill: var(--text); }
-.labelSub { font: 8px var(--mono); fill: var(--dim); }
-.grip { stroke: var(--line2); stroke-width: 2; stroke-linecap: round; }
-
-.tab { fill: var(--s2); stroke: var(--line2); stroke-width: 1.5; }
-/* Edge-connector contacts: the one warm colour, it's what says "plugs in". */
-.pin { stroke: #b8954a; stroke-opacity: 0.7; stroke-width: 2.4; }
-
-.top { fill: var(--s2); stroke: var(--line2); stroke-width: 1.5; stroke-linejoin: round; }
-.topFront { fill: var(--s3); stroke: var(--line2); stroke-width: 1.5; stroke-linejoin: round; }
-.slot { fill: #000; }
-.slotLip { stroke: var(--dim); stroke-width: 1.5; }
-.knob { fill: var(--s2); stroke: var(--dim); stroke-width: 1.2; }
-
-.console { fill: var(--s2); stroke: var(--line2); stroke-width: 1.5; }
-.port { fill: var(--bg); stroke: var(--dim); stroke-width: 1.2; }
-.portPins { stroke: var(--dim); stroke-width: 2; stroke-dasharray: 1.5 1.5; }
-.vent { stroke: var(--line2); stroke-width: 2; stroke-linecap: round; }
-.foot { fill: var(--line2); }
-.consoleText { font: 500 9px var(--mono); letter-spacing: 0.3em; fill: var(--dim); }
-.consoleSmall { font: 6px var(--mono); letter-spacing: 0.1em; fill: var(--dim); }
-
-.led { fill: var(--dim); animation: led 4.5s step-end infinite; }
-
-@keyframes led {
-  0%, 34% { fill: var(--dim); filter: none; }
-  34%, 78% { fill: var(--hi); filter: drop-shadow(0 0 4px var(--hi)); }
-  78%, 100% { fill: var(--dim); filter: none; }
-}
-
-.cartCaption {
-  font-family: var(--mono);
-  font-size: 12px;
-  color: var(--sub);
-  margin-top: 8px;
-}
-
-.hint { color: var(--dim); }
-
-@media (prefers-reduced-motion: reduce) {
-  .cartBody, .led, .idle, .result, .cursor { animation: none; }
-  .idle { opacity: 0; }
-  .result { opacity: 1; }
-  .led { fill: var(--hi); }
-  .dualBody { animation: none !important; }
-}
-
 /* ── shared section bits ─────────────────────────────────────────────────── */
 
 .section { padding: 72px 5%; max-width: 1120px; margin: 0 auto; }
@@ -404,7 +274,7 @@
 
 .points li::before { content: '✓'; position: absolute; left: 0; color: var(--hi); }
 
-/* ── built on fangorn ────────────────────────────────────────────────────── */
+/* ── live apps ──────────────────────────────────────────────────────────── */
 
 .casesHead { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; }
 
@@ -467,15 +337,9 @@
 
 .btnSm:hover { box-shadow: 0 0 16px var(--glow); }
 
-.ready { color: var(--g1); border: 1px solid rgba(34, 197, 94, 0.3); }
 
 @media (max-width: 860px) {
   .hero { padding: 64px 16px 40px; }
   .section { padding: 48px 16px; }
   .bento, .caseGrid, .dualBody { grid-template-columns: 1fr; }
-  .rig { flex-direction: column; gap: 0; }
-  .cartBtn { width: min(100%, 320px); flex: none; }
-  .rig { align-items: center; }
-  .screen { flex: none; width: min(100%, 260px); margin: 12px 0 0; }
-  .screen::before { right: auto; bottom: 100%; left: 50%; width: 0; height: 12px; border-top: none; border-left: 1.5px solid var(--line2); }
 }

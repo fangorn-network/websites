@@ -1,103 +1,34 @@
 import { useCallback, useEffect, useState } from 'react';
-import { createPublicClient, createWalletClient, custom, http, getAddress, parseEther, erc20Abi } from 'viem';
-import { DataRegistryClient } from '@fangorn-network/sdk/lib/contracts/data-registry/index.js';
-// PublisherStatus lives in contracts/types.js, NOT in the data-registry client it used
-// to be re-exported from. Importing it from the old path is a link-time SyntaxError that
-// takes down every module importing this one — i.e. a blank page.
-import { PublisherStatus } from '@fangorn-network/sdk/lib/contracts/types.js';
-import { DEFAULT_APP, FangornConfig, toAppId } from '@fangorn-network/sdk/lib/config.js';
+import { createPublicClient, createWalletClient, custom, http, getAddress, erc20Abi } from 'viem';
+import { BaseSepoliaConfig } from '@fangorn-network/sdk/lib/config.js';
 import { useAuth } from './authContext.js';
 
-export { PublisherStatus };
-
-// Deployment settings come from the SDK (FangornConfig) — registry address, chain
-// and RPC — so the site can never drift from the network the SDK publishes to.
+// The deployment the site runs against: chain, RPC, registry addresses and the RPC's
+// getLogs window, all from the SDK so the site can't drift from what the CLI uses.
 // Deep imports on purpose: the SDK root entry pulls the graph engine, Pinata and
-// the ZK gadgets (bb.js/noir WASM) into the bundle, and the dashboard only ever
-// touches the DataRegistry.
-export const CHAIN = FangornConfig.chain;
-export const REGISTRY_ADDRESS = FangornConfig.dataRegistryContractAddress;
+// the ZK gadgets (bb.js/noir WASM) into the bundle, and the hub only touches the
+// AppRegistry.
+//
+// ⚠️ NOT FangornConfig: since 2026.10.20 that is still the old Arbitrum Sepolia
+// deployment, kept for apps claimed there. New apps live on Base Sepolia.
+export const NETWORK = BaseSepoliaConfig;
+export const CHAIN = NETWORK.chain;
 
-// The AppRegistry, which owns what an "app" is. Read-only here: the account hub
-// (account.js) looks up each app's owner and agent URI.
-export const APP_REGISTRY_ADDRESS = FangornConfig.appRegistryContractAddress;
+// The AppRegistry owns what an "app" is, and since 2026.10.20 also the storage
+// subscription: claiming an app pays its first period (account.js).
+export const APP_REGISTRY_ADDRESS = NETWORK.appRegistryContractAddress;
+export const MEMBERSHIP_REGISTRY_ADDRESS = NETWORK.membershipRegistryContractAddress;
 
-// Every registry call is scoped to an app id. Publishers register app-agnostically,
-// and this site registers them on the DataRegistry ONLY — joining an app is that app's
-// business, not the account dashboard's. The client still requires an app id for the
-// namespace keys it derives, so use the SDK's default app. Exported because the
-// Quickbeam panel has to say when a picked namespace lives in a *different* app.
-export const APP_ID = toAppId(DEFAULT_APP);
-
-// USDC, for the balance display and the subscription fee (subscription.js). The
-// registration fee is native ETH, paid by the SDK's register().
+// USDC, for the balance display and the earnings scan (account.js). Circle's Base
+// Sepolia USDC, which is what AppRegistry.usdc() names; the SDK's own fee calls
+// read it from the contract.
 // import.meta.env is undefined under plain node (the self-check), so guard it.
 export const USDC_ADDRESS =
-  import.meta.env?.VITE_USDC_ADDRESS ?? '0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d';
-
-// The testnet faucet worker (websites/faucet). Tops an empty wallet up so a new
-// publisher can afford the registration fee + gas.
-export const FAUCET_URL = (
-  import.meta.env?.VITE_FAUCET_URL ?? 'https://fangorn-faucet.fangorn-0be.workers.dev'
-).replace(/\/$/, '');
-
-export const FAUCET_ETH = '0.05';
-export const FAUCET_USDC = '10';
-
-/** Seconds until this address may claim again — 0 means claimable now. */
-export async function readFaucetCooldown(address) {
-  const res = await fetch(`${FAUCET_URL}/faucet?address=${address}`);
-  if (!res.ok) throw new Error(`Faucet ${res.status}`);
-  return (await res.json()).retryAfter;
-}
-
-/**
- * Claim the drip. Resolves once the txs are mined, so the caller can re-read
- * balances immediately. Throws with .retryAfter set when still on cooldown.
- */
-export async function dripFaucet(address) {
-  const res = await fetch(`${FAUCET_URL}/faucet`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ address }),
-  });
-  const body = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    const err = new Error(res.status === 429 ? 'Faucet cooldown' : `Faucet ${res.status}`);
-    err.retryAfter = body.retryAfter ?? 0;
-    throw err;
-  }
-  return body;
-}
+  import.meta.env?.VITE_USDC_ADDRESS ?? '0x036CbD53842c5426634e7929541eC2318f3dCF7e';
 
 // Reads go through a dedicated client on the SDK's chain/RPC so they hit the right
 // network regardless of the wallet's current one.
-export const publicClient = createPublicClient({ chain: CHAIN, transport: http(FangornConfig.rpcUrl) });
-
-// Gateway for reading content-addressed blocks (the publisher directory resolves
-// namespace names through it). The SDK defaults to ipfs.io, which is unreliable for
-// this content and is DNS-filtered on plenty of networks, so point at the project's
-// gateway instead.
-//
-// ⚠️ NO trailing `/ipfs` — the SDK appends that itself, and a suffix here produces
-// `/ipfs/ipfs/<cid>` and a 400 from the gateway.
-export const IPFS_GATEWAY = (
-  import.meta.env?.VITE_IPFS_GATEWAY ?? 'https://green-reasonable-heron-957.mypinata.cloud'
-).replace(/\/(ipfs\/?)?$/, '');
-
-// A DataRegistryClient wired for reads. Writes need the user's wallet, so
-// register() below builds its own client with a Privy-backed walletClient.
-export const readRegistry = new DataRegistryClient(REGISTRY_ADDRESS, APP_ID, publicClient, publicClient);
-
-// The same client with the app left open. A namespace is an `app:publisher:subspace`
-// triple and all three are indexed topics on StateCommitted, so the client's appId is
-// simply topic 2 of the log filter — leaving it undefined makes that a null topic and
-// the node returns every app's commits. That is what lets the directory show which app
-// each namespace belongs to instead of only the one this site publishes under.
-//
-// Reads only. Anything that derives a namespaceKey — a write, or a filter naming one
-// exact namespace — hashes the app id in and needs a real one.
-export const allAppsRegistry = new DataRegistryClient(REGISTRY_ADDRESS, undefined, publicClient, publicClient);
+export const publicClient = createPublicClient({ chain: CHAIN, transport: http(NETWORK.rpcUrl) });
 
 /**
  * The Privy wallet (embedded or injected) as a viem WalletClient, switched to
@@ -118,11 +49,6 @@ export async function walletClientFor(wallet, address) {
   });
 }
 
-/** The publisher's lifecycle status: UNREGISTERED / ACTIVE / SUSPENDED. */
-export async function readStatus(publisher) {
-  return readRegistry.getPublisherStatus(getAddress(publisher));
-}
-
 /** The wallet's native ETH (wei) and USDC (6-decimal base units) balances, raw. */
 export async function readBalances(address) {
   const account = getAddress(address);
@@ -140,7 +66,7 @@ export async function readBalances(address) {
 
 /**
  * The signed-in wallet's ETH + USDC balances. `balances` is null while loading.
- * `refresh()` re-reads them — the faucet and registration both move the balance.
+ * `refresh()` re-reads them — creating an app moves the balance.
  */
 export function useBalances() {
   const { user } = useAuth();
@@ -162,113 +88,4 @@ export function useBalances() {
   }, [address, tick]);
 
   return { balances, loading, refresh };
-}
-
-/**
- * The faucet claim for the signed-in wallet:
- *   retryAfter – seconds until the next claim is allowed (0 = claimable now)
- *   loading    – true while the initial eligibility check is in flight
- *   claiming   – true while a drip is being mined
- *   claim()    – drips, then resolves so the caller can re-read balances
- */
-export function useFaucet() {
-  const { user } = useAuth();
-  const address = user?.wallet?.address;
-
-  const [retryAfter, setRetryAfter] = useState(0);
-  const [loading, setLoading] = useState(Boolean(address));
-  const [claiming, setClaiming] = useState(false);
-
-  useEffect(() => {
-    if (!address) return;
-    let cancelled = false;
-    readFaucetCooldown(address)
-      .then((secs) => !cancelled && setRetryAfter(secs))
-      .catch((err) => !cancelled && console.warn('Faucet lookup failed:', err))
-      .finally(() => !cancelled && setLoading(false));
-    return () => { cancelled = true; };
-  }, [address]);
-
-  const claim = useCallback(async () => {
-    if (!address) throw new Error('Connect a wallet first.');
-    setClaiming(true);
-    try {
-      const { retryAfter: next } = await dripFaucet(address);
-      setRetryAfter(next);
-    } catch (err) {
-      // A 429 means someone else already claimed for this wallet — reflect it.
-      if (err.retryAfter) setRetryAfter(err.retryAfter);
-      throw err;
-    } finally {
-      setClaiming(false);
-    }
-  }, [address]);
-
-  return { retryAfter, eligible: retryAfter === 0, loading, claiming, claim };
-}
-
-/**
- * The signed-in wallet's global publisher standing (DataRegistry):
- *   registered   – status is ACTIVE
- *   loading      – true while the initial lookup is in flight
- *   registering  – true while register() is sending
- *   register()   – register this wallet, if it isn't already
- *
- * Only the global step. SubscriptionRegistry.subscribe() requires it, which is
- * why the site does it at all. Joining an app (AppRegistry.registerForApp) is per
- * app and belongs to the build: `westmarch-ship` runs `fangorn register` for the
- * owner's own app, so the site joins nothing.
- */
-export function usePublisher() {
-  const { user, wallet } = useAuth();
-  const address = user?.wallet?.address;
-
-  const [status, setStatus] = useState(PublisherStatus.UNREGISTERED);
-  // address is stable for the hook's lifetime: App keys Home by wallet, so a
-  // wallet switch remounts this fresh.
-  const [loading, setLoading] = useState(Boolean(address));
-  const [registering, setRegistering] = useState(false);
-
-  useEffect(() => {
-    if (!address) return;
-    let cancelled = false;
-    readStatus(address)
-      .then((s) => !cancelled && setStatus(s))
-      .catch((err) => !cancelled && console.warn('Status lookup failed:', err))
-      .finally(() => !cancelled && setLoading(false));
-    return () => { cancelled = true; };
-  }, [address]);
-
-  const register = useCallback(async () => {
-    if (!wallet || !address) throw new Error('Connect a wallet first.');
-    setRegistering(true);
-    try {
-      const [{ eth, usdc }, fee, current] = await Promise.all([
-        readBalances(address),
-        readRegistry.registrationFee(),
-        readStatus(address),
-      ]);
-      // The contract reverts for a wallet that's already registered.
-      if (current !== PublisherStatus.ACTIVE) {
-        // Registration costs a native fee plus gas, and the subscription right after
-        // needs USDC, so a brand-new wallet can't pay for either. Auto-claim only
-        // when the wallet is actually short, so a funded user doesn't burn their 24h
-        // drip here. A faucet failure (outage, cooldown already spent) must not block
-        // a wallet with its own funds — let register() surface the real error.
-        if (eth < fee + parseEther('0.005') || usdc < 1_000_000n) {
-          await dripFaucet(address).catch((err) => console.warn('Faucet drip failed:', err));
-        }
-        const walletClient = await walletClientFor(wallet, address);
-        const registry = new DataRegistryClient(REGISTRY_ADDRESS, APP_ID, publicClient, walletClient);
-        // Reads the on-chain fee, attaches it as msg.value, waits for the receipt.
-        // It also sets gas/fee headroom itself, which an embedded wallet won't.
-        await registry.register();
-      }
-      setStatus(await readStatus(address));
-    } finally {
-      setRegistering(false);
-    }
-  }, [wallet, address]);
-
-  return { registered: status === PublisherStatus.ACTIVE, loading, registering, register };
 }

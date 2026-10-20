@@ -10,7 +10,7 @@ import { PrivyProvider } from '@privy-io/react-auth';
 import './index.css';
 import App from './App.jsx';
 import { PrivyAuthBridge, DisabledAuthProvider } from './auth.jsx';
-import { arbitrumSepolia } from 'viem/chains';
+import { CHAIN } from './fangorn.js';
 
 const privyAppId = import.meta.env.VITE_PRIVY_APP_ID;
 
@@ -38,7 +38,7 @@ const tree = privyAppId ? (
       legal: {
         privacyPolicyUrl: 'https://fangorn.network/privacy.html',
       },
-      defaultChain: arbitrumSepolia,
+      defaultChain: CHAIN,
       // Email login has no wallet of its own, so Privy has to mint one or the
       // user lands authenticated-but-wallet-less and every on-chain action
       // fails. 'users-without-wallets' leaves an injected-wallet login alone.
@@ -46,7 +46,7 @@ const tree = privyAppId ? (
         ethereum: { createOnLogin: 'users-without-wallets' },
       },
       loginMethods: ['email', 'wallet'],
-      supportedChains: [arbitrumSepolia]
+      supportedChains: [CHAIN]
     }}
   >
     <PrivyAuthBridge>

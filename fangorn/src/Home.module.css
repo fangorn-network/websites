@@ -773,3 +773,18 @@ a.fieldValueMono:hover { color: var(--hi); }
 }
 
 details > summary.h2 { cursor: pointer; }
+
+/* The (+) create card: dashed so it reads as a slot, not an app. */
+.cardNew {
+  border-style: dashed;
+  cursor: pointer;
+  color: inherit;
+  justify-content: center;
+  min-height: 160px;
+}
+
+.cardPlus {
+  font-size: 28px;
+  line-height: 1;
+  color: var(--hi);
+}

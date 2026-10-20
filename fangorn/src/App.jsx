@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import './index.css';
 import Nav from './Nav';
-import Landing, { UseCases } from './Landing';
+import Landing, { LiveApps } from './Landing';
 import { Footer } from './Footer';
 import Home from './Home';
 import { useAuth, ACCOUNT_ENABLED } from './authContext';
@@ -19,8 +19,6 @@ function useHash() {
 
 function Account() {
   const { ready, authenticated, user, login } = useAuth();
-
-  if (!ACCOUNT_ENABLED) return <div className="appSplash">Account management — coming soon.</div>;
 
   // Avoid flashing the login prompt before Privy resolves an existing session.
   if (!ready) return <div className="appSplash" aria-busy="true">Loading…</div>;
@@ -40,7 +38,7 @@ export default function App() {
   const hash = useHash();
   const page =
     hash === '#/account' ? <Account /> :
-    hash === '#/use-cases' ? <UseCases /> :
+    hash === '#/explorer' ? <main><LiveApps /></main> :
     <Landing />;
 
   return (

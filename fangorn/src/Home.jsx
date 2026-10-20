@@ -1,22 +1,26 @@
 import { useEffect, useRef, useState } from 'react';
-import { formatEther, formatUnits, parseEther } from 'viem';
+import { formatEther, formatUnits, parseEther, parseUnits } from 'viem';
 import styles from './Home.module.css';
 import { useAuth } from './authContext';
-import { usePublisher, useBalances, useFaucet, FAUCET_ETH, FAUCET_USDC } from './fangorn';
-import { DEFAULT_APP } from '@fangorn-network/sdk/lib/config.js';
-import { useSubscription, SUBSCRIPTION_WINDOW_DAYS } from './subscription';
+import { useBalances } from './fangorn';
 import { useUsage } from './usage';
-import { useQuickbeam, buildSources, describeSources, findDuplicate } from './quickbeam';
-import { useDirectory, appName } from './directory';
 import { truncate, explorer, formatBytes, meterState } from './format';
-import { useOwnedApps } from './account';
+import { useOwnedApps, readAppOwner, isCardUrl } from './account';
 
 const INSTALL_CMD = 'npm i @fangorn-network/sdk';
 const DOCS_URL = 'https://deepwiki.com/fangorn-network/fangorn';
 
-// Enough ETH to cover the registration fee and its gas. Below this the wallet is
-// "Low" and the faucet is the thing to do next.
-const LOW_ETH = parseEther('0.005');
+// Enough ETH for a few app writes' gas. Below this the wallet is "Low" and a
+// testnet faucet is the thing to do next.
+const LOW_ETH = parseEther('0.002');
+
+// Public Base Sepolia faucets. We don't run one: it was drainable infra to maintain,
+// and these cover the only thing a new owner needs — gas (and USDC if the app fee
+// ever goes above zero).
+const FAUCETS = [
+  { label: 'ETH (Coinbase)', url: 'https://portal.cdp.coinbase.com/products/faucet' },
+  { label: 'USDC (Circle)', url: 'https://faucet.circle.com' },
+];
 
 
 // viem attaches .shortMessage to contract/RPC errors; fall back to .message.
@@ -29,23 +33,13 @@ function friendlyError(err) {
   const msg = err?.shortMessage || err?.message || String(err);
   const text = `${msg}\n${err?.message ?? ''}`;
   if (/rejected|denied/i.test(text)) return 'Transaction cancelled.';
-  if (/insufficient funds/i.test(text)) return 'Not enough ETH for gas. Add funds and try again.';
-  if (/AlreadyRegistered/i.test(text)) return 'This wallet is already registered.';
-  if (/NotRegistered/i.test(text)) return 'Register before subscribing.';
-  if (/cooldown/i.test(text)) return 'Already claimed. Try again tomorrow.';
+  if (/insufficient funds/i.test(text)) return 'Not enough Base Sepolia ETH for gas. Grab some from a faucet and try again.';
+  if (/AppAlreadyRegistered|AlreadyClaimed/i.test(text)) return 'That name is taken. Pick another.';
+  if (/cannot be renewed until/i.test(text)) return 'Renewal opens when less than one period is left.';
   if (/max fee per gas less than block base fee/i.test(text)) {
     return 'Network fees moved while confirming. Try again.';
   }
   return msg;
-}
-
-// The faucet cooldown as "13h 20m" / "45m". Coarse on purpose — it's a hint,
-// not a countdown.
-function formatCooldown(secs) {
-  const hours = Math.floor(secs / 3600);
-  const mins = Math.round((secs % 3600) / 60);
-  if (hours) return `${hours}h ${mins}m`;
-  return mins ? `${mins}m` : 'a moment';
 }
 
 // Pull a friendly identity out of Privy's user object, whichever method they
@@ -79,7 +73,7 @@ function CopyButton({ text, label = 'Copy', className }) {
 // ── Account panel primitives ────────────────────────────────────────────────
 // Fields stack their value under their label rather than sitting opposite it.
 // A column is only ~340px wide, and a space-between row there is one long string
-// (a faucet error, a balance) away from pushing its own action out of the panel.
+// (an error, a balance) away from pushing its own action out of the panel.
 
 function Field({ label, children }) {
   return (
@@ -185,36 +179,21 @@ function Meter({ label, used, limit }) {
 
 // ── Columns ─────────────────────────────────────────────────────────────────
 
-// Testnet faucet: 0.05 ETH + 10 USDC per wallet per 24h — enough to cover the
-// registration fee and its gas. Balances are re-read once the drip is mined.
-function FaucetField({ onClaimed }) {
-  const { eligible, retryAfter, loading, claiming, claim } = useFaucet();
-  const [error, setError] = useState(null);
-
-  async function onClaim() {
-    setError(null);
-    try {
-      await claim();
-      onClaimed();
-    } catch (err) {
-      setError(friendlyError(err));
-    }
-  }
-
+// Links out to the public faucets. Opening in a new tab keeps the hub where it was;
+// Refresh re-reads the balance once the drip lands.
+function FaucetLinks({ onRefresh }) {
   return (
-    <Field label="Testnet faucet">
-      <div className={styles.fieldValue}>
-        {loading ? '…' : eligible ? `${FAUCET_ETH} ETH + ${FAUCET_USDC} USDC` : `Next drip in ${formatCooldown(retryAfter)}`}
+    <Field label="Testnet funds">
+      <div className={styles.cardLinks}>
+        {FAUCETS.map((f) => (
+          <a key={f.url} className={styles.resLink} href={f.url} target="_blank" rel="noreferrer">
+            {f.label} <span className={styles.resArrow}>↗</span>
+          </a>
+        ))}
       </div>
-      {error && <div className={styles.formError}>{error}</div>}
-      <button
-        className={styles.ghostBtn}
-        onClick={onClaim}
-        disabled={loading || claiming || !eligible}
-        type="button"
-      >
-        {claiming ? 'Dripping…' : 'Claim'}
-      </button>
+      {onRefresh && (
+        <button className={styles.ghostBtn} onClick={onRefresh} type="button">Refresh balance</button>
+      )}
     </Field>
   );
 }
@@ -260,795 +239,47 @@ function WalletColumn({ wallet, balances, onFund, funding, refreshBalances }) {
 
       <br></br>
 
-      <FaucetField onClaimed={refreshBalances} />
+      <FaucetLinks onRefresh={refreshBalances} />
 
     </Column>
   );
 }
 
-// Usage and the subscription that lifts it, in one column: the lifetime free tier
-// (which a subscription removes the ceiling on) and the daily upload cap (which
-// applies to everyone). Both are metered by the worker, not the chain.
-// The subscription itself is read in Home (the Apps section gates on it too) and
-// passed down, so the page makes one lookup rather than one per consumer.
-// subscribe() reverts NotRegistered for a wallet that isn't a publisher yet, so
-// Subscribe runs the registration first when it's missing (register() sends only
-// the step still needed, and tops up from the faucet if the wallet is short).
-function StorageColumn({ publisher, subscription }) {
+// Usage as the storage worker meters it: the lifetime free tier and the daily upload
+// cap. The subscription that pays for storage is per app now, so it lives on each
+// app's card, not here.
+function StorageColumn() {
   const { usage, loading } = useUsage();
-  const { active, fee, expiresAt, loading: subLoading, renewing, renew } = subscription;
-  const [error, setError] = useState(null);
-
-  async function onRenew() {
-    setError(null);
-    try {
-      if (!publisher.registered) await publisher.register();
-      await renew();
-    } catch (err) {
-      setError(friendlyError(err));
-    }
-  }
-
-  const busy = loading || subLoading;
-  const feeLabel = fee != null ? `${formatUnits(fee, 6)} USDC` : '…';
 
   return (
     <Column
       title="Storage"
-      state={busy ? 'statePending' : active ? 'stateGood' : 'statePending'}
-      stateLabel={busy ? 'Loading' : active ? 'Subscribed' : 'Free tier'}
+      state={loading ? 'statePending' : usage ? 'stateGood' : 'stateWarn'}
+      stateLabel={loading ? 'Loading' : usage ? 'Metered' : 'Unavailable'}
     >
-      {busy && <div className={styles.pending}>Loading your usage…</div>}
-      {!busy && !usage && <div className={styles.pending}>Usage is unavailable right now.</div>}
-
-      {!busy && usage && (
+      {loading && <div className={styles.pending}>Loading your usage…</div>}
+      {!loading && !usage && <div className={styles.pending}>Usage is unavailable right now.</div>}
+      {!loading && usage && (
         <>
-          {/* A subscription removes the lifetime ceiling, so there's no limit to meter. */}
-          <Meter
-            label={active ? 'Total stored' : 'Free tier used'}
-            used={usage.total}
-            limit={active ? 0 : usage.freeLimit}
-          />
+          <Meter label="Total stored" used={usage.total} limit={usage.freeLimit} />
           <Meter label="Uploaded today" used={usage.daily} limit={usage.dailyLimit} />
         </>
       )}
-
-      {!busy && (
-        <Field label="Subscription">
-          <div className={styles.fieldValue}>
-            {active
-              ? `Active until ${expiresAt?.toLocaleDateString()}`
-              : `${feeLabel} / ${SUBSCRIPTION_WINDOW_DAYS} days`}
-          </div>
-          {error && <div className={styles.formError}>{error}</div>}
-          <button
-            className={styles.ghostBtn}
-            onClick={onRenew}
-            disabled={renewing || publisher.registering || publisher.loading}
-            type="button"
-          >
-            {publisher.registering ? 'Registering…' : renewing ? 'Confirming…' : active ? 'Renew' : 'Subscribe'}
-          </button>
-        </Field>
-      )}
     </Column>
-  );
-}
-
-// Quickbeam watches a namespace's on-chain head and embeds every commit as it lands.
-// Sits in its own panel rather than as a fourth Account column: at 1080px the account
-// grid only fits three, and a fourth would wrap to a lone 3+1 row.
-//
-// What you create here is a VIEW: a named set of namespaces that gets its own search
-// URL and its own MCP catalog. Embeddings are not per requester — asking for a
-// namespace somebody else already watches returns the same points and costs no extra
-// indexing, so a view is a filter rather than a copy.
-//
-// TWO inputs on screen, not five: a name, and a source you pick from the directory.
-// A source is the whole `app:publisher:subspace` triple — a subspace name is only
-// unique inside one publisher inside one app — but every watchable triple already
-// exists in the directory behind "Choose from the network", so the three fields that
-// spell one out sit in a disclosure for the cases browsing can't reach (a namespace
-// whose name the gateway won't resolve, or one committed seconds ago).
-//
-// There is no scope switch. Leaving publisher and namespace blank IS the whole-app
-// source (`owner:'*', namespace:'*'`), so the same three fields express both shapes
-// and buildSources derives which one you meant — no radio to drift out of sync with
-// the inputs it enables.
-//
-// The registry worker gates on the storage subscription this site already sells, so
-// there is no separate Quickbeam purchase — `subscribed` is that same state, passed
-// down rather than re-read.
-function QuickbeamPanel({ wallet, subscribed }) {
-  const [name, setName] = useState('');
-  // The source triple. `app` starts EMPTY rather than at DEFAULT_APP: with a blank
-  // publisher/namespace meaning "the whole app", a prefilled app would make the
-  // untouched form a valid view over every namespace on it, one click from Create.
-  const [app, setApp] = useState('');
-  const [publisher, setPublisher] = useState('');
-  const [namespace, setNamespace] = useState('');
-  const [hostedMcp, setHostedMcp] = useState(false);
-  // Mounted on first open and left mounted: the directory's name pass costs ~12s of
-  // gateway fetches, and reopening should not pay it again.
-  const [browsing, setBrowsing] = useState(false);
-  const [browsed, setBrowsed] = useState(false);
-  const [error, setError] = useState(null);
-
-  const { views, loading, creating, removing, create, remove } = useQuickbeam();
-  const wholeApp = !publisher.trim() && !namespace.trim();
-  // A half-filled triple is neither shape, so Create stays off until it resolves to
-  // one namespace or to all of them.
-  const ready = name.trim() && app.trim()
-    && (wholeApp || (publisher.trim() && namespace.trim()));
-
-  const replacing = views.find((v) => v.name.toLowerCase() === name.trim().toLowerCase());
-  const covering = app.trim()
-    ? findDuplicate(views, buildSources({ app, publisher, namespace }))
-    : null;
-  const duplicate = covering && covering.id !== replacing?.id ? covering : null;
-
-  function openBrowser() {
-    setBrowsed(true);
-    setBrowsing(true);
-  }
-
-  async function onCreate() {
-    setError(null);
-    try {
-      await create({
-        name: name.trim(),
-        sources: buildSources({ app, publisher, namespace }),
-        // A whole-app view has no CDN domains to pull from, so a hosted MCP would come
-        // up serving an empty catalog. The checkbox is hidden in that mode; force the
-        // flag too, so a box ticked before clearing the namespace can't leak through.
-        hostedMcp: wholeApp ? false : hostedMcp,
-      });
-      // Empty the form. The view it produced is listed below, so nothing is lost by
-      // clearing, and leaving the values sitting there reads as "not submitted yet".
-      // `app` survives: creating two views over one app is the common case.
-      setName('');
-      setPublisher('');
-      setNamespace('');
-      setHostedMcp(false);
-    } catch (err) {
-      setError(friendlyError(err));
-    }
-  }
-
-  return (
-    <Column
-      title="Quickbeam"
-      state={views.length ? 'stateGood' : 'statePending'}
-      stateLabel={loading ? 'Checking' : views.length
-        ? `${views.length} view${views.length === 1 ? '' : 's'}`
-        : 'No views'}
-    >
-      <p className={styles.colText}>
-        Create a view over one or more namespaces and get four endpoints for them:
-        hosted search, a full download of the embeddings for searching offline, a live
-        stream telling you when they change, and an MCP. Quickbeam follows each
-        publisher's on-chain head and embeds every commit as it lands, so the view stays
-        current without you running the server. Any namespace on the network can be
-        watched, not only the ones your wallet publishes — and it is included with your
-        storage subscription, at no separate charge.
-      </p>
-
-      <Field label="View name">
-        <input
-          className={styles.input}
-          value={name}
-          onChange={(event) => setName(event.target.value)}
-          placeholder="my-view"
-          aria-label="Name for this view"
-        />
-      </Field>
-
-      {/* One control for the whole source. The summary is the readback — the triple as
-          the worker will receive it — so what gets watched is legible without reading
-          three fields back to yourself. */}
-      <Field label="Watching">
-        <div className={styles.fieldValue}>
-          {app.trim() ? (
-            <span className={styles.fieldValueMono}>
-              {app.trim()}
-              {wholeApp ? (
-                <span className={styles.fieldNote}> · every publisher · every namespace</span>
-              ) : (
-                ` · ${publisher.trim() ? truncate(publisher.trim(), 8, 6) : '…'} · ${namespace.trim() || '…'}`
-              )}
-            </span>
-          ) : (
-            <span className={styles.fieldNote}>Nothing chosen yet.</span>
-          )}
-        </div>
-
-        <div className={styles.btnRow}>
-          <button className={styles.ghostBtn} onClick={openBrowser} type="button">
-            Choose from the network
-          </button>
-          {!!app.trim() && (
-            <button
-              className={styles.ghostBtn}
-              onClick={() => { setApp(''); setPublisher(''); setNamespace(''); }}
-              type="button"
-            >
-              Clear
-            </button>
-          )}
-        </div>
-
-        {wholeApp && !!app.trim() && (
-          <div className={`${styles.pending} ${styles.pendingNote}`}>
-            The whole application — every publisher in it, including ones who arrive
-            later. Search and Download cover all of it; Stream and MCP are per-namespace
-            and stay empty for a view like this.
-          </div>
-        )}
-
-        {/* The escape hatch, closed by default. An app id is a hash with no on-chain
-            preimage and a namespace name the gateway can't resolve never becomes a
-            chip, so typing a triple has to stay possible — it just isn't the path. */}
-        <details className={styles.more}>
-          <summary>Type it in instead</summary>
-
-          <Field label="Application">
-            <input
-              className={styles.input}
-              value={app}
-              onChange={(event) => setApp(event.target.value)}
-              placeholder="fangorn, or 0x… app id"
-              aria-label="Application to watch"
-            />
-          </Field>
-
-          {/* Not prefilled with the signed-in wallet: that implies you can only watch
-              your own graph, which is the opposite of how this works. */}
-          <Field label="Publisher">
-            <input
-              className={styles.input}
-              value={publisher}
-              onChange={(event) => setPublisher(event.target.value)}
-              placeholder="0x… — blank means every publisher"
-              aria-label="Publisher address to watch"
-            />
-            <div className={styles.btnRow}>
-              <button
-                className={styles.ghostBtn}
-                onClick={() => { setPublisher(wallet); if (!app.trim()) setApp(DEFAULT_APP); }}
-                disabled={!wallet}
-                type="button"
-              >
-                My address
-              </button>
-            </div>
-          </Field>
-
-          <Field label="Namespace">
-            <input
-              className={styles.input}
-              value={namespace}
-              onChange={(event) => setNamespace(event.target.value)}
-              placeholder="my-namespace — blank means every namespace"
-              aria-label="Namespace to watch"
-            />
-          </Field>
-        </details>
-      </Field>
-
-      {/* Off by default: running the client yourself keeps the query on your own
-          machine, and a hosted MCP is a service we have to run. Hidden for a whole-app
-          view — an MCP is a pull-client over the view's CDN catalog, and a wildcard
-          source ships no CDN shards, so it would provision a server that answers every
-          question with nothing. */}
-      {!wholeApp && (
-        <Field label="MCP">
-          <label className={styles.checkRow}>
-            <input
-              type="checkbox"
-              checked={hostedMcp}
-              onChange={(event) => setHostedMcp(event.target.checked)}
-            />
-            <span>Host an MCP server for me, instead of running one locally.</span>
-          </label>
-        </Field>
-      )}
-
-      <div className={styles.field}>
-        {error && <div className={styles.formError}>{error}</div>}
-        <div className={styles.pending}>
-          {duplicate
-            ? `Your view "${duplicate.name}" already covers these sources — use it, or `
-              + `name this one "${duplicate.name}" to change what it watches.`
-            : replacing
-              ? `This replaces your existing view "${replacing.name}", keeping its URLs.`
-              : 'Indexing starts within a minute. A namespace already being watched is '
-                + 'ready immediately.'}
-        </div>
-        <div className={styles.btnRow}>
-          <button
-            className={styles.ghostBtn}
-            onClick={onCreate}
-            disabled={creating || loading || !ready || !subscribed || !!duplicate}
-            type="button"
-            // The worker refuses a wallet without an active subscription, so say why
-            // rather than letting the request fail.
-            title={subscribed ? undefined : 'Subscribe to storage first'}
-          >
-            {creating ? 'Creating…' : replacing ? 'Replace view' : 'Create view'}
-          </button>
-        </div>
-      </div>
-
-      {/* Every view this wallet owns, newest first, loaded from the registry on each
-          visit — the URLs are worth nothing if they only exist in the session that
-          created them. Expandable because a wallet can hold several and only one is
-          usually of interest. */}
-      {!!views.length && (
-        <Field label={`Your views (${views.length})`}>
-          <div className={styles.pubList}>
-            {views.map((view, i) => (
-              <details key={view.id} className={styles.pub} open={i === 0}>
-                <summary className={styles.pubHead}>
-                  <span className={styles.fieldValueMono}>{view.name}</span>
-                  {/* Not a source count: a wildcard source covers however many
-                      namespaces the app holds, so counting sources would read
-                      "1 namespace" for a view over forty. */}
-                  <span className={styles.pubCount}>{describeSources(view.sources)}</span>
-                  {view.mcp?.url && <span className={styles.fieldNote}>hosted MCP</span>}
-                  <RemoveView
-                    name={view.name}
-                    busy={removing === view.id}
-                    onRemove={() => remove(view.id)}
-                  />
-                </summary>
-                <div className={styles.pubBody}>
-                  <ViewEndpoints view={view} />
-                </div>
-              </details>
-            ))}
-          </div>
-        </Field>
-      )}
-
-      <Modal open={browsing} onClose={() => setBrowsing(false)} title="Browse the network">
-        {browsed && (
-          <NetworkDirectory
-            onPick={(owner, ns, appId) => {
-              setApp(appName(appId) ?? appId);
-              setPublisher(owner);
-              setNamespace(ns);
-              setBrowsing(false);
-            }}
-            // The id is authoritative, but a name is what a person can read back and
-            // check — so prefer it when the phrasebook has one. Never `appLabel`: it
-            // truncates an unknown id, and the worker would hash the ellipsis.
-            onPickApp={(appId) => {
-              setApp(appName(appId) ?? appId);
-              setPublisher('');
-              setNamespace('');
-              setBrowsing(false);
-            }}
-          />
-        )}
-      </Modal>
-    </Column>
-  );
-}
-
-// A view's search URL and the command that points an MCP client at it. The MCP is the
-// user's own `quickbeam mcp` process — the worker only serves it a catalog filtered to
-// this view's namespaces, so nothing is provisioned per requester.
-// One endpoint: what it is for, then the URL. The hint matters more than it looks —
-// four monospace URLs with only "Search"/"Download"/"Stream"/"MCP" over them tells a
-// user nothing about which one they want.
-function EndpointRow({ label, hint, value, copy }) {
-  return (
-    <Field label={label}>
-      <div className={styles.pending}>{hint}</div>
-      <div className={styles.inlineValue}>
-        <span className={styles.fieldValueMono}>{value}</span>
-        <CopyButton text={copy ?? value} className={styles.ghostBtnSm} />
-      </div>
-    </Field>
-  );
-}
-
-// Everything a view hands you. The three HTTP endpoints are all scoped to this view by
-// the registry worker; the MCP is either one we host or a command you run.
-function ViewEndpoints({ view }) {
-  // The worker returns these; derive them only for rows written before it did.
-  const exportUrl = view.exportUrl ?? view.searchUrl.replace(/\/search$/, '/export');
-  const streamUrl = view.streamUrl ?? view.searchUrl.replace(/\/search$/, '/stream');
-
-  return (
-    <>
-      <EndpointRow
-        label="Search"
-        hint="Semantic search, hosted. Append your query."
-        value={`${view.searchUrl}?q=`}
-      />
-      <EndpointRow
-        label="Download"
-        hint="Every embedding as NDJSON — load it and search with no network."
-        value={exportUrl}
-      />
-      <EndpointRow
-        label="Stream"
-        hint="Server-sent events telling you when this view changed, so you re-download only then."
-        value={streamUrl}
-      />
-
-      {/* Three states: a hosted MCP is a URL to paste into an agent, an unhosted one is
-          a command to run, and a freshly-requested one is still starting. */}
-      {view.mcp?.url ? (
-        <EndpointRow
-          label="MCP"
-          hint="Hosted for you. Paste into an agent that speaks MCP."
-          value={`${view.mcp.url}/mcp`}
-        />
-      ) : view.hostedMcp ? (
-        <Field label="MCP">
-          <div className={styles.pending}>
-            Hosted MCP is starting up — refresh in a moment.
-          </div>
-        </Field>
-      ) : (
-        <EndpointRow
-          label="MCP"
-          hint="Run this yourself and the query never leaves your machine."
-          value={view.mcpCommand}
-        />
-      )}
-    </>
-  );
-}
-
-// Stop watching — the control lives in the view's own header row, not inside the
-// disclosure. A button you have to expand a view to find reads as a button that isn't
-// there, and "how do I turn this off" is the one question a list of endpoints must
-// answer without a hunt.
-//
-// Still two clicks: the signature that follows may not prompt at all with a Privy
-// embedded wallet, so this confirm is the only thing standing between a stray click and
-// a deleted view. It confirms in place rather than opening the row, so the answer is
-// wherever the question was asked.
-function RemoveView({ name, busy, onRemove }) {
-  const [confirming, setConfirming] = useState(false);
-  const [error, setError] = useState(null);
-
-  // Every one of these clicks lands inside a <summary>, which would otherwise toggle
-  // the view open underneath the buttons.
-  const inHead = (fn) => (event) => {
-    event.preventDefault();
-    event.stopPropagation();
-    fn();
-  };
-
-  async function onConfirm() {
-    setError(null);
-    try {
-      await onRemove();
-    } catch (err) {
-      // Stay in confirm mode: the message sits beside the button that produced it, and
-      // a cancelled signature is one click from being retried.
-      setError(friendlyError(err));
-    }
-  }
-
-  if (!confirming) {
-    return (
-      <button
-        className={styles.ghostBtnSm}
-        onClick={inHead(() => setConfirming(true))}
-        type="button"
-        title={`Stop watching ${name}`}
-      >
-        Remove
-      </button>
-    );
-  }
-
-  return (
-    <>
-      {error
-        ? <span className={styles.headError} title={error}>{error}</span>
-        : <span className={styles.fieldNote}>Remove this view?</span>}
-      <button
-        className={styles.dangerBtnSm}
-        onClick={inHead(onConfirm)}
-        disabled={busy}
-        type="button"
-      >
-        {busy ? 'Removing…' : 'Remove'}
-      </button>
-      <button
-        className={styles.ghostBtnSm}
-        onClick={inHead(() => { setError(null); setConfirming(false); })}
-        disabled={busy}
-        type="button"
-      >
-        Cancel
-      </button>
-    </>
-  );
-}
-
-// The two ways into the same data: by application, or by publisher.
-//
-// ONE useDirectory() for both. The name pass behind it is ~12s of gateway fetches (the
-// StateCommitted event carries keccak(name), never the name), so a second hook call
-// would pay for it twice and the two lists could disagree while they filled in.
-//
-// Applications open first: the app is the outer part of the `app:publisher:subspace`
-// triple, so it is the part you have to settle either way, and this tab drills into a
-// single namespace as well as offering the whole app. Publishers is one click away.
-function NetworkDirectory({ onPick, onPickApp }) {
-  const { apps, publishers, loading, resolving, error } = useDirectory();
-  const [tab, setTab] = useState('apps');
-
-  return (
-    <>
-      <div className={styles.btnRow} role="tablist" aria-label="Browse by">
-        <button
-          className={`${styles.ghostBtn} ${tab === 'apps' ? styles.tabActive : ''}`}
-          type="button"
-          role="tab"
-          aria-selected={tab === 'apps'}
-          onClick={() => setTab('apps')}
-        >
-          Applications{apps.length ? ` (${apps.length})` : ''}
-        </button>
-        <button
-          className={`${styles.ghostBtn} ${tab === 'publishers' ? styles.tabActive : ''}`}
-          type="button"
-          role="tab"
-          aria-selected={tab === 'publishers'}
-          onClick={() => setTab('publishers')}
-        >
-          Publishers{publishers.length ? ` (${publishers.length})` : ''}
-        </button>
-      </div>
-
-      {tab === 'apps' ? (
-        <AppDirectory
-          apps={apps}
-          loading={loading}
-          resolving={resolving}
-          error={error}
-          onPick={onPick}
-          onPickApp={onPickApp}
-        />
-      ) : (
-        <PublisherDirectory
-          publishers={publishers}
-          loading={loading}
-          resolving={resolving}
-          error={error}
-          onPick={onPick}
-        />
-      )}
-    </>
-  );
-}
-
-// What applications exist, and what is in them.
-//
-// An app id is keccak256 of a name with NO on-chain preimage, so the set of apps can
-// only ever be recovered from who has committed under one — there is no registry to
-// list and no name to read back. That is exactly why this view has to exist: without
-// it, naming an app in the form is guesswork, and a wrong guess watches nothing and
-// says nothing about why.
-//
-// Rows are `<details>` so the choice can be made on evidence — how many publishers,
-// how many namespaces, and what they are called — rather than on recognising a name.
-// The full id sits in the body because it is what `fangorn --app` takes, and for an
-// app we have no name for it is the only usable value.
-function AppDirectory({ apps, loading, resolving, error, onPick, onPickApp }) {
-  return (
-    <>
-      <p className={styles.colText}>
-        Every application anyone has published under, most recently active first. Watch
-        one whole — that follows every publisher in it, including ones who arrive later —
-        or open it and take a single namespace.
-        {loading && ' Loading…'}
-        {/* App names and counts need no wallet and no gateway — only the namespace
-            names inside do, so the list is useful the moment it loads. */}
-        {resolving && ' Resolving namespace names…'}
-      </p>
-
-      {error && <div className={styles.formError}>{error}</div>}
-      {!loading && !error && !apps.length && (
-        <div className={styles.pending}>Nothing published yet.</div>
-      )}
-
-      <div className={styles.pubList}>
-        {apps.map((app, i) => (
-          <details key={app.appId} className={styles.pub} open={i === 0}>
-            <summary className={styles.pubHead}>
-              <span className={styles.fieldValueMono}>{app.label}</span>
-              <span className={styles.pubCount}>
-                {app.publishers} publisher{app.publishers === 1 ? '' : 's'}
-                {' · '}
-                {app.namespaces.length} namespace{app.namespaces.length === 1 ? '' : 's'}
-              </span>
-              <span className={styles.fieldNote}>block {app.lastBlock.toString()}</span>
-            </summary>
-
-            <div className={styles.pubBody}>
-              {/* The id, always — it is the value the form falls back to for an app
-                  with no known name, and what you paste into `fangorn --app`. */}
-              <Field label="App id">
-                <div className={styles.inlineValue}>
-                  <span className={styles.fieldValueMono}>{truncate(app.appId, 12, 8)}</span>
-                  <CopyButton text={app.appId} className={styles.ghostBtnSm} />
-                </div>
-              </Field>
-
-              <button
-                className={styles.ghostBtn}
-                type="button"
-                onClick={() => onPickApp(app.appId)}
-                title={`Watch every namespace in ${app.label}, across all publishers`}
-              >
-                Watch all of {app.label}
-              </button>
-
-              {/* A preview of what is inside, and a shortcut to just one of them. Two
-                  publishers can both name a namespace `media`, so the owner rides in
-                  the title rather than the label — it would double the width of every
-                  chip to disambiguate a case that is usually absent. */}
-              <div className={styles.chipRow}>
-                {app.namespaces.map((ns) => (
-                  <button
-                    key={ns.key}
-                    className={styles.chip}
-                    type="button"
-                    onClick={() => onPick(ns.owner, ns.name, app.appId)}
-                    disabled={!ns.name}
-                    title={ns.name
-                      ? `Watch only ${ns.name}, from ${truncate(ns.owner, 8, 6)}`
-                      : 'Name unavailable — the head could not be resolved through the gateway'}
-                  >
-                    {ns.name ?? `${ns.subspaceId.slice(0, 10)}…`}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </details>
-        ))}
-      </div>
-    </>
-  );
-}
-
-// Who has published to this app, and what they called their namespaces.
-//
-// Two passes with very different costs (see directory.js): the chain pass is one
-// getLogs and gives every publisher instantly; namespaces arrive after, because the
-// event carries only keccak(name) and recovering the name costs a gateway fetch each.
-// So rows render immediately and fill in — a namespace that never resolves keeps its
-// hash, which usually means an orphaned head rather than a bug.
-//
-// Clicking a namespace fills the Quickbeam form: browsing and then watching something
-// is the actual path through this page.
-function PublisherDirectory({ publishers, loading, resolving, error, onPick }) {
-  const [query, setQuery] = useState('');
-
-  // Match on the address, any namespace name, or the app (name or id) — "robin" finds
-  // the publisher who owns `robinhood` even though the address says nothing, and an app
-  // name finds everyone publishing under it.
-  const q = query.trim().toLowerCase();
-  const matches = q
-    ? publishers.filter((p) =>
-        p.owner.toLowerCase().includes(q)
-        || p.namespaces.some((ns) => (ns.name ?? '').toLowerCase().includes(q))
-        || p.apps.some((app) => app.label.toLowerCase().includes(q)
-          || app.appId.toLowerCase().includes(q)))
-    : publishers;
-
-  return (
-    <>
-      <p className={styles.colText}>
-        Everyone who has committed to the network, newest first. Open a publisher and
-        pick a namespace to load it into the form — you don't have to own it to watch it.
-        Namespaces are grouped by the app they were published under: the same name in two
-        apps is two different graphs.
-        {loading && ' Loading…'}
-        {resolving && ' Resolving namespace names…'}
-      </p>
-
-      <input
-        className={styles.input}
-        value={query}
-        onChange={(event) => setQuery(event.target.value)}
-        placeholder="Filter by address, namespace or app"
-        aria-label="Filter publishers"
-      />
-
-      {error && <div className={styles.formError}>{error}</div>}
-      {!loading && !error && !publishers.length && (
-        <div className={styles.pending}>Nothing published yet.</div>
-      )}
-      {!loading && !!publishers.length && !matches.length && (
-        <div className={styles.pending}>No publisher or namespace matches “{query}”.</div>
-      )}
-
-      <div className={styles.pubList}>
-        {matches.map((p) => (
-          <details
-            key={p.owner}
-            className={styles.pub}
-            // Searching expands the hits, so a match is never hidden one click away.
-            open={q ? true : undefined}
-          >
-            <summary className={styles.pubHead}>
-              <span className={styles.fieldValueMono}>{truncate(p.owner, 10, 8)}</span>
-              <span className={styles.pubCount}>
-                {p.namespaces.length} namespace{p.namespaces.length === 1 ? '' : 's'}
-                {p.apps.length > 1 && ` in ${p.apps.length} apps`}
-              </span>
-              <span className={styles.fieldNote}>block {p.lastBlock.toString()}</span>
-            </summary>
-
-            <div className={styles.pubBody}>
-              <a
-                className={styles.resLink}
-                href={explorer(p.owner)}
-                target="_blank"
-                rel="noreferrer"
-              >
-                View on explorer <span className={styles.resArrow}>→</span>
-              </a>
-              {/* One block per app. The heading carries the full id in its title so it
-                  can be copied into `fangorn --app` / `quickbeam watch --app`, which is
-                  the only way to read a namespace outside the default app. */}
-              {p.apps.map((app) => (
-                <div key={app.appId}>
-                  <div className={styles.appHead} title={app.appId}>
-                    <span className={styles.appName}>{app.label}</span>
-                    <span>
-                      {app.namespaces.length} namespace{app.namespaces.length === 1 ? '' : 's'}
-                    </span>
-                  </div>
-                  <div className={styles.chipRow}>
-                    {app.namespaces.map((ns) => (
-                      <button
-                        key={ns.key}
-                        className={styles.chip}
-                        type="button"
-                        onClick={() => onPick(p.owner, ns.name, app.appId)}
-                        disabled={!ns.name}
-                        // An unresolved name is not clickable: there is nothing to put in
-                        // the form, and the API does not accept the hash.
-                        title={ns.name
-                          ? `Watch ${ns.name} in ${app.label}`
-                          : 'Name unavailable — the head could not be resolved through the gateway'}
-                      >
-                        {ns.name ?? `${ns.subspaceId.slice(0, 10)}…`}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </details>
-        ))}
-      </div>
-    </>
   );
 }
 
 // The one thing to do next, in the order the contracts enforce.
-function nextStep(subscription) {
-  if (subscription.loading) return 'Checking where you left off…';
-  if (!subscription.active) return 'Start by subscribing to storage below.';
+function nextStep(apps) {
+  if (apps === null) return 'Checking where you left off…';
+  if (!apps.length) return 'Start by creating your first app below.';
   return "You're set up. Configure the CLI below and ask Claude to build your app.";
 }
 
 // ── The hub ─────────────────────────────────────────────────────────────────
 
-const SDK_INSTALL = 'npm i -g @fangorn-network/sdk@2026.9.22-dev';
-const MCP_CMD = `claude mcp add fangorn -e FANGORN_LOG_WINDOW=100000 -- \\
+const SDK_INSTALL = 'npm i -g @fangorn-network/sdk';
+const MCP_CMD = `claude mcp add fangorn -e FANGORN_NETWORK=baseSepolia -- \\
   npx -y -p @fangorn-network/westmarch -p @huggingface/transformers fangorn-mcp`;
 // Slash commands, typed inside Claude Code rather than the terminal. The plugin
 // carries the skill that builds the app (fangorn-app).
@@ -1096,9 +327,9 @@ function CopyKey({ exportKey }) {
 }
 
 // The CLI signs as this same wallet: the key exported above goes into
-// `fangorn init`, so the registration and storage paid for here cover
-// everything Claude publishes from the terminal.
-function CliSetup({ wallet, exportKey }) {
+// `fangorn init`, so the apps claimed and paid for here are the ones Claude
+// publishes to from the terminal.
+function CliSetup({ wallet, exportKey, appName }) {
   return (
     <ol className={styles.onboard}>
       <li>
@@ -1109,14 +340,18 @@ function CliSetup({ wallet, exportKey }) {
         <div className={styles.cardTitle}>Configure it with your key</div>
         <Cmd text="fangorn init" />
         <p className={styles.colText}>
-          At the first prompt, paste your private key. Press Enter to accept the defaults
-          for the rest.
+          Pick <b>Base Sepolia</b> as the chain, then paste your private key. Press Enter
+          to accept the defaults for the rest.
         </p>
         <CopyKey exportKey={exportKey} />
         <p className={styles.colText}>
           Anyone with this key controls your wallet. Paste it only into your own terminal,
           never into a chat (including with Claude), a website or an email.
         </p>
+      </li>
+      <li>
+        <div className={styles.cardTitle}>Point it at your app</div>
+        <Cmd text={`fangorn set-app ${appName ?? '<your-app>'}`} />
       </li>
       <li>
         <div className={styles.cardTitle}>Check it's the same wallet</div>
@@ -1145,39 +380,240 @@ function CliSetup({ wallet, exportKey }) {
   );
 }
 
-function AppCard({ app }) {
+const formatDate = (secs) => new Date(Number(secs) * 1000).toLocaleDateString();
+
+// One owned app: what it is, whether its subscription is live, and the two things an
+// owner does from here — renew, and bind the agent card the explorer lists it by.
+// Accepting other publishers stays in the CLI (`fangorn app accept`).
+function AppCard({ app, onRenew, onSetCard }) {
+  const [busy, setBusy] = useState(null);
+  const [cardUrl, setCardUrl] = useState(app.uri);
+  const [error, setError] = useState(null);
+
+  async function run(what, fn) {
+    setError(null);
+    setBusy(what);
+    try {
+      await fn();
+    } catch (err) {
+      setError(friendlyError(err));
+    } finally {
+      setBusy(null);
+    }
+  }
+
   return (
     <div className={styles.card}>
       <div className={styles.cardTitle}>
         {app.name ?? truncate(app.appId, 10, 6)}
         {app.suspended && <span className={styles.badgeWarn}>Suspended</span>}
+        {app.expired && <span className={styles.badgeWarn}>Expired</span>}
+      </div>
+      <div className={styles.inlineValue}>
+        <span className={styles.fieldValueMono}>{truncate(app.appId, 10, 6)}</span>
+        <CopyButton text={app.appId} className={styles.ghostBtnSm} />
       </div>
       <div className={styles.stats}>
-        <Field label="Namespaces"><div className={styles.fieldValue}>{app.namespaces}</div></Field>
+        <Field label={app.expired ? 'Expired' : 'Paid until'}>
+          <div className={styles.fieldValue}>{app.expiresAt ? formatDate(app.expiresAt) : 'Cancelled'}</div>
+        </Field>
         <Field label="Price">
           <div className={styles.fieldValue}>{app.price != null ? `${formatUnits(app.price, 6)} USDC / record` : 'Free'}</div>
         </Field>
       </div>
+      {app.renewable && (
+        <button className={styles.ghostBtn} type="button" disabled={!!busy} onClick={() => run('renew', () => onRenew(app.appId))}>
+          {busy === 'renew' ? 'Renewing…' : 'Renew subscription'}
+        </button>
+      )}
+      <details className={styles.more}>
+        <summary>{app.uri ? 'Agent card' : 'Bind an agent card'}</summary>
+        <input
+          className={styles.input}
+          value={cardUrl}
+          onChange={(event) => setCardUrl(event.target.value)}
+          placeholder="https://…/.well-known/agent-card.json"
+          aria-label="Agent card URL"
+        />
+        <div className={styles.btnRow}>
+          <button
+            className={styles.ghostBtn}
+            type="button"
+            disabled={!!busy || !isCardUrl(cardUrl) || cardUrl === app.uri}
+            onClick={() => run('card', () => onSetCard(app.appId, cardUrl))}
+          >
+            {busy === 'card' ? 'Saving…' : 'Save'}
+          </button>
+        </div>
+      </details>
+      {error && <div className={styles.formError}>{error}</div>}
       <div className={styles.cardLinks}>
         {app.site && <a className={styles.resLink} href={app.site} target="_blank" rel="noreferrer">Site ↗</a>}
-        <a className={styles.resLink} href="https://explorer.fangorn.network" target="_blank" rel="noreferrer">Explorer ↗</a>
+        {app.listed && <a className={styles.resLink} href="#/explorer">Explorer</a>}
       </div>
     </div>
   );
 }
 
+// The (+) card. Opens the create modal; the grid keeps it last so owned apps lead.
+function NewAppCard({ onClick }) {
+  return (
+    <button className={`${styles.card} ${styles.cardNew}`} type="button" onClick={onClick}>
+      <span className={styles.cardPlus} aria-hidden="true">+</span>
+      <span className={styles.cardTitle}>Create a new app</span>
+      <span className={styles.cardBody}>Claim a name on chain and pay its first month of storage.</span>
+    </button>
+  );
+}
+
+// App names are what `fangorn set-app` takes and what the id hashes, so keep them to
+// something a shell and a URL don't need quoting for.
+const APP_NAME = /^[a-z0-9][a-z0-9._-]{1,62}$/;
+
+// Configure-and-deploy. "Deploy" is the claim: registerApp pays the first period and
+// makes this wallet the owner and first publisher. The card and price are optional
+// config sent after it, and both can be set later.
+// ponytail: terms & conditions and validation rules have no on-chain home yet — add
+// fields here when the AppRegistry grows them.
+function CreateAppModal({ open, onClose, fee, period, balances, onCreate }) {
+  const [name, setName] = useState('');
+  const [cardUrl, setCardUrl] = useState('');
+  const [price, setPrice] = useState('');
+  // The last availability answer, tagged with the name it answers for.
+  const [check, setCheck] = useState({ name: null, taken: null });
+  const [deploying, setDeploying] = useState(false);
+  const [error, setError] = useState(null);
+
+  const trimmed = name.trim();
+  const validName = APP_NAME.test(trimmed);
+  const validCard = !cardUrl.trim() || isCardUrl(cardUrl.trim());
+  const validPrice = !price.trim() || /^\d+(\.\d{1,6})?$/.test(price.trim());
+  const taken = check.name === trimmed ? check.taken : null;
+
+  // Availability as you type, debounced; a stale answer is dropped.
+  useEffect(() => {
+    if (!validName) return;
+    let cancelled = false;
+    const t = setTimeout(() => {
+      readAppOwner(trimmed)
+        .then((owner) => !cancelled && setCheck({ name: trimmed, taken: Boolean(owner) }))
+        .catch(() => {});
+    }, 400);
+    return () => { cancelled = true; clearTimeout(t); };
+  }, [trimmed, validName]);
+
+  function close() {
+    if (deploying) return;
+    setName(''); setCardUrl(''); setPrice(''); setError(null);
+    onClose();
+  }
+
+  async function deploy() {
+    setError(null);
+    setDeploying(true);
+    try {
+      await onCreate({
+        name: trimmed,
+        cardUrl: cardUrl.trim() || null,
+        price: price.trim() && Number(price) > 0 ? parseUnits(price.trim(), 6) : null,
+      });
+      setDeploying(false);
+      close();
+    } catch (err) {
+      setError(friendlyError(err));
+      setDeploying(false);
+    }
+  }
+
+  const days = period ? Number(period / 86400n) : 30;
+
+  return (
+    <Modal open={open} onClose={close} title="Create a new app">
+      <Field label="App name">
+        <input
+          className={styles.input}
+          value={name}
+          onChange={(event) => setName(event.target.value.toLowerCase())}
+          placeholder="my-app"
+          aria-label="App name"
+          autoFocus
+        />
+        <div className={styles.pending}>
+          {!trimmed ? 'Lowercase letters, digits, dot, dash or underscore. This is what `fangorn set-app` takes.'
+            : !validName ? '2–63 characters: lowercase letters, digits, dot, dash or underscore.'
+              : taken === null ? 'Checking…'
+                : taken ? 'Taken. Pick another name.' : 'Available.'}
+        </div>
+      </Field>
+
+      <Field label="Agent card URL (optional)">
+        <input
+          className={styles.input}
+          value={cardUrl}
+          onChange={(event) => setCardUrl(event.target.value)}
+          placeholder="https://…/.well-known/agent-card.json"
+          aria-label="Agent card URL"
+        />
+        <div className={styles.pending}>
+          How the explorer and agents find your app. `westmarch-ship` sets it for you if you
+          leave it blank.
+        </div>
+      </Field>
+
+      <Field label="Reader price, USDC / month (optional)">
+        <input
+          className={styles.input}
+          value={price}
+          onChange={(event) => setPrice(event.target.value)}
+          placeholder="0"
+          inputMode="decimal"
+          aria-label="Reader membership price in USDC per month"
+        />
+        <div className={styles.pending}>What a reader pays for a month's membership. Blank is free.</div>
+      </Field>
+
+      <Field label="Cost">
+        <div className={styles.fieldValue}>
+          {fee == null ? '…' : fee === 0n ? 'Free' : `${formatUnits(fee, 6)} USDC`} for {days} days of storage, plus gas
+        </div>
+      </Field>
+
+      {/* A warning, not a gate: the balance can be a drip behind. */}
+      {balances && balances.eth < LOW_ETH && (
+        <div className={styles.formError}>
+          Your wallet needs a little Base Sepolia ETH for gas.
+          <FaucetLinks />
+        </div>
+      )}
+      {error && <div className={styles.formError}>{error}</div>}
+      <div className={styles.btnRow}>
+        <button
+          className={styles.primaryBtn}
+          type="button"
+          onClick={deploy}
+          disabled={deploying || !validName || taken !== false || !validCard || !validPrice}
+        >
+          {deploying ? 'Deploying…' : 'Deploy'}
+        </button>
+      </div>
+      {deploying && (
+        <div className={styles.pending}>
+          Claiming {trimmed}{cardUrl.trim() ? ', then binding its card' : ''}{price.trim() ? ', then setting its price' : ''}. Confirm each transaction.
+        </div>
+      )}
+    </Modal>
+  );
+}
+
 export default function Home() {
   const { user, fundWallet, exportKey } = useAuth();
-  const publisher = usePublisher();
   const { balances, refresh: refreshBalances } = useBalances();
-  const subscription = useSubscription();
   const [funding, setFunding] = useState(false);
+  const [creating, setCreating] = useState(false);
 
   const { name } = readIdentity(user);
   const wallet = user?.wallet?.address;
-  const { apps, received, error: appsError } = useOwnedApps(wallet);
-  const listed = apps?.filter((a) => a.listed);
-  const unlisted = apps ? apps.length - listed.length : 0;
+  const { apps, received, error: appsError, fee, period, create, renew, setCard } = useOwnedApps(wallet);
 
   async function addFunds() {
     setFunding(true);
@@ -1191,42 +627,47 @@ export default function Home() {
     }
   }
 
+  async function onCreate(config) {
+    await create(config);
+    refreshBalances();
+  }
+
   return (
     <div className={styles.page}>
       <main className={styles.main}>
         <section className={styles.welcome}>
           <span className={styles.eyebrow}>Account</span>
           <h1 className={styles.h1}>Welcome, {name}.</h1>
-          <p className={styles.sub}>{nextStep(subscription)}</p>
+          <p className={styles.sub}>{nextStep(apps)}</p>
         </section>
 
         <section className={styles.section}>
           <h2 className={styles.h2}>Your apps</h2>
           {appsError && <div className={styles.formError}>{appsError}</div>}
           {apps === null && <div className={styles.pending}>Reading your apps from the chain…</div>}
-          {listed?.length === 0 && (
-            <p className={styles.colText}>No apps yet. Set up below, then ask Claude to build one.</p>
-          )}
-          {listed?.length > 0 && received != null && (
+          {apps?.length > 0 && received != null && (
             <p className={styles.colText}>
               Earned across your apps: <b>{formatUnits(received, 6)} USDC</b>
             </p>
           )}
-          <div className={styles.grid}>
-            {listed?.map((app) => <AppCard key={app.appId} app={app} />)}
-          </div>
-          {unlisted > 0 && (
-            <p className={styles.colText}>
-              {unlisted} more {unlisted === 1 ? 'app is' : 'apps are'} claimed by this wallet but not
-              on the explorer: no reachable agent card is bound to {unlisted === 1 ? 'it' : 'them'} yet.
-            </p>
+          {apps !== null && (
+            <div className={styles.grid}>
+              {apps.map((app) => <AppCard key={app.appId} app={app} onRenew={renew} onSetCard={setCard} />)}
+              <NewAppCard onClick={() => setCreating(true)} />
+            </div>
           )}
+          <CreateAppModal
+            open={creating}
+            onClose={() => setCreating(false)}
+            fee={fee}
+            period={period}
+            balances={balances}
+            onCreate={onCreate}
+          />
         </section>
 
-        {/* Wallet, then storage: fund, then subscribe. Publisher registration has no
-            panel of its own — Subscribe does it first when it's missing. */}
         <section className={styles.section}>
-          <h2 className={styles.h2}>1. Set up your account</h2>
+          <h2 className={styles.h2}>1. Your account</h2>
           <div className={styles.accountPanel}>
             {wallet && (
               <WalletColumn
@@ -1237,21 +678,14 @@ export default function Home() {
                 refreshBalances={refreshBalances}
               />
             )}
-            <StorageColumn publisher={publisher} subscription={subscription} />
+            <StorageColumn />
           </div>
         </section>
 
         <section className={styles.section}>
           <h2 className={styles.h2}>2. Set up Claude Code</h2>
-          <CliSetup wallet={wallet} exportKey={exportKey} />
+          <CliSetup wallet={wallet} exportKey={exportKey} appName={apps?.find((a) => a.name)?.name} />
         </section>
-
-        {/* <details className={styles.section}>
-          <summary className={styles.h2}>Hosted embeddings (Quickbeam)</summary>
-          <div className={styles.accountPanel}>
-            <QuickbeamPanel wallet={wallet} subscribed={subscription.active} />
-          </div>
-        </details> */}
       </main>
     </div>
   );
