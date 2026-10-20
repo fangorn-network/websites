@@ -236,6 +236,41 @@ export function LiveApps({ limit }) {
   );
 }
 
+// Early adopters. Hand-written: these aren't (all) in the Base registry yet.
+const ADOPTERS = [
+  {
+    name: 'City of Piedmont, AL',
+    kind: 'Government',
+    body: 'Council minutes kept in a permanent, verifiable public record, searchable by street, purchase or resolution.',
+    url: 'https://www.piedmontcity.org/government/minutes',
+  },
+  {
+    name: 'Watchroom',
+    kind: 'Public safety',
+    body: 'Fire department records (calls, NERIS filing, truck checks, training) on Fangorn, rolling out to 20+ departments.',
+    url: 'https://www.getwatchroom.com/',
+  },
+];
+
+function UsedBy() {
+  return (
+    <section className={styles.section} id="used-by">
+      <h2 className={styles.h2}>Used by</h2>
+      <p className={styles.sectionSub}>Early teams putting real records on Fangorn.</p>
+      <div className={styles.caseGrid}>
+        {ADOPTERS.map((a) => (
+          <div key={a.name} className={styles.case}>
+            <div className={styles.caseTop}><span className={styles.pill}>{a.kind}</span></div>
+            <div className={styles.caseName}>{a.name}</div>
+            <p className={styles.caseBody}>{a.body}</p>
+            <div className={styles.caseLinks}><a href={a.url} className={styles.btnSm}>Visit ↗</a></div>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 export default function Landing() {
   return (
     <main>
@@ -253,8 +288,18 @@ export default function Landing() {
 
       <Quickstart />
       <LiveApps limit={6} />
+      <UsedBy />
       <Bento />
       <DualViewPreview />
+
+      <section className={`${styles.section} ${styles.coda}`}>
+        <h2 className={styles.h2}>Every view, rooted on-chain.</h2>
+        <p className={styles.sectionSub}>What you read traces back to what was committed. Hosts hold the data; nobody has to trust them.</p>
+        <div className={styles.ctas}>
+          <a href="#/explorer" className={styles.btnA}>Explore Apps</a>
+          <AccountButton>Deploy a Dataset</AccountButton>
+        </div>
+      </section>
     </main>
   );
 }

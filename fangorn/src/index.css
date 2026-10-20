@@ -19,6 +19,10 @@
   --blue: #60a5fa;
   --pink: #f472b6;
   --glow: rgba(167, 139, 250, 0.18);
+  /* Frosted panels over the low-poly backdrop. */
+  --glass: rgba(14, 14, 18, 0.55);
+  --glass-blur: blur(14px) saturate(150%);
+  --glass-edge: inset 0 1px 0 rgba(255, 255, 255, 0.06);
   --mono: 'JetBrains Mono', monospace;
   --sans: 'Geist', 'Inter', sans-serif;
 }

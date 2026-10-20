@@ -75,6 +75,9 @@
   color: var(--sub);
 }
 
+/* Closing line and CTAs. */
+.coda { text-align: center; }
+
 /* ── shared section bits ─────────────────────────────────────────────────── */
 
 .section { padding: 72px 5%; max-width: 1120px; margin: 0 auto; }
@@ -139,9 +142,9 @@
   margin: 0 auto;
   border: 1px solid var(--line2);
   border-radius: 12px;
-  background: rgba(24, 24, 27, 0.5);
-  backdrop-filter: blur(12px);
-  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.02), 0 20px 60px -20px var(--glow);
+  background: var(--glass);
+  backdrop-filter: var(--glass-blur);
+  box-shadow: var(--glass-edge), 0 20px 60px -20px var(--glow);
 }
 
 .cmd { position: relative; padding: 18px 20px; }
@@ -186,11 +189,13 @@
   padding: 28px;
   border: 1px solid var(--line);
   border-radius: 12px;
-  background: linear-gradient(180deg, var(--s2), var(--s1));
+  background: var(--glass);
+  backdrop-filter: var(--glass-blur);
+  box-shadow: var(--glass-edge);
   transition: border-color 0.2s, box-shadow 0.2s;
 }
 
-.card:hover { border-color: var(--line2); box-shadow: 0 0 32px -12px var(--glow); }
+.card:hover { border-color: var(--line2); box-shadow: var(--glass-edge), 0 0 32px -12px var(--glow); }
 
 .cardTitle { font-size: 17px; font-weight: 500; letter-spacing: -0.02em; margin-bottom: 8px; }
 .cardBody { font-size: 14px; font-weight: 300; color: var(--sub); }
@@ -200,7 +205,9 @@
 .dual {
   border: 1px solid var(--line2);
   border-radius: 12px;
-  background: var(--s1);
+  background: var(--glass);
+  backdrop-filter: var(--glass-blur);
+  box-shadow: var(--glass-edge);
   overflow: hidden;
 }
 
@@ -291,7 +298,9 @@
   border: 1px solid var(--line);
   border-radius: 12px;
   padding: 22px;
-  background: var(--s1);
+  background: var(--glass);
+  backdrop-filter: var(--glass-blur);
+  box-shadow: var(--glass-edge);
   transition: border-color 0.2s, transform 0.2s;
 }
 
