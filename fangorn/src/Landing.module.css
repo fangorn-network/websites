@@ -1,7 +1,7 @@
 /* ── hero ────────────────────────────────────────────────────────────────── */
 
 .hero {
-  padding: 112px 20px 56px;
+  padding: 88px 20px 24px;
   text-align: center;
   background: radial-gradient(ellipse 60% 40% at 50% 0%, var(--glow), transparent 70%);
 }
@@ -20,11 +20,12 @@
 }
 
 .sub {
-  font-size: 17px;
-  font-weight: 300;
+  font-size: 20px;
+  font-weight: 400;
   color: var(--sub);
-  max-width: 600px;
+  max-width: 640px;
   margin: 0 auto;
+  line-height: 1.55;
 }
 
 .ctas {
@@ -32,14 +33,14 @@
   gap: 12px;
   justify-content: center;
   flex-wrap: wrap;
-  margin: 32px 0 64px;
+  margin: 32px 0 24px;
 }
 
 .btnA, .btnB {
   display: inline-block;
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 500;
-  padding: 11px 24px;
+  padding: 12px 26px;
   border-radius: 8px;
   transition: background 0.15s, border-color 0.15s, box-shadow 0.15s, transform 0.15s;
 }
@@ -78,28 +79,158 @@
 /* Closing line and CTAs. */
 .coda { text-align: center; }
 
+/* ── cartridge ───────────────────────────────────────────────────────────── */
+
+.cart { max-width: 640px; margin: 0 auto; }
+
+.rig {
+  --tint: var(--hi);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 8px;
+}
+
+.cartBtn {
+  flex: 0 1 320px;
+  background: none;
+  border: none;
+  border-radius: 12px;
+  padding: 0;
+}
+
+.cartBtn:focus-visible { outline: 2px solid var(--hi); outline-offset: 4px; }
+.cartBtn svg { width: 100%; overflow: visible; display: block; }
+.cartBtn:hover .shell { stroke: var(--sub); }
+
+/* ── screen: idle until the LED comes on, then shows the cartridge's demo ── */
+
+.screen {
+  position: relative;
+  flex: 0 0 220px;
+  height: 132px;
+  margin-bottom: 14px;
+  border: 1px solid var(--line2);
+  border-radius: 10px;
+  background: var(--bg);
+  box-shadow: inset 0 0 24px rgba(0, 0, 0, 0.6);
+  text-align: left;
+  font-family: var(--mono);
+  font-size: 12px;
+}
+
+/* Cable from the console to the screen. */
+.screen::before {
+  content: '';
+  position: absolute;
+  right: 100%;
+  bottom: 28px;
+  width: 24px;
+  border-top: 1.5px solid var(--line2);
+}
+
+.idle, .result { position: absolute; inset: 0; padding: 16px; }
+.idle { color: var(--dim); animation: idle 4.5s step-end infinite; }
+.cursor { animation: blink 1s step-end infinite; }
+
+.result { opacity: 0; animation: show 4.5s step-end infinite; }
+.prompt { color: var(--sub); }
+.hit { font-family: var(--mono); font-size: 12px; font-weight: 500; color: var(--text); margin: 14px 0 4px; }
+.via { font-size: 11px; color: var(--tint); }
+
+@keyframes idle { 0% { opacity: 1; } 34% { opacity: 0; } 78% { opacity: 1; } }
+@keyframes show { 0% { opacity: 0; } 34% { opacity: 1; } 78% { opacity: 0; } }
+@keyframes blink { 50% { opacity: 0; } }
+
+.cartBody { animation: insert 4.5s cubic-bezier(0.5, 0, 0.2, 1) infinite; }
+
+/* Drop in, small seat bounce, hold, eject. Iteration boundary = cartridge out. */
+@keyframes insert {
+  0%, 8%   { transform: translateY(-34px); }
+  28%      { transform: translateY(62px); }
+  31%      { transform: translateY(57px); }
+  34%, 78% { transform: translateY(62px); }
+  94%, 100% { transform: translateY(-34px); }
+}
+
+.shell { fill: var(--s3); stroke: var(--line2); stroke-width: 1.5; }
+
+.label {
+  fill: var(--s1);
+  stroke: var(--tint);
+  stroke-opacity: 0.6;
+  transition: stroke 0.3s;
+}
+
+.labelTag { font: 500 8px var(--mono); letter-spacing: 0.14em; fill: var(--tint, var(--sub)); }
+.labelName { font: 600 17px var(--sans); letter-spacing: -0.02em; fill: var(--text); }
+.labelSub { font: 8px var(--mono); fill: var(--dim); }
+.grip { stroke: var(--line2); stroke-width: 2; stroke-linecap: round; }
+
+.tab { fill: var(--s2); stroke: var(--line2); stroke-width: 1.5; }
+/* Edge-connector contacts: the one warm colour, it's what says "plugs in". */
+.pin { stroke: #b8954a; stroke-opacity: 0.7; stroke-width: 2.4; }
+
+.top { fill: var(--s2); stroke: var(--line2); stroke-width: 1.5; stroke-linejoin: round; }
+.topFront { fill: var(--s3); stroke: var(--line2); stroke-width: 1.5; stroke-linejoin: round; }
+.slot { fill: #000; }
+.slotLip { stroke: var(--dim); stroke-width: 1.5; }
+.knob { fill: var(--s2); stroke: var(--dim); stroke-width: 1.2; }
+
+.console { fill: var(--s2); stroke: var(--line2); stroke-width: 1.5; }
+.port { fill: var(--bg); stroke: var(--dim); stroke-width: 1.2; }
+.portPins { stroke: var(--dim); stroke-width: 2; stroke-dasharray: 1.5 1.5; }
+.vent { stroke: var(--line2); stroke-width: 2; stroke-linecap: round; }
+.foot { fill: var(--line2); }
+.consoleText { font: 500 9px var(--mono); letter-spacing: 0.3em; fill: var(--dim); }
+.consoleSmall { font: 6px var(--mono); letter-spacing: 0.1em; fill: var(--dim); }
+
+.led { fill: var(--dim); animation: led 4.5s step-end infinite; }
+
+@keyframes led {
+  0%, 34% { fill: var(--dim); filter: none; }
+  34%, 78% { fill: var(--hi); filter: drop-shadow(0 0 4px var(--hi)); }
+  78%, 100% { fill: var(--dim); filter: none; }
+}
+
+.cartCaption {
+  font-family: var(--mono);
+  font-size: 14px;
+  color: var(--sub);
+  margin-top: 16px;
+}
+
+.hint { color: var(--dim); }
+
+
+@media (prefers-reduced-motion: reduce) {
+  .cartBody, .led, .idle, .result, .cursor { animation: none; }
+  .idle { opacity: 0; }
+  .result { opacity: 1; }
+  .led { fill: var(--hi); }
+}
+
 /* ── shared section bits ─────────────────────────────────────────────────── */
 
 .section { padding: 72px 5%; max-width: 1120px; margin: 0 auto; }
 
 .h2 {
-  font-size: clamp(22px, 3vw, 30px);
+  font-size: clamp(26px, 3.4vw, 36px);
   font-weight: 600;
   letter-spacing: -0.03em;
   margin-bottom: 8px;
 }
 
-.sectionSub { font-size: 15px; font-weight: 300; color: var(--sub); margin-bottom: 24px; }
+.sectionSub { font-size: 18px; color: var(--sub); margin-bottom: 28px; max-width: 680px; line-height: 1.55; }
 
 .caption {
   text-align: center;
-  font-size: 13px;
-  font-style: italic;
+  font-size: 15px;
   color: var(--sub);
   margin-top: 14px;
 }
 
-.link { font-size: 13px; color: var(--sub); transition: color 0.15s; }
+.link { font-size: 15px; color: var(--sub); transition: color 0.15s; }
 .link:hover { color: var(--text); }
 
 .inline {
@@ -115,6 +246,7 @@
 
 .tabs {
   display: flex;
+  flex-wrap: wrap;
   gap: 4px;
   padding: 6px;
   border-bottom: 1px solid var(--line);
@@ -122,7 +254,7 @@
 }
 
 .tab, .tabOn {
-  font-size: 13px;
+  font-size: 15px;
   white-space: nowrap;
   padding: 6px 14px;
   border-radius: 6px;
@@ -151,7 +283,7 @@
 
 .cmd pre {
   font-family: var(--mono);
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1.7;
   color: var(--text);
   /* Wrapped, not scrolled: a command you can't see the end of gets pasted wrong. */
@@ -176,6 +308,87 @@
 
 .copy:hover { color: var(--text); border-color: var(--sub); }
 
+/* ── start: the two doors ───────────────────────────────────────────────── */
+
+.doors { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
+
+.door {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 28px;
+  border: 1px solid var(--line2);
+  border-radius: 12px;
+  background: var(--glass);
+  backdrop-filter: var(--glass-blur);
+  box-shadow: var(--glass-edge), 0 20px 60px -30px var(--glow);
+}
+
+.door .terminal { width: 100%; max-width: none; margin: 0; }
+.doorTitle { font-size: 24px; font-weight: 600; letter-spacing: -0.03em; }
+.doorBody { font-size: 17px; color: var(--sub); }
+.doorNext { font-size: 16px; color: var(--sub); line-height: 1.6; }
+.doorNext q { color: var(--text); }
+
+.more { display: flex; flex-direction: column; gap: 4px; margin-top: 24px; }
+.disclose { font-size: 16px; color: var(--sub); }
+.disclose summary { cursor: pointer; padding: 8px 0; color: var(--text); }
+.disclose summary:hover { color: var(--hi); }
+.disclose p { margin: 8px 0 14px; max-width: 680px; line-height: 1.6; }
+.disclose .terminal { margin: 0; }
+
+/* ── one app, two doors ─────────────────────────────────────────────────── */
+
+.split {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  gap: 16px 56px;
+  margin-top: 20px;
+}
+
+.splitHub {
+  grid-row: span 2;
+  align-self: center;
+  padding: 28px;
+  border: 1px solid var(--hi);
+  border-radius: 12px;
+  background: var(--glass);
+  box-shadow: var(--glass-edge), 0 0 48px -16px var(--glow);
+}
+
+.splitHub .caseBody { margin-bottom: 0; }
+
+/* The branches from the app to its two doors, drawn in the gap between columns. */
+.splitDoor {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 22px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--glass);
+  backdrop-filter: var(--glass-blur);
+}
+
+.splitDoor::before {
+  content: '';
+  position: absolute;
+  right: 100%;
+  top: 50%;
+  width: 56px;
+  border-top: 1.5px solid var(--line2);
+}
+
+.splitWho { font-size: 18px; font-weight: 600; letter-spacing: -0.02em; }
+.splitText { font-size: 16px; color: var(--sub); }
+.splitCode { font-family: var(--mono); font-size: 14px; color: var(--hi); }
+.splitTools { font-family: var(--mono); font-size: 12px; color: var(--sub); word-break: break-all; }
+
 /* ── bento ───────────────────────────────────────────────────────────────── */
 
 .bento {
@@ -197,89 +410,8 @@
 
 .card:hover { border-color: var(--line2); box-shadow: var(--glass-edge), 0 0 32px -12px var(--glow); }
 
-.cardTitle { font-size: 17px; font-weight: 500; letter-spacing: -0.02em; margin-bottom: 8px; }
-.cardBody { font-size: 14px; font-weight: 300; color: var(--sub); }
-
-/* ── dual view ───────────────────────────────────────────────────────────── */
-
-.dual {
-  border: 1px solid var(--line2);
-  border-radius: 12px;
-  background: var(--glass);
-  backdrop-filter: var(--glass-blur);
-  box-shadow: var(--glass-edge);
-  overflow: hidden;
-}
-
-.dualBody {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 220px;
-  gap: 24px;
-  padding: 24px;
-  animation: fadeIn 0.25s ease-out;
-}
-
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(4px); }
-  to { opacity: 1; transform: none; }
-}
-
-.browser {
-  border: 1px solid var(--line2);
-  border-radius: 8px;
-  background: #fafafa;
-  color: #18181b;
-  overflow: hidden;
-}
-
-.browserBar {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 12px;
-  background: #e4e4e7;
-}
-
-.browserBar span { width: 10px; height: 10px; border-radius: 50%; background: #a1a1aa; }
-.browserBar code { font-family: var(--mono); font-size: 11px; color: #52525b; margin-left: 8px; }
-
-.browserPage { padding: 16px; }
-
-.search {
-  font-size: 13px;
-  padding: 10px 12px;
-  border: 1px solid #d4d4d8;
-  border-radius: 8px;
-  background: #fff;
-  margin-bottom: 12px;
-}
-
-.row { font-size: 13px; padding: 10px 2px; border-top: 1px solid #e4e4e7; }
-.rowMeta { font-size: 12px; color: #71717a; }
-
-.editor {
-  font-family: var(--mono);
-  font-size: 12px;
-  line-height: 1.7;
-  color: var(--text);
-  background: var(--bg);
-  border: 1px solid var(--line2);
-  border-radius: 8px;
-  padding: 16px;
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-
-.points { list-style: none; align-self: center; }
-
-.points li {
-  font-size: 14px;
-  padding: 10px 0 10px 22px;
-  position: relative;
-  border-bottom: 1px solid var(--line);
-}
-
-.points li::before { content: '✓'; position: absolute; left: 0; color: var(--hi); }
+.cardTitle { font-size: 19px; font-weight: 500; letter-spacing: -0.02em; margin-bottom: 8px; }
+.cardBody { font-size: 16px; color: var(--sub); line-height: 1.6; }
 
 /* ── live apps ──────────────────────────────────────────────────────────── */
 
@@ -310,7 +442,7 @@
 
 .pill, .badge, .ready, .stat {
   font-family: var(--mono);
-  font-size: 10px;
+  font-size: 11px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   border-radius: 999px;
@@ -320,14 +452,14 @@
 .pill { color: var(--text); background: var(--s3); }
 .badge { color: var(--hi); border: 1px solid var(--line2); }
 
-.caseName { font-size: 18px; font-weight: 600; letter-spacing: -0.02em; }
-.caseBody { font-size: 13px; font-weight: 300; color: var(--sub); margin: 6px 0 14px; }
+.caseName { font-size: 20px; font-weight: 600; letter-spacing: -0.02em; }
+.caseBody { font-size: 16px; color: var(--sub); margin: 6px 0 14px; line-height: 1.6; }
 
 .stat {
   align-self: flex-start;
   text-transform: none;
   letter-spacing: 0;
-  font-size: 11px;
+  font-size: 13px;
   color: var(--text);
   border: 1px solid var(--line);
   margin-bottom: 18px;
@@ -336,7 +468,7 @@
 .caseLinks { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: auto; }
 
 .btnSm {
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 500;
   color: var(--bg);
   background: #fff;
@@ -350,5 +482,22 @@
 @media (max-width: 860px) {
   .hero { padding: 64px 16px 40px; }
   .section { padding: 48px 16px; }
-  .bento, .caseGrid, .dualBody { grid-template-columns: 1fr; }
+  .bento, .caseGrid, .doors, .split { grid-template-columns: 1fr; }
+  .splitDoor::before { display: none; }
+  .splitHub { grid-row: auto; }
+}
+
+/* Door commands get the full width: the copy button sits above the first line
+   instead of reserving a column, so `fangorn-builder@fangorn` never splits. */
+.door .cmd pre { font-size: 13px; padding-right: 0; padding-top: 26px; word-break: normal; overflow-wrap: anywhere; }
+.door .copy { top: 10px; }
+.door .cmd { padding: 16px 18px; }
+.door .cmd pre { font-size: 12.5px; }
+
+/* Phones: console above its screen, both full width, no cable between them. */
+@media (max-width: 600px) {
+  .rig { flex-direction: column; align-items: center; gap: 16px; }
+  .cartBtn { flex: none; width: min(320px, 100%); }
+  .screen { flex: none; width: min(320px, 100%); margin-bottom: 0; }
+  .screen::before { display: none; }
 }

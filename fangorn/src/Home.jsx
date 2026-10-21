@@ -279,12 +279,10 @@ function nextStep(apps) {
 // ── The hub ─────────────────────────────────────────────────────────────────
 
 const SDK_INSTALL = 'npm i -g @fangorn-network/sdk';
-const MCP_CMD = `claude mcp add fangorn -e FANGORN_NETWORK=baseSepolia -- \\
-  npx -y -p @fangorn-network/westmarch -p @huggingface/transformers fangorn-mcp`;
-// Slash commands, typed inside Claude Code rather than the terminal. The plugin
-// carries the skill that builds the app (fangorn-app).
+// Slash commands, typed inside Claude Code rather than the terminal. The builder
+// plugin carries the owner's skills: fangorn-app (build) and fangorn-improve.
 const PLUGIN_CMD = `/plugin marketplace add fangorn-network/westmarch
-/plugin install fangorn-index@fangorn-index`;
+/plugin install fangorn-builder@fangorn`;
 const BUILD_PROMPT = 'Build a Fangorn app from <your data>.';
 
 // A command with a copy button. Wraps instead of scrolling: a command you can't
@@ -363,10 +361,12 @@ function CliSetup({ wallet, exportKey, appName }) {
         )}
       </li>
       <li>
-        <div className={styles.cardTitle}>Install the Fangorn tools in Claude Code</div>
-        <Cmd text={MCP_CMD} />
-        <p className={styles.colText}>Then, inside Claude Code, add the skills:</p>
+        <div className={styles.cardTitle}>Add the builder skills to Claude Code</div>
         <Cmd text={PLUGIN_CMD} />
+        <p className={styles.colText}>
+          Run these inside Claude Code. <b>fangorn-app</b> builds and registers your app;{' '}
+          <b>fangorn-improve</b> keeps it getting better, one pull request at a time.
+        </p>
       </li>
       <li>
         <div className={styles.cardTitle}>Ask Claude to build it</div>

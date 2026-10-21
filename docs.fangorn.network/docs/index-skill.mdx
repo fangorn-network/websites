@@ -1,0 +1,78 @@
+---
+sidebar_position: 3
+title: The fangorn-index skill
+---
+
+# The `fangorn-index` skill
+
+The skill comes with the `fangorn-index` plugin, alongside the MCP server. It gives an
+agent the app index: it finds which publisher has what, reads enough to decide, and hands
+you off to the app that owns the record. It also carries a **taste kernel** that works in
+every corpus on the network.
+
+It isn't a browser driver, and no publisher has to host a server for it to find them.
+Every verb is a function that `@fangorn-network/westmarch` already exports, and the shell
+is the transport. The MCP server is for clients that would rather call tools than run
+commands.
+
+## Install
+
+```text
+/plugin marketplace add fangorn-network/westmarch
+/plugin install fangorn-index@fangorn
+```
+
+It finds every app bound on chain by itself. To search only some publishers, pin them:
+
+```bash
+echo '["https://…/q/qb_1","https://…/q/qb_2"]' > ~/.fangorn/sources.json
+```
+
+## The verbs
+
+You don't type these. Ask in plain language and the agent runs them.
+
+```text
+find <query>              which app has this. Downloads no corpus: coverage
+                          centroids only, a few KB each.
+describe <view>           rows, field coverage (not a schema), roles, where it
+                          hands off, what it charges for
+browse <view>             what is here, with no query
+search <view> <query>     semantic where rows carry vectors, lexical where they
+                          don't, and it says which
+facet <view> <field>      count a field's values
+row <view> <id>           one record, whole
+similar <view> <id>       nearest by vector
+
+like|dislike <view> <id>  teach the kernel
+forget <id>               take a pick back
+taste                     what it is, and what it was built from
+recommend <view>          rank ANY corpus by it
+
+launch <view> [query]     the app, with the kernel in the URL
+launch <view> --row=<id>  the publisher's own link for that row
+```
+
+## The taste kernel
+
+The kernel is a file, `~/.fangorn/taste.json`, that sits between you and the agent. It
+isn't stored in a site's `localStorage`. That storage is scoped to one origin, so the next
+app can never see it, which is why every app normally rebuilds your profile from zero.
+
+The kernel stores your picks, not only the vector derived from them, so you can read and
+correct it. Every publisher bakes into the same embedding space, so the kernel works in any
+corpus you point it at. In this example, a bar you liked in a places corpus ranks a game
+first:
+
+```bash
+fx like      http://localhost:8099/places ChIJJ0iVXx3LVU0R0E4pjG1Oo8M   # a bar
+fx recommend http://localhost:8099/games                            # → Callahan's Crosstime Saloon
+```
+
+The two corpora share no fields and no ids.
+
+## What it won't do
+
+It won't spend money; [paying](/use-apps#paying-for-private-apps) is the MCP server's job.
+It won't host an app either. `launch` walks you to the app's door, and the app is on the
+other side.
