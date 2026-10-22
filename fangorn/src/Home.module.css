@@ -785,3 +785,25 @@ details > summary.h2 { cursor: pointer; }
 }
 
 .h1 .badge, .h1 .badgeWarn { margin-left: 12px; font-size: 12px; }
+
+/* ── Loading ───────────────────────────────────────────────────────────────
+   A light band sweeping across placeholders while the chain reads land. */
+
+.skeleton {
+  display: inline-block;
+  height: 0.9em;
+  max-width: 100%;
+  vertical-align: middle;
+  border-radius: 4px;
+  background: linear-gradient(90deg, var(--s3) 0%, var(--line2) 50%, var(--s3) 100%) 0 0 / 200% 100%;
+  animation: shimmer 1.4s ease-in-out infinite;
+}
+
+.statePending { animation: pulse 1.2s ease-in-out infinite; }
+
+@keyframes shimmer { from { background-position: 100% 0; } to { background-position: -100% 0; } }
+@keyframes pulse { 50% { opacity: 0.3; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton, .statePending { animation: none; }
+}

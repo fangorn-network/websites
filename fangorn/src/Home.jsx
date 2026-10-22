@@ -131,6 +131,11 @@ function Column({ title, state, stateLabel, children }) {
   );
 }
 
+// A shimmering stand-in for a value still on its way from the chain.
+function Skeleton({ width }) {
+  return <span className={styles.skeleton} style={{ width }} aria-hidden="true" />;
+}
+
 // ── Columns ─────────────────────────────────────────────────────────────────
 
 // Links out to the public faucets. Opening in a new tab keeps the hub where it was;
@@ -179,9 +184,9 @@ function Summary({ wallet, balances, earnings, onFund, funding, refreshBalances 
         state={!balances ? 'statePending' : low ? 'stateWarn' : 'stateGood'}
         stateLabel={!balances ? 'Loading' : low ? 'Low on gas' : 'Funded'}
       >
-        <div className={styles.bigValue}>{balances ? usdc(balances.usdc) : '…'}</div>
+        <div className={styles.bigValue}>{balances ? usdc(balances.usdc) : <Skeleton width="8em" />}</div>
         <div className={styles.fieldValue}>
-          {balances ? `${Number(formatEther(balances.eth)).toFixed(4)} ETH` : '…'}
+          {balances ? `${Number(formatEther(balances.eth)).toFixed(4)} ETH` : <Skeleton width="6em" />}
         </div>
         <div className={styles.btnRow}>
           <button className={styles.ghostBtn} onClick={onFund} disabled={funding} type="button">
@@ -199,7 +204,7 @@ function Summary({ wallet, balances, earnings, onFund, funding, refreshBalances 
         state={earnings?.error ? 'stateWarn' : earnings ? 'stateGood' : 'statePending'}
         stateLabel={earnings?.error ? 'Unavailable' : earnings ? 'All time' : 'Loading'}
       >
-        <div className={styles.bigValue}>{earnings?.error ? '—' : earnings ? usdc(earnings.total) : '…'}</div>
+        <div className={styles.bigValue}>{earnings?.error ? '—' : earnings ? usdc(earnings.total) : <Skeleton width="8em" />}</div>
         {earnings && !earnings.error && (
           <>
             <div className={styles.fieldValue}>
@@ -790,7 +795,15 @@ export default function Home({ appKey }) {
             )}
           </div>
           {appsError && <div className={styles.formError}>{appsError}</div>}
-          {apps === null && <div className={styles.pending}>Reading your apps from the chain…</div>}
+          {apps === null && (
+            <div className={styles.rows} role="status" aria-label="Reading your apps from the chain">
+              {[0, 1, 2].map((i) => (
+                <div key={i} className={styles.rowLink}>
+                  <Skeleton width="9em" /><Skeleton width="4em" /><Skeleton width="14em" />
+                </div>
+              ))}
+            </div>
+          )}
           {apps?.length === 0 && <NewAppCard onClick={() => setCreating(true)} />}
           {apps?.length > 0 && (
             <div className={styles.rows}>
