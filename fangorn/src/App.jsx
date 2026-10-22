@@ -6,7 +6,7 @@ import { Footer } from './Footer';
 import Home from './Home';
 import { useAuth, ACCOUNT_ENABLED } from './authContext';
 
-// ponytail: hash routes, three pages. No router dep, no host fallback config.
+// ponytail: hash routes, a handful of pages. No router dep, no host fallback config.
 function useHash() {
   const [hash, setHash] = useState(location.hash);
   useEffect(() => {
@@ -17,7 +17,7 @@ function useHash() {
   return hash;
 }
 
-function Account() {
+function Account({ route }) {
   const { ready, authenticated, user, login } = useAuth();
 
   // Avoid flashing the login prompt before Privy resolves an existing session.
@@ -31,13 +31,14 @@ function Account() {
   }
   // Key Home by wallet so switching accounts in-session fully remounts it — the
   // publisher/namespace state is per-wallet and must not carry over.
-  return <Home key={user?.wallet?.address} />;
+  return <Home key={user?.wallet?.address} appKey={route} />;
 }
 
 export default function App() {
   const hash = useHash();
   const page =
-    hash === '#/account' ? <Account /> :
+    // #/account is the dashboard, #/account/app/<name or id> one app's page.
+    hash === '#/account' || hash.startsWith('#/account/') ? <Account route={hash.match(/^#\/account\/app\/(.+)$/)?.[1]} /> :
     hash === '#/explorer' ? <main><LiveApps /></main> :
     <Landing />;
 

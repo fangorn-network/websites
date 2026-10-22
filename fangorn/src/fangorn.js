@@ -27,8 +27,14 @@ export const USDC_ADDRESS =
   import.meta.env?.VITE_USDC_ADDRESS ?? '0x036CbD53842c5426634e7929541eC2318f3dCF7e';
 
 // Reads go through a dedicated client on the SDK's chain/RPC so they hit the right
-// network regardless of the wallet's current one.
-export const publicClient = createPublicClient({ chain: CHAIN, transport: http(NETWORK.rpcUrl) });
+// network regardless of the wallet's current one. Multicall batching folds the
+// reads issued in one tick (five per app, every app at once) into a single eth_call:
+// the public RPC refuses a burst of separate ones ("Request exceeds defined limit").
+export const publicClient = createPublicClient({
+  chain: CHAIN,
+  transport: http(NETWORK.rpcUrl),
+  batch: { multicall: true },
+});
 
 /**
  * The Privy wallet (embedded or injected) as a viem WalletClient, switched to

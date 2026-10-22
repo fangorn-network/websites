@@ -8,11 +8,11 @@
 // claiming an app (AppRegistry.registerApp) pays its first period and mints the app's
 // ERC-5643 token to the owner, and renewing extends it.
 import { useCallback, useEffect, useState } from 'react';
-import { parseAbiItem, toHex } from 'viem';
+import { parseAbiItem, parseEventLogs, toHex } from 'viem';
 import { getLogsInWindows } from '@fangorn-network/sdk/lib/contracts/logs.js';
 import { AppRegistryClient } from '@fangorn-network/sdk/lib/contracts/app-registry/index.js';
 import { toAppId } from '@fangorn-network/sdk/lib/config.js';
-import { APP_REGISTRY_ADDRESS, NETWORK, USDC_ADDRESS, publicClient, walletClientFor } from './fangorn.js';
+import { APP_REGISTRY_ADDRESS, MEMBERSHIP_REGISTRY_ADDRESS, NETWORK, USDC_ADDRESS, publicClient, walletClientFor } from './fangorn.js';
 import { useAuth } from './authContext.js';
 
 /** The SDK's FANGORN_APP_EXTENSION — where a card says what its records cost. */
@@ -73,34 +73,71 @@ function readCard(card, appId) {
   };
 }
 
+// The two ways an app pays its owner. A membership: MembershipRegistry.join pulls the
+// reader's USDC and forwards it to the owner in the same tx, next to Joined(app_id).
+// A record sale: x402 settles as an EIP-3009 transferWithAuthorization from the buyer,
+// which USDC marks with AuthorizationUsed(buyer).
+const JOINED = parseAbiItem('event Joined(bytes32 indexed app_id, uint256 indexed epoch, uint256 commitment)');
+const AUTH_USED = parseAbiItem('event AuthorizationUsed(address indexed authorizer, bytes32 indexed nonce)');
+
+const same = (a, b) => a?.toLowerCase() === b?.toLowerCase();
+
 /**
- * USDC paid in to an address: x402 sales settle as plain USDC transfers to the
- * app owner. Transfers from `exclude` (the owner itself)
- * aren't sales and are left out.
- * ponytail: every transfer from anyone else counts as a sale. If owners start
- * receiving USDC for other reasons, match on the facilitator's
- * transferWithAuthorization instead.
+ * Sorts USDC transfers into `owner` by what paid them, given each tx's receipt logs
+ * (`logsByTx`: tx hash → logs). Pure, so the self-check drives it.
+ *   byApp – membership payouts, per app id (lowercase)
+ *   sales – x402 record sales. The transfer doesn't name the app, so wallet-wide.
+ * Anything else (faucet drips, funding, gifts, the owner's own sends) isn't earnings.
  */
-export async function readReceived(address, exclude) {
-  const skip = new Set(exclude.map((a) => a.toLowerCase()));
-  // From the AppRegistry's deploy: nothing before it can be an app sale, and from
-  // genesis would be thousands of windows on Base's 10k-block getLogs cap.
-  const logs = await getLogsInWindows(publicClient, NETWORK.appRegistryFromBlock, undefined, (fromBlock, toBlock) =>
-    publicClient.getLogs({ address: USDC_ADDRESS, event: ERC20_TRANSFER, args: { to: address }, fromBlock, toBlock }),
-  NETWORK.logWindow);
-  return logs
-    .filter((l) => !skip.has(l.args.from.toLowerCase()))
-    .reduce((sum, l) => sum + l.args.value, 0n);
+export function classifyEarnings(transfers, logsByTx, owner) {
+  const byApp = {};
+  let sales = 0n;
+  for (const t of transfers) {
+    const { from, value } = t.args;
+    if (same(from, owner)) continue;
+    const events = parseEventLogs({ abi: [JOINED, AUTH_USED], logs: logsByTx.get(t.transactionHash) ?? [], strict: false });
+    if (same(from, MEMBERSHIP_REGISTRY_ADDRESS)) {
+      const joined = events.find((e) => e.eventName === 'Joined' && same(e.address, MEMBERSHIP_REGISTRY_ADDRESS));
+      if (!joined) continue;
+      const id = joined.args.app_id.toLowerCase();
+      byApp[id] = (byApp[id] ?? 0n) + value;
+    } else if (events.some((e) => e.eventName === 'AuthorizationUsed' && same(e.address, USDC_ADDRESS) && same(e.args.authorizer, from))) {
+      sales += value;
+    }
+  }
+  const total = Object.values(byApp).reduce((s, v) => s + v, sales);
+  return { total, byApp, sales };
 }
 
-/** One app's state, as the hub shows it. */
+/**
+ * What `address` has earned from its apps: { total, byApp, sales } (USDC base units).
+ * ponytail: one receipt per incoming tx, every load. Fine for a testnet wallet; past
+ * a few hundred payments, index it (the explorer, or a subgraph).
+ */
+export async function readEarnings(address) {
+  // From the AppRegistry's deploy: nothing before it can be an app sale, and from
+  // genesis would be thousands of windows on Base's 10k-block getLogs cap.
+  const transfers = await getLogsInWindows(publicClient, NETWORK.appRegistryFromBlock, undefined, (fromBlock, toBlock) =>
+    publicClient.getLogs({ address: USDC_ADDRESS, event: ERC20_TRANSFER, args: { to: address }, fromBlock, toBlock }),
+  NETWORK.logWindow);
+  const hashes = [...new Set(transfers.filter((t) => !same(t.args.from, address)).map((t) => t.transactionHash))];
+  const receipts = await Promise.all(hashes.map((hash) => publicClient.getTransactionReceipt({ hash })));
+  return classifyEarnings(transfers, new Map(receipts.map((r) => [r.transactionHash, r.logs])), address);
+}
+
+/**
+ * One app's state, as the hub shows it. A read that fails is `null` — unknown — and
+ * never a default that means something: `0n` reads as cancelled and `''` as "no
+ * agent card", and a refused RPC call must not tell an owner their live app is
+ * expired or undeployed.
+ */
 async function readApp(appId) {
   const reg = reader(appId);
   const [owner, uri, suspended, expiresAt, renewable] = await Promise.all([
     reg.getAppOwner(),
-    reg.appAgentUri().catch(() => ''),
+    reg.appAgentUri().catch(() => null),
     reg.isAppSuspended().catch(() => false),
-    reg.expiresAt().catch(() => 0n),
+    reg.expiresAt().catch(() => null),
     reg.isRenewable().catch(() => false),
   ]);
   const card = uri
@@ -109,7 +146,7 @@ async function readApp(appId) {
   const info = readCard(card, appId);
   return {
     appId, owner, uri, suspended, expiresAt, renewable, ...info,
-    expired: expiresAt * 1000n <= BigInt(Date.now()),
+    expired: expiresAt != null && expiresAt * 1000n <= BigInt(Date.now()),
     name: rememberedName(appId) ?? info.cardName ?? null,
   };
 }
@@ -117,6 +154,7 @@ async function readApp(appId) {
 /**
  * Apps `address` owns, newest first:
  *   { appId, owner, name, uri, listed, site, price, suspended, expiresAt, expired, renewable }
+ * (`uri` and `expiresAt` are null when their read failed).
  *
  * Found through the app tokens sent to the wallet: claiming mints one, so this sees
  * an app the moment it's claimed, before it has a card or a commit. A token sent on
@@ -176,13 +214,13 @@ const MEMBERSHIP_PERIOD = 30n * 86400n;
  *   setCard(appId, url, { register }) – point the app at its agent card; `register`
  *       first mints the app's ERC-8004 agent from it (the first binding)
  *
- * Earnings are per wallet, not per app: an x402 sale is a USDC transfer to the
- * owner, and the transfer doesn't say which app it paid for.
+ * `earnings` is readEarnings' { total, byApp, sales }, null while loading,
+ * { error: true } if the scan failed.
  */
 export function useOwnedApps(address) {
   const { wallet } = useAuth();
   const [apps, setApps] = useState(null);
-  const [received, setReceived] = useState(null);
+  const [earnings, setEarnings] = useState(null);
   const [error, setError] = useState(null);
   const [tick, setTick] = useState(0);
   const refresh = useCallback(() => setTick((n) => n + 1), []);
@@ -202,9 +240,9 @@ export function useOwnedApps(address) {
     readOwnedApps(address)
       .then((a) => { if (!cancelled) { setApps(a); setError(null); } })
       .catch((err) => { if (!cancelled) { setError(err.message); setApps([]); } });
-    readReceived(address, [address])
-      .then((r) => !cancelled && setReceived(r))
-      .catch((err) => console.warn('Earnings lookup failed:', err));
+    readEarnings(address)
+      .then((e) => !cancelled && setEarnings(e))
+      .catch((err) => { console.warn('Earnings lookup failed:', err); if (!cancelled) setEarnings({ error: true }); });
     return () => { cancelled = true; };
   }, [address, tick]);
 
@@ -252,7 +290,7 @@ export function useOwnedApps(address) {
     refresh();
   }, [writer, refresh]);
 
-  return { apps, received, error, ...terms, create, renew, setCard };
+  return { apps, earnings, error, ...terms, create, renew, setCard };
 }
 
 /** A Worker's URL, or its card's, as the card's URL. */

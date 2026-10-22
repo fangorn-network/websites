@@ -3,8 +3,7 @@ import { formatEther, formatUnits, parseEther, parseUnits } from 'viem';
 import styles from './Home.module.css';
 import { useAuth } from './authContext';
 import { useBalances } from './fangorn';
-import { useUsage } from './usage';
-import { truncate, explorer, formatBytes, meterState } from './format';
+import { truncate, explorer } from './format';
 import { useOwnedApps, readAppOwner, isCardUrl, cardUrlOf } from './account';
 
 const INSTALL_CMD = 'npm i @fangorn-network/sdk';
@@ -132,51 +131,6 @@ function Column({ title, state, stateLabel, children }) {
   );
 }
 
-// Bytes used against a limit. Not a chart — a stat with a meter, so the answer to
-// "am I near the cap?" survives a glance. A limit of 0 means the gate is off, and
-// `null` means there is no ceiling to draw (a subscription lifts the lifetime one),
-// so both render the bare amount.
-// ponytail: a div + inline width beats <progress>, which needs
-// ::-webkit-progress-value AND ::-moz-progress-bar to restyle. Swap if we ever
-// want the native semantics for free.
-function Meter({ label, used, limit }) {
-  const meter = meterState(used, limit);
-  if (!meter) {
-    return (
-      <Field label={label}>
-        <div className={styles.fieldValue}>{formatBytes(used)}</div>
-      </Field>
-    );
-  }
-
-  return (
-    <Field label={label}>
-      <div
-        className={styles.meterTrack}
-        role="progressbar"
-        aria-valuenow={used}
-        aria-valuemin={0}
-        aria-valuemax={limit}
-        aria-label={label}
-      >
-        <div
-          className={`${styles.meterFill} ${meter.full ? styles.meterFull : ''}`}
-          style={{ width: `${meter.pct}%` }}
-        />
-      </div>
-      <div className={styles.fieldValue}>
-        {formatBytes(used)} / {formatBytes(limit)}
-        {/* Near the cap the colour shift alone shouldn't carry it — say it in words. */}
-        {meter.full && (
-          <span className={styles.fieldNote}>
-            {meter.remaining ? ` · ${formatBytes(meter.remaining)} left` : ' · Limit reached'}
-          </span>
-        )}
-      </div>
-    </Field>
-  );
-}
-
 // ── Columns ─────────────────────────────────────────────────────────────────
 
 // Links out to the public faucets. Opening in a new tab keeps the hub where it was;
@@ -198,74 +152,66 @@ function FaucetLinks({ onRefresh }) {
   );
 }
 
-function WalletColumn({ wallet, balances, onFund, funding, refreshBalances }) {
+const usdc = (units) => `${Number(formatUnits(units, 6)).toFixed(2)} USDC`;
+
+// The top of the hub: who you are on chain, what you hold, what your apps have made.
+function Summary({ wallet, balances, earnings, onFund, funding, refreshBalances }) {
   // Don't call it low until the balances actually land — an orange dot on a
   // still-loading wallet reads as a problem that isn't there.
   const low = balances && balances.eth < LOW_ETH;
 
   return (
-    <Column
-      title="Wallet"
-      state={!balances ? 'statePending' : low ? 'stateWarn' : 'stateGood'}
-      stateLabel={!balances ? 'Loading' : low ? 'Low balance' : 'Funded'}
-    >
-      <Field label="Address">
-        <div className={styles.inlineValue}>
-          <a
-            className={styles.fieldValueMono}
-            href={explorer(wallet)}
-            target="_blank"
-            rel="noreferrer"
-          >
-            {truncate(wallet, 8, 6)}
+    <div className={styles.accountPanel}>
+      <Column title="Wallet" state="stateGood" stateLabel="Base Sepolia">
+        <Field label="Address">
+          <div className={styles.inlineValue}>
+            <span className={styles.fieldValueMono}>{truncate(wallet, 8, 6)}</span>
+            <CopyButton text={wallet} className={styles.ghostBtnSm} />
+          </div>
+          <a className={styles.resLink} href={explorer(wallet)} target="_blank" rel="noreferrer">
+            View on Basescan <span className={styles.resArrow}>↗</span>
           </a>
-          <CopyButton text={wallet} className={styles.ghostBtnSm} />
-        </div>
-      </Field>
+        </Field>
+      </Column>
 
-      <br></br>
-
-      <Field label="Balance">
+      <Column
+        title="Balance"
+        state={!balances ? 'statePending' : low ? 'stateWarn' : 'stateGood'}
+        stateLabel={!balances ? 'Loading' : low ? 'Low on gas' : 'Funded'}
+      >
+        <div className={styles.bigValue}>{balances ? usdc(balances.usdc) : '…'}</div>
         <div className={styles.fieldValue}>
           {balances ? `${Number(formatEther(balances.eth)).toFixed(4)} ETH` : '…'}
         </div>
-        <div className={styles.fieldValue}>
-          {balances ? `${Number(formatUnits(balances.usdc, 6)).toFixed(2)} USDC` : '…'}
+        <div className={styles.btnRow}>
+          <button className={styles.ghostBtn} onClick={onFund} disabled={funding} type="button">
+            {funding ? 'Funding…' : 'Add funds'}
+          </button>
         </div>
-        <button className={styles.ghostBtn} onClick={onFund} disabled={funding} type="button">
-          {funding ? 'Funding…' : 'Add funds'}
-        </button>
-      </Field>
+        <details className={styles.more} open={low || undefined}>
+          <summary>Testnet faucets</summary>
+          <FaucetLinks onRefresh={refreshBalances} />
+        </details>
+      </Column>
 
-      <br></br>
-
-      <FaucetLinks onRefresh={refreshBalances} />
-
-    </Column>
-  );
-}
-
-// Usage as the storage worker meters it: the lifetime free tier and the daily upload
-// cap. The subscription that pays for storage is per app now, so it lives on each
-// app's card, not here.
-function StorageColumn() {
-  const { usage, loading } = useUsage();
-
-  return (
-    <Column
-      title="Storage"
-      state={loading ? 'statePending' : usage ? 'stateGood' : 'stateWarn'}
-      stateLabel={loading ? 'Loading' : usage ? 'Metered' : 'Unavailable'}
-    >
-      {loading && <div className={styles.pending}>Loading your usage…</div>}
-      {!loading && !usage && <div className={styles.pending}>Usage is unavailable right now.</div>}
-      {!loading && usage && (
-        <>
-          <Meter label="Total stored" used={usage.total} limit={usage.freeLimit} />
-          <Meter label="Uploaded today" used={usage.daily} limit={usage.dailyLimit} />
-        </>
-      )}
-    </Column>
+      <Column
+        title="Earned"
+        state={earnings?.error ? 'stateWarn' : earnings ? 'stateGood' : 'statePending'}
+        stateLabel={earnings?.error ? 'Unavailable' : earnings ? 'All time' : 'Loading'}
+      >
+        <div className={styles.bigValue}>{earnings?.error ? '—' : earnings ? usdc(earnings.total) : '…'}</div>
+        {earnings && !earnings.error && (
+          <>
+            <div className={styles.fieldValue}>
+              {usdc(earnings.total - earnings.sales)} <span className={styles.fieldNote}>from memberships</span>
+            </div>
+            <div className={styles.fieldValue}>
+              {usdc(earnings.sales)} <span className={styles.fieldNote}>from record sales</span>
+            </div>
+          </>
+        )}
+      </Column>
+    </div>
   );
 }
 
@@ -273,7 +219,7 @@ function StorageColumn() {
 function nextStep(apps) {
   if (apps === null) return 'Checking where you left off…';
   if (!apps.length) return 'Start by creating your first app below.';
-  return "You're set up. Configure the CLI below and ask Claude to build your app.";
+  return "You're set up. Getting started, below, has the CLI steps.";
 }
 
 // ── The hub ─────────────────────────────────────────────────────────────────
@@ -403,7 +349,7 @@ function GettingStarted({ wallet, exportKey, appName }) {
             <li>
               <div className={styles.cardTitle}>Deploy it to Cloudflare</div>
               <p className={styles.colText}>
-                Press <b>Deploy to Cloudflare</b> on your app's card above. Cloudflare copies the
+                Open your app above and press <b>Deploy to Cloudflare</b>. Cloudflare copies the
                 app's template into your GitHub, makes its storage and deploys it as a Worker on
                 your free plan; every push to the repo deploys again. The repo holds the recipe,
                 never the data, so it can be public.
@@ -412,7 +358,7 @@ function GettingStarted({ wallet, exportKey, appName }) {
             <li>
               <div className={styles.cardTitle}>Register its agent</div>
               <p className={styles.colText}>
-                Paste the Worker's URL into the card and press <b>Register</b>. Your wallet mints
+                Paste the Worker's URL into the app's page and press <b>Register</b>. Your wallet mints
                 the app's ERC-8004 agent and binds its card, and the app shows in the explorer.
               </p>
             </li>
@@ -432,14 +378,65 @@ function GettingStarted({ wallet, exportKey, appName }) {
 
 const formatDate = (secs) => new Date(Number(secs) * 1000).toLocaleDateString();
 
-// One owned app: what it is, whether its subscription is live, and the two things an
-// owner does from here — renew, and bind the agent card the explorer lists it by.
-// Accepting other publishers stays in the CLI (`fangorn app accept`).
-function AppCard({ app, onRenew, onSetCard }) {
+// An app whose subscription runs out within this many days is flagged in its row.
+const EXPIRING_DAYS = 7;
+
+// The one word the closed row leads with. Anything that stops the app working wins,
+// so it shows without opening the row.
+// A field whose read failed is null, and says so rather than guessing.
+function appStatus(app) {
+  if (app.suspended) return { warn: true, label: 'Taken down' };
+  if (app.expired) return { warn: true, label: app.expiresAt ? 'Expired' : 'Cancelled' };
+  if (app.uri === '') return { warn: true, label: 'Not deployed' };
+  if (app.uri == null || app.expiresAt == null) return { warn: false, label: 'Status unknown' };
+  if (Number(app.expiresAt) * 1000 - Date.now() < EXPIRING_DAYS * 86400_000) return { warn: true, label: 'Expiring soon' };
+  return { warn: false, label: 'Live' };
+}
+
+// When the subscription runs to, for display: 0 is a cancelled one, null an unread one.
+const paidUntil = (app) => (app.expiresAt == null ? '—' : app.expiresAt ? formatDate(app.expiresAt) : 'Cancelled');
+
+// Free to read: no record price and no pass on its card, so nothing to earn or show.
+const isPaid = (app) => app.price != null || app.pass != null;
+
+// What a reader pays, in one phrase: per record, or for a pass.
+const priceLabel = (app) =>
+  app.price != null ? `${formatUnits(app.price, 6)} USDC / record`
+    : app.pass ? `${formatUnits(app.pass.price, 6)} USDC pass` : 'Free';
+
+// An app's address in the hub: its name when this browser knows it, else its id.
+const appHref = (app) => `#/account/app/${encodeURIComponent(app.name ?? app.appId)}`;
+const findApp = (apps, key) => {
+  const k = decodeURIComponent(key).toLowerCase();
+  // Card names carry case ("FAR Desk"), so match them the way the key was lowered.
+  return apps.find((a) => a.name?.toLowerCase() === k || a.appId.toLowerCase() === k);
+};
+
+// One app on the dashboard: enough to see it's healthy, and the way into its page.
+function AppLine({ app }) {
+  const status = appStatus(app);
+  return (
+    <a className={styles.rowLink} href={appHref(app)}>
+      <span className={styles.rowName}>{app.name ?? truncate(app.appId, 10, 6)}</span>
+      <span className={status.warn ? styles.badgeWarn : styles.badge}>{status.label}</span>
+      <span className={styles.rowMeta}>
+        {app.expiresAt ? `Paid until ${formatDate(app.expiresAt)}` : app.expiresAt === 0n ? 'Cancelled' : ''}
+        {app.expiresAt != null && ' · '}{priceLabel(app)}
+      </span>
+      <span className={styles.resArrow} aria-hidden="true">→</span>
+    </a>
+  );
+}
+
+// One owned app's page: everything an owner does with it — renew, see where its
+// storage goes and what it charges, deploy, bind the agent card the explorer lists
+// it by. Accepting other publishers stays in the CLI (`fangorn app accept`).
+function AppPage({ app, earned, onRenew, onSetCard }) {
   const worker = app.name ? app.name.replace(/[._]/g, '-') : '<your-app>';
   const [busy, setBusy] = useState(null);
-  const [cardUrl, setCardUrl] = useState(app.uri);
+  const [cardUrl, setCardUrl] = useState(app.uri ?? '');
   const [error, setError] = useState(null);
+  const status = appStatus(app);
 
   async function run(what, fn) {
     setError(null);
@@ -454,80 +451,115 @@ function AppCard({ app, onRenew, onSetCard }) {
   }
 
   return (
-    <div className={styles.card}>
-      <div className={styles.cardTitle}>
-        {app.name ?? truncate(app.appId, 10, 6)}
-        {app.suspended && <span className={styles.badgeWarn}>Suspended</span>}
-        {app.expired && <span className={styles.badgeWarn}>Expired</span>}
-      </div>
-      <div className={styles.inlineValue}>
-        <span className={styles.fieldValueMono}>{truncate(app.appId, 10, 6)}</span>
-        <CopyButton text={app.appId} className={styles.ghostBtnSm} />
-      </div>
-      <div className={styles.stats}>
-        <Field label={app.expired ? 'Expired' : 'Paid until'}>
-          <div className={styles.fieldValue}>{app.expiresAt ? formatDate(app.expiresAt) : 'Cancelled'}</div>
-        </Field>
-        <Field label="Price">
-          <div className={styles.fieldValue}>{app.price != null ? `${formatUnits(app.price, 6)} USDC / record` : 'Free'}</div>
-        </Field>
-      </div>
-      {app.renewable && (
-        <button className={styles.ghostBtn} type="button" disabled={!!busy} onClick={() => run('renew', () => onRenew(app.appId))}>
-          {busy === 'renew' ? 'Renewing…' : 'Renew subscription'}
-        </button>
-      )}
-      {/* Claimed but not deployed: Cloudflare makes the repo and the Worker, then the
-          wallet registers the agent from the Worker's card. */}
-      {!app.uri && (
-        <>
-          <a href={DEPLOY_URL} target="_blank" rel="noreferrer">
-            <img src="https://deploy.workers.cloudflare.com/button" alt="Deploy to Cloudflare" height="32" />
-          </a>
-          <p className={styles.colText}>
-            Name the Worker <b>{worker}</b> and its R2 bucket <b>{worker}-view</b>.
-            {app.name && /[._]/.test(app.name) && <> Then set <b>"app": "{app.name}"</b> in the new repo's app.json.</>}
-            {' '}Cloudflare copies the app's template into your GitHub and deploys it on your
-            free plan. Then paste the Worker's URL below.
-          </p>
-        </>
-      )}
-      <details className={styles.more} open={!app.uri || undefined}>
-        <summary>{app.uri ? 'Agent card' : 'Register the agent'}</summary>
-        <input
-          className={styles.input}
-          value={cardUrl}
-          onChange={(event) => setCardUrl(event.target.value)}
-          placeholder={`https://${worker}.<you>.workers.dev`}
-          aria-label="Worker or agent card URL"
-        />
-        <div className={styles.btnRow}>
-          <button
-            className={styles.ghostBtn}
-            type="button"
-            disabled={!!busy || !isCardUrl(cardUrl) || cardUrlOf(cardUrl) === app.uri}
-            onClick={() => run('card', () => onSetCard(app.appId, cardUrlOf(cardUrl), { register: !app.uri }))}
-          >
-            {busy === 'card' ? 'Signing…' : app.uri ? 'Save' : 'Register'}
-          </button>
+    <>
+      <section className={styles.welcome}>
+        <a className={styles.resLink} href="#/account">← All apps</a>
+        <h1 className={styles.h1}>
+          {app.name ?? truncate(app.appId, 10, 6)}
+          <span className={status.warn ? styles.badgeWarn : styles.badge}>{status.label}</span>
+        </h1>
+        <div className={styles.inlineValue}>
+          <span className={styles.fieldValueMono}>{app.appId}</span>
+          <CopyButton text={app.appId} className={styles.ghostBtnSm} />
         </div>
-        {!app.uri && (
-          <p className={styles.colText}>
-            Mints the app's ERC-8004 agent from the Worker's card and binds the card to the
-            app, from your wallet.
-          </p>
+        <div className={styles.cardLinks}>
+          {app.site && <a className={styles.resLink} href={app.site} target="_blank" rel="noreferrer">Site <span className={styles.resArrow}>↗</span></a>}
+          {app.listed && <a className={styles.resLink} href="#/explorer">Explorer</a>}
+        </div>
+      </section>
+
+      <div className={styles.accountPanel}>
+        <Column
+          title="Subscription"
+          state={app.expiresAt == null ? 'statePending' : app.expired || app.suspended || status.label === 'Expiring soon' ? 'stateWarn' : 'stateGood'}
+          stateLabel={app.expiresAt == null ? 'Unread' : app.suspended ? 'Taken down' : app.expired ? 'Expired' : status.label === 'Expiring soon' ? 'Expiring soon' : 'Paid'}
+        >
+          <Field label={app.expired ? 'Expired' : 'Paid until'}>
+            <div className={styles.bigValue}>{paidUntil(app)}</div>
+            {app.renewable && (
+              <button className={styles.ghostBtn} type="button" disabled={!!busy} onClick={() => run('renew', () => onRenew(app.appId))}>
+                {busy === 'renew' ? 'Renewing…' : 'Renew'}
+              </button>
+            )}
+          </Field>
+        </Column>
+
+        {/* What the app's card says it charges. Read-only: setting prices is next. */}
+        <Column title="Pricing" state="stateGood" stateLabel="From its card">
+          <Field label="Per record (x402)">
+            <div className={styles.fieldValue}>{app.price != null ? `${formatUnits(app.price, 6)} USDC` : 'Free'}</div>
+          </Field>
+          {app.pass && (
+            <Field label="Access pass">
+              <div className={styles.fieldValue}>
+                {formatUnits(app.pass.price, 6)} USDC{app.pass.days ? ` for ${app.pass.days} days` : ''}
+              </div>
+            </Field>
+          )}
+        </Column>
+
+        {isPaid(app) && (
+          <Column title="Earned" state={earned == null ? 'statePending' : 'stateGood'} stateLabel={earned == null ? 'Loading' : 'Memberships'}>
+            <div className={styles.bigValue}>{earned == null ? '…' : usdc(earned)}</div>
+            {/* A sale's transfer doesn't name its app, so sales are wallet-wide. */}
+            <p className={styles.colText}>
+              From reader memberships. Record and pass sales are paid straight to your wallet
+              without naming the app, so the dashboard counts them for all your apps together.
+            </p>
+          </Column>
         )}
-      </details>
-      {error && <div className={styles.formError}>{error}</div>}
-      <div className={styles.cardLinks}>
-        {app.site && <a className={styles.resLink} href={app.site} target="_blank" rel="noreferrer">Site ↗</a>}
-        {app.listed && <a className={styles.resLink} href="#/explorer">Explorer</a>}
       </div>
-    </div>
+
+      {app.uri != null && <section className={styles.section}>
+        <h2 className={styles.h2}>{app.uri ? 'Agent card' : 'Deploy'}</h2>
+        {/* Claimed but not deployed (the chain says no card, not "couldn't read"):
+            Cloudflare makes the repo and the Worker, then the wallet registers the
+            agent from the Worker's card. */}
+        {app.uri === '' && (
+          <div className={styles.field}>
+            <a href={DEPLOY_URL} target="_blank" rel="noreferrer">
+              <img src="https://deploy.workers.cloudflare.com/button" alt="Deploy to Cloudflare" height="32" />
+            </a>
+            <p className={styles.colText}>
+              Name the Worker <b>{worker}</b> and its R2 bucket <b>{worker}-view</b>.
+              {app.name && /[._]/.test(app.name) && <> Then set <b>"app": "{app.name}"</b> in the new repo's app.json.</>}
+              {' '}Cloudflare copies the app's template into your GitHub and deploys it on your
+              free plan. Then paste the Worker's URL below.
+            </p>
+          </div>
+        )}
+        <Field label={app.uri ? 'Agent card URL' : 'Register the agent'}>
+          <input
+            className={styles.input}
+            value={cardUrl}
+            onChange={(event) => setCardUrl(event.target.value)}
+            placeholder={`https://${worker}.<you>.workers.dev`}
+            aria-label="Worker or agent card URL"
+          />
+          <div className={styles.btnRow}>
+            <button
+              className={styles.ghostBtn}
+              type="button"
+              disabled={!!busy || !isCardUrl(cardUrl) || cardUrlOf(cardUrl) === app.uri}
+              onClick={() => run('card', () => onSetCard(app.appId, cardUrlOf(cardUrl), { register: !app.uri }))}
+            >
+              {busy === 'card' ? 'Signing…' : app.uri ? 'Save' : 'Register'}
+            </button>
+          </div>
+          {!app.uri && (
+            <p className={styles.colText}>
+              Mints the app's ERC-8004 agent from the Worker's card and binds the card to the
+              app, from your wallet.
+            </p>
+          )}
+        </Field>
+        {error && <div className={styles.formError}>{error}</div>}
+      </section>}
+    </>
   );
 }
 
-// The (+) card. Opens the create modal; the grid keeps it last so owned apps lead.
+// The empty state: no apps yet, so creating one is the whole page's next step.
 function NewAppCard({ onClick }) {
   return (
     <button className={`${styles.card} ${styles.cardNew}`} type="button" onClick={onClick}>
@@ -677,7 +709,7 @@ function CreateAppModal({ open, onClose, fee, period, balances, onCreate }) {
   );
 }
 
-export default function Home() {
+export default function Home({ appKey }) {
   const { user, fundWallet, exportKey } = useAuth();
   const { balances, refresh: refreshBalances } = useBalances();
   const [funding, setFunding] = useState(false);
@@ -685,7 +717,7 @@ export default function Home() {
 
   const { name } = readIdentity(user);
   const wallet = user?.wallet?.address;
-  const { apps, received, error: appsError, fee, period, create, renew, setCard } = useOwnedApps(wallet);
+  const { apps, earnings, error: appsError, fee, period, create, renew, setCard } = useOwnedApps(wallet);
 
   async function addFunds() {
     setFunding(true);
@@ -704,6 +736,32 @@ export default function Home() {
     refreshBalances();
   }
 
+  if (appKey) {
+    const app = apps && findApp(apps, appKey);
+    return (
+      <div className={styles.page}>
+        <main className={styles.main}>
+          {apps === null && <div className={styles.pending}>Reading your apps from the chain…</div>}
+          {apps && !app && (
+            <section className={styles.welcome}>
+              <a className={styles.resLink} href="#/account">← All apps</a>
+              <p className={styles.sub}>This wallet doesn't own an app called {decodeURIComponent(appKey)}.</p>
+            </section>
+          )}
+          {app && (
+            <AppPage
+              key={app.appId}
+              app={app}
+              earned={earnings && !earnings.error ? (earnings.byApp[app.appId.toLowerCase()] ?? 0n) : null}
+              onRenew={renew}
+              onSetCard={setCard}
+            />
+          )}
+        </main>
+      </div>
+    );
+  }
+
   return (
     <div className={styles.page}>
       <main className={styles.main}>
@@ -713,19 +771,30 @@ export default function Home() {
           <p className={styles.sub}>{nextStep(apps)}</p>
         </section>
 
+        {wallet && (
+          <Summary
+            wallet={wallet}
+            balances={balances}
+            earnings={earnings}
+            onFund={addFunds}
+            funding={funding}
+            refreshBalances={refreshBalances}
+          />
+        )}
+
         <section className={styles.section}>
-          <h2 className={styles.h2}>Your apps</h2>
+          <div className={styles.rowsHead}>
+            <h2 className={styles.h2}>Your apps</h2>
+            {apps?.length > 0 && (
+              <button className={styles.ghostBtnSm} type="button" onClick={() => setCreating(true)}>+ New app</button>
+            )}
+          </div>
           {appsError && <div className={styles.formError}>{appsError}</div>}
           {apps === null && <div className={styles.pending}>Reading your apps from the chain…</div>}
-          {apps?.length > 0 && received != null && (
-            <p className={styles.colText}>
-              Earned across your apps: <b>{formatUnits(received, 6)} USDC</b>
-            </p>
-          )}
-          {apps !== null && (
-            <div className={styles.grid}>
-              {apps.map((app) => <AppCard key={app.appId} app={app} onRenew={renew} onSetCard={setCard} />)}
-              <NewAppCard onClick={() => setCreating(true)} />
+          {apps?.length === 0 && <NewAppCard onClick={() => setCreating(true)} />}
+          {apps?.length > 0 && (
+            <div className={styles.rows}>
+              {apps.map((app) => <AppLine key={app.appId} app={app} />)}
             </div>
           )}
           <CreateAppModal
@@ -738,26 +807,12 @@ export default function Home() {
           />
         </section>
 
-        <section className={styles.section}>
-          <h2 className={styles.h2}>1. Your account</h2>
-          <div className={styles.accountPanel}>
-            {wallet && (
-              <WalletColumn
-                wallet={wallet}
-                balances={balances}
-                onFund={addFunds}
-                funding={funding}
-                refreshBalances={refreshBalances}
-              />
-            )}
-            <StorageColumn />
-          </div>
-        </section>
-
-        <section className={styles.section}>
-          <h2 className={styles.h2}>2. Getting started</h2>
+        {/* Needed once: open until there's an app, one line after. Keyed so it opens
+            itself when the apps land empty, without fighting the user's toggle after. */}
+        <details key={String(apps?.length === 0)} className={styles.section} open={apps?.length === 0 || undefined}>
+          <summary className={styles.h2}>Getting started</summary>
           <GettingStarted wallet={wallet} exportKey={exportKey} appName={apps?.find((a) => a.name)?.name} />
-        </section>
+        </details>
       </main>
     </div>
   );
