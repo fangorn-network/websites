@@ -10,10 +10,17 @@ import { useAuth, ACCOUNT_ENABLED } from './authContext';
 function useHash() {
   const [hash, setHash] = useState(location.hash);
   useEffect(() => {
-    const on = () => { setHash(location.hash); window.scrollTo(0, 0); };
+    const on = () => setHash(location.hash);
     addEventListener('hashchange', on);
     return () => removeEventListener('hashchange', on);
   }, []);
+  // After the page for the new hash renders: a section anchor (#start, #contact)
+  // scrolls to its section, from any page; a route starts at the top.
+  useEffect(() => {
+    const section = /^#[\w-]+$/.test(hash) && document.getElementById(hash.slice(1));
+    if (section) section.scrollIntoView({ behavior: 'smooth' });
+    else window.scrollTo(0, 0);
+  }, [hash]);
   return hash;
 }
 

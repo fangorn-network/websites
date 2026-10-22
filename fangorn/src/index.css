@@ -67,6 +67,9 @@
 
 html { scroll-behavior: smooth; }
 
+/* Anchored sections land below the sticky nav, not under it. */
+[id] { scroll-margin-top: 80px; }
+
 body {
   font-family: var(--sans);
   background: var(--bg);

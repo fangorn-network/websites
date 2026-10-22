@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Contact } from './Footer';
 import styles from './Landing.module.css';
 import { formatUnits } from 'viem';
 import { useAuth } from './authContext';
@@ -441,14 +442,16 @@ export default function Landing() {
       <UsedBy />
       <Bento />
 
-      <section className={`${styles.section} ${styles.coda}`}>
+      {/* <section className={`${styles.section} ${styles.coda}`}>
         <h2 className={styles.h2}>Every view, rooted on-chain.</h2>
         <p className={styles.sectionSub}>Every answer traces back to the record that was published.</p>
         <div className={styles.ctas}>
           <a href="#start" className={styles.btnA}>Get started</a>
           <a href="#/explorer" className={styles.btnB}>Explore Apps</a>
         </div>
-      </section>
+      </section> */}
+
+      <Contact />
     </main>
   );
 }
