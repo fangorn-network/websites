@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import styles from './Nav.module.css';
 import { useAuth } from './authContext';
 
@@ -7,6 +8,26 @@ const DiscordIcon = () => (
   </svg>
 );
 
+// Light/dark switch. The choice is saved; until one is made, index.html follows the system.
+function ThemeToggle() {
+  const [dark, setDark] = useState(document.documentElement.dataset.theme === 'dark');
+  function flip() {
+    const theme = dark ? 'light' : 'dark';
+    document.documentElement.dataset.theme = theme;
+    try { localStorage.theme = theme; } catch {}
+    setDark(!dark);
+  }
+  return (
+    <button className={styles.theme} onClick={flip} type="button" aria-label={dark ? 'Switch to light mode' : 'Switch to dark mode'}>
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        {dark
+          ? <><circle cx="12" cy="12" r="4.5" /><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" /></>
+          : <path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z" />}
+      </svg>
+    </button>
+  );
+}
+
 export default function Nav() {
   const { ready, authenticated, login, logout } = useAuth();
 
@@ -14,12 +35,14 @@ export default function Nav() {
     <nav className={styles.nav}>
       <a href="#" className={styles.logo}>Fangorn</a>
       <div className={styles.right}>
-        <a href="https://explorer.fangorn.network" className={styles.link}>Explorer ↗</a>
+        <a href="#/explorer" className={styles.link}>Explorer</a>
         <a href="https://deepwiki.com/fangorn-network/fangorn" className={styles.link}>Docs</a>
+        <a href="#contact" className={styles.link}>Contact</a>
         <a href="https://github.com/fangorn-network" className={styles.link}>GitHub</a>
         <a href="https://discord.gg/JDj8RdCVyU" className={styles.link} aria-label="Discord">
           <DiscordIcon />
         </a>
+        <ThemeToggle />
         {authenticated ? (
           <>
             <button className={styles.ghostBtn} onClick={logout}>Log out</button>

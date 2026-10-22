@@ -1,6 +1,6 @@
 // Shared pure formatters. Kept out of the page components so the data layer
 // (fangorn.js, usage.js) can reuse them without importing UI.
-const ARBISCAN = 'https://sepolia.arbiscan.io';
+const EXPLORER = 'https://sepolia.basescan.org';
 
 export function truncate(value, lead = 6, tail = 4) {
   if (!value) return '';
@@ -9,8 +9,8 @@ export function truncate(value, lead = 6, tail = 4) {
     : value;
 }
 
-export const explorer = (addr) => `${ARBISCAN}/address/${addr}`;
-export const txExplorer = (hash) => `${ARBISCAN}/tx/${hash}`;
+export const explorer = (addr) => `${EXPLORER}/address/${addr}`;
+export const txExplorer = (hash) => `${EXPLORER}/tx/${hash}`;
 
 // Usage against a limit, for the storage meters. Returns null when there is no
 // ceiling to draw — the gate is disabled (limit 0), or a subscription lifted the

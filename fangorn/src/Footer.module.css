@@ -1,25 +1,75 @@
 .cta {
   padding: 72px 48px;
   text-align: center;
-  border-top: 1px solid var(--line);
+  margin: 48px 16px 0;
+  border-radius: 28px 28px 0 0;
+  background: var(--s3);
 }
 
 .ctaH2 {
-  font-size: clamp(22px, 2.5vw, 30px);
-  font-weight: 500;
-  letter-spacing: -0.025em;
+  font-family: var(--display);
+  font-size: clamp(26px, 3vw, 36px);
+  font-weight: 700;
+  letter-spacing: -0.03em;
   color: var(--text);
   margin-bottom: 12px;
 }
 
 .ctaP {
-  font-size: 14px;
-  line-height: 1.8;
+  font-size: 16px;
+  line-height: 1.7;
   color: var(--sub);
-  font-weight: 300;
-  max-width: 360px;
+  max-width: 420px;
   margin: 0 auto 32px;
 }
+
+.form {
+  display: grid;
+  gap: 16px;
+  max-width: 520px;
+  margin: 0 auto 32px;
+  text-align: left;
+}
+
+.label {
+  display: grid;
+  gap: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.optional { font-weight: 400; color: var(--sub); }
+
+.control {
+  width: 100%;
+  font: 400 15px/1.5 var(--sans);
+  color: var(--text);
+  background: var(--s1);
+  border: 1px solid var(--line2);
+  border-radius: 14px;
+  padding: 11px 14px;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+textarea.control { resize: vertical; min-height: 140px; }
+.control:focus { outline: none; border-color: var(--hi); box-shadow: 0 0 0 4px var(--glow); }
+
+.form .btnA { justify-self: start; border: none; cursor: pointer; }
+
+.copy {
+  font: 600 12px var(--sans);
+  color: var(--hi2);
+  background: var(--s1);
+  border: 1px solid var(--line2);
+  border-radius: 999px;
+  padding: 3px 12px;
+  margin-left: 4px;
+  vertical-align: middle;
+  transition: border-color 0.15s;
+}
+
+.copy:hover { border-color: var(--hi); }
 
 .ctaBtns {
   display: flex;
@@ -30,29 +80,31 @@
 }
 
 .btnA {
-  font-size: 13px;
-  font-weight: 500;
+  font-size: 15px;
+  font-weight: 600;
   background: var(--hi);
-  color: #fff;
-  padding: 10px 22px;
-  border-radius: 6px;
-  transition: background 0.15s;
+  color: var(--on-hi);
+  padding: 11px 24px;
+  border-radius: 999px;
+  box-shadow: 0 3px 0 var(--ledge);
+  transition: background 0.15s, transform 0.1s, box-shadow 0.1s;
 }
 
 .btnA:hover { background: var(--hi2); }
+.btnA:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--ledge); }
 
 .btnB {
-  font-size: 13px;
-  font-weight: 400;
-  color: var(--sub);
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ink);
   border: 1px solid var(--line2);
-  padding: 10px 22px;
-  border-radius: 6px;
-  background: var(--s2);
+  padding: 11px 24px;
+  border-radius: 999px;
+  background: var(--s1);
   transition: border-color 0.15s, color 0.15s;
 }
 
-.btnB:hover { border-color: var(--dim); color: var(--text); }
+.btnB:hover { border-color: var(--hi); }
 
 .ctaLinks {
   display: flex;
@@ -61,14 +113,15 @@
   flex-wrap: wrap;
   margin-top: 32px;
   padding-top: 32px;
-  border-top: 1px solid var(--line);
+  border-top: 1px solid var(--line2);
   max-width: 520px;
   margin-left: auto;
   margin-right: auto;
 }
 
 .ctaLink {
-  font-size: 13px;
+  font-size: 14px;
+  font-weight: 500;
   color: var(--sub);
   display: flex;
   align-items: center;
@@ -77,30 +130,33 @@
 }
 
 .ctaLink::after { content: '↗'; font-size: 11px; }
-.ctaLink:hover { color: var(--text); }
+.ctaLink:hover { color: var(--hi); }
 
 .footer {
   padding: 20px 32px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  border-top: 1px solid var(--line);
+  margin: 0 16px;
+  background: var(--s3);
+  border-top: 1px solid var(--line2);
 }
 
-.fl { font-size: 13px; font-weight: 500; color: var(--sub); }
-.fc { font-size: 12px; color: var(--dim); }
+.fl { font-family: var(--display); font-size: 15px; font-weight: 700; color: var(--ink); }
+.fc { font-size: 13px; color: var(--sub); }
 
 .flinks { display: flex; gap: 20px; }
 
 .flink {
-  font-size: 12px;
-  color: var(--dim);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--sub);
   transition: color 0.15s;
 }
 
-.flink:hover { color: var(--sub); }
+.flink:hover { color: var(--hi); }
 
 @media (max-width: 860px) {
-  .cta { padding: 48px 20px; }
-  .footer { flex-direction: column; gap: 10px; text-align: center; padding: 20px; }
+  .cta { padding: 48px 20px; margin: 32px 8px 0; border-radius: 22px 22px 0 0; }
+  .footer { flex-direction: column; gap: 10px; text-align: center; padding: 20px; margin: 0 8px; }
 }

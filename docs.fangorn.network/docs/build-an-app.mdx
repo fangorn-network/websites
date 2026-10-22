@@ -1,0 +1,83 @@
+---
+sidebar_position: 4
+title: Build an app
+---
+
+# Build an app
+
+A Fangorn app is a database with no server:
+
+- Its records are committed on chain, on Base Sepolia.
+- A view of those records, made of content-addressed shards with embeddings, is hosted as
+  static files on Cloudflare Pages.
+- A page searches the view in the reader's tab.
+- An agent card bound on chain lets any agent find, verify and use the app.
+
+You bring the data, a Cloudflare account and Claude Code. The builder skills do the rest.
+
+## 1. Set up your account
+
+Sign in at [fangorn.network](https://fangorn.network/#/account). There you can:
+
+- Create your app. This claims its name and pays for its storage, in USDC.
+- Optionally, set a reader price.
+
+The hub then walks you through the CLI. It signs with the same wallet you used in the
+hub, so the apps you claim there are the ones Claude publishes to:
+
+```bash
+npm i -g @fangorn-network/sdk
+fangorn init            # choose Base Sepolia, then paste your exported private key
+fangorn set-app <your-app>
+fangorn wallet          # should print the same address as the hub
+```
+
+:::warning
+Anyone with your private key controls your wallet. Paste it only into your own terminal,
+never into a chat (including with Claude), a website or an email.
+:::
+
+## 2. Install the builder plugin
+
+Inside Claude Code:
+
+```text
+/plugin marketplace add fangorn-network/westmarch
+/plugin install fangorn-builder@fangorn
+```
+
+| Skill | What it does |
+|---|---|
+| **`fangorn-app`** | Builds an app: records → graph → schema → commit → view → page → agent card → on-chain binding. Triggers on anything like "put this dataset on Fangorn" or "make this searchable by agents". |
+| **`fangorn-improve`** | Keeps a live app improving. Each run picks one thing, such as a failing guardrail, a broken source, an accepted Observation, the largest coverage gap or the weakest question. It proves the fix locally with `westmarch-eval` and opens one pull request, which the app's `eval` gate then grades. It never publishes, deploys or merges. |
+
+The skills run their commands from the published `@fangorn-network/westmarch` through `npx`.
+
+## 3. Ask Claude to build it
+
+> Build a Fangorn app from &lt;your data&gt;.
+
+`fangorn-app` does this in two stages:
+
+1. **Register (minutes).** As soon as you know what the app is and what to call it, it
+   claims the name, puts an empty page at the app's address and binds the app's card, so
+   something real exists right away.
+2. **Build (hours).** It works from your questions, then your sources, then a local build
+   graded against those questions. No record goes on chain until the build passes.
+
+New records always ship. A change to *how* records are made only ships if your questions
+are answered no worse.
+
+Your app shows up in the hub and in [the app explorer](https://fangorn.network/#/explorer)
+once it's published. Any `fangorn-mcp` can then [open it by name](/use-apps#use-it).
+
+## 4. Keep it improving
+
+Run `fangorn-improve` by hand, or on a schedule with `/loop`. Each run opens at most one
+pull request, and merging it stays your call.
+
+## Reference
+
+The full walkthrough, with every file's source, is
+[`docs/app-to-agent.md`](https://github.com/fangorn-network/westmarch/blob/main/docs/app-to-agent.md).
+The `fangorn-app` skill points at it section by section.
