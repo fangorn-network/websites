@@ -5,7 +5,7 @@ import { useAuth } from './authContext';
 import { useBalances } from './fangorn';
 import { useUsage } from './usage';
 import { truncate, explorer, formatBytes, meterState } from './format';
-import { useOwnedApps, readAppOwner, isCardUrl } from './account';
+import { useOwnedApps, readAppOwner, isCardUrl, cardUrlOf } from './account';
 
 const INSTALL_CMD = 'npm i @fangorn-network/sdk';
 const DOCS_URL = 'https://deepwiki.com/fangorn-network/fangorn';
@@ -284,6 +284,13 @@ const SDK_INSTALL = 'npm i -g @fangorn-network/sdk';
 const PLUGIN_CMD = `/plugin marketplace add fangorn-network/westmarch
 /plugin install fangorn-builder@fangorn`;
 const BUILD_PROMPT = 'Build a Fangorn app from <your data>.';
+// Cloudflare's deploy button: it copies westmarch's template into the owner's GitHub, makes
+// the bucket and deploys the Worker, which builds itself with `westmarch build`.
+const DEPLOY_URL = 'https://deploy.workers.cloudflare.com/?url=https://github.com/fangorn-network/westmarch/tree/main/template';
+const PUBLISH_CMD = (app) => `fangorn set-app ${app}
+fangorn repo init items
+fangorn commit items.json -m "first items"
+fangorn push`;
 
 // A command with a copy button. Wraps instead of scrolling: a command you can't
 // see the end of gets pasted wrong.
@@ -324,59 +331,102 @@ function CopyKey({ exportKey }) {
   );
 }
 
-// The CLI signs as this same wallet: the key exported above goes into
-// `fangorn init`, so the apps claimed and paid for here are the ones Claude
-// publishes to from the terminal.
-function CliSetup({ wallet, exportKey, appName }) {
+// Two ways in, one wallet either way: the CLI signs as it (the key exported above goes
+// into `fangorn init`), so the apps claimed here are the ones published to.
+function GettingStarted({ wallet, exportKey, appName }) {
+  const [path, setPath] = useState('claude');
+  const app = appName ?? '<your-app>';
   return (
-    <ol className={styles.onboard}>
-      <li>
-        <div className={styles.cardTitle}>Install the Fangorn CLI</div>
-        <Cmd text={SDK_INSTALL} />
-      </li>
-      <li>
-        <div className={styles.cardTitle}>Configure it with your key</div>
-        <Cmd text="fangorn init" />
-        <p className={styles.colText}>
-          Pick <b>Base Sepolia</b> as the chain, then paste your private key. Press Enter
-          to accept the defaults for the rest.
-        </p>
-        <CopyKey exportKey={exportKey} />
-        <p className={styles.colText}>
-          Anyone with this key controls your wallet. Paste it only into your own terminal,
-          never into a chat (including with Claude), a website or an email.
-        </p>
-      </li>
-      <li>
-        <div className={styles.cardTitle}>Point it at your app</div>
-        <Cmd text={`fangorn set-app ${appName ?? '<your-app>'}`} />
-      </li>
-      <li>
-        <div className={styles.cardTitle}>Check it's the same wallet</div>
-        <Cmd text="fangorn wallet" />
-        {wallet && (
+    <>
+      <div className={styles.btnRow} role="tablist">
+        {[['claude', 'With Claude Code'], ['manual', 'Deploy to Cloudflare']].map(([id, label]) => (
+          <button
+            key={id}
+            type="button"
+            role="tab"
+            aria-selected={path === id}
+            className={`${styles.ghostBtn} ${path === id ? styles.tabActive : ''}`}
+            onClick={() => setPath(id)}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      <ol className={styles.onboard}>
+        <li>
+          <div className={styles.cardTitle}>Install the Fangorn CLI</div>
+          <Cmd text={SDK_INSTALL} />
+        </li>
+        <li>
+          <div className={styles.cardTitle}>Configure it with your key</div>
+          <Cmd text="fangorn init" />
           <p className={styles.colText}>
-            The address should be <span className={styles.fieldValueMono}>{wallet}</span>.
+            Pick <b>Base Sepolia</b> as the chain, then paste your private key. Press Enter
+            to accept the defaults for the rest.
           </p>
+          <CopyKey exportKey={exportKey} />
+          <p className={styles.colText}>
+            Anyone with this key controls your wallet. Paste it only into your own terminal,
+            never into a chat (including with Claude), a website or an email.
+          </p>
+          <details className={styles.more}>
+            <summary>Verify app ownership</summary>
+            <Cmd text={'fangorn set-app <your-app>\nfangorn wallet'} />
+            <p className={styles.colText}>
+              {wallet
+                ? <>The address should be <span className={styles.fieldValueMono}>{wallet}</span>, the owner of the app you set.</>
+                : <>The address should be the wallet that claimed the app you set.</>}
+            </p>
+          </details>
+        </li>
+        {path === 'claude' ? (
+          <>
+            <li>
+              <div className={styles.cardTitle}>Add the builder skills to Claude Code</div>
+              <Cmd text={PLUGIN_CMD} />
+              <p className={styles.colText}>
+                Run these inside Claude Code. <b>fangorn-app</b> builds and registers your app;{' '}
+                <b>fangorn-improve</b> keeps it getting better, one pull request at a time.
+              </p>
+            </li>
+            <li>
+              <div className={styles.cardTitle}>Ask Claude to build it</div>
+              <Cmd text={BUILD_PROMPT} />
+              <p className={styles.colText}>
+                You'll need a free Cloudflare account for the site. Your app shows up on this page
+                once it publishes.
+              </p>
+            </li>
+          </>
+        ) : (
+          <>
+            <li>
+              <div className={styles.cardTitle}>Deploy it to Cloudflare</div>
+              <p className={styles.colText}>
+                Press <b>Deploy to Cloudflare</b> on your app's card above. Cloudflare copies the
+                app's template into your GitHub, makes its storage and deploys it as a Worker on
+                your free plan; every push to the repo deploys again. The repo holds the recipe,
+                never the data, so it can be public.
+              </p>
+            </li>
+            <li>
+              <div className={styles.cardTitle}>Register its agent</div>
+              <p className={styles.colText}>
+                Paste the Worker's URL into the card and press <b>Register</b>. Your wallet mints
+                the app's ERC-8004 agent and binds its card, and the app shows in the explorer.
+              </p>
+            </li>
+            <li>
+              <div className={styles.cardTitle}>Publish records</div>
+              <Cmd text={PUBLISH_CMD(app)} />
+              <p className={styles.colText}>
+                The site indexes them within 5 minutes. The repo's README shows the record format.
+              </p>
+            </li>
+          </>
         )}
-      </li>
-      <li>
-        <div className={styles.cardTitle}>Add the builder skills to Claude Code</div>
-        <Cmd text={PLUGIN_CMD} />
-        <p className={styles.colText}>
-          Run these inside Claude Code. <b>fangorn-app</b> builds and registers your app;{' '}
-          <b>fangorn-improve</b> keeps it getting better, one pull request at a time.
-        </p>
-      </li>
-      <li>
-        <div className={styles.cardTitle}>Ask Claude to build it</div>
-        <Cmd text={BUILD_PROMPT} />
-        <p className={styles.colText}>
-          You'll need a free Cloudflare account for the site. Your app shows up on this page
-          once it publishes.
-        </p>
-      </li>
-    </ol>
+      </ol>
+    </>
   );
 }
 
@@ -386,6 +436,7 @@ const formatDate = (secs) => new Date(Number(secs) * 1000).toLocaleDateString();
 // owner does from here — renew, and bind the agent card the explorer lists it by.
 // Accepting other publishers stays in the CLI (`fangorn app accept`).
 function AppCard({ app, onRenew, onSetCard }) {
+  const worker = app.name ? app.name.replace(/[._]/g, '-') : '<your-app>';
   const [busy, setBusy] = useState(null);
   const [cardUrl, setCardUrl] = useState(app.uri);
   const [error, setError] = useState(null);
@@ -426,25 +477,46 @@ function AppCard({ app, onRenew, onSetCard }) {
           {busy === 'renew' ? 'Renewing…' : 'Renew subscription'}
         </button>
       )}
-      <details className={styles.more}>
-        <summary>{app.uri ? 'Agent card' : 'Bind an agent card'}</summary>
+      {/* Claimed but not deployed: Cloudflare makes the repo and the Worker, then the
+          wallet registers the agent from the Worker's card. */}
+      {!app.uri && (
+        <>
+          <a href={DEPLOY_URL} target="_blank" rel="noreferrer">
+            <img src="https://deploy.workers.cloudflare.com/button" alt="Deploy to Cloudflare" height="32" />
+          </a>
+          <p className={styles.colText}>
+            Name the Worker <b>{worker}</b> and its R2 bucket <b>{worker}-view</b>.
+            {app.name && /[._]/.test(app.name) && <> Then set <b>"app": "{app.name}"</b> in the new repo's app.json.</>}
+            {' '}Cloudflare copies the app's template into your GitHub and deploys it on your
+            free plan. Then paste the Worker's URL below.
+          </p>
+        </>
+      )}
+      <details className={styles.more} open={!app.uri || undefined}>
+        <summary>{app.uri ? 'Agent card' : 'Register the agent'}</summary>
         <input
           className={styles.input}
           value={cardUrl}
           onChange={(event) => setCardUrl(event.target.value)}
-          placeholder="https://…/.well-known/agent-card.json"
-          aria-label="Agent card URL"
+          placeholder={`https://${worker}.<you>.workers.dev`}
+          aria-label="Worker or agent card URL"
         />
         <div className={styles.btnRow}>
           <button
             className={styles.ghostBtn}
             type="button"
-            disabled={!!busy || !isCardUrl(cardUrl) || cardUrl === app.uri}
-            onClick={() => run('card', () => onSetCard(app.appId, cardUrl))}
+            disabled={!!busy || !isCardUrl(cardUrl) || cardUrlOf(cardUrl) === app.uri}
+            onClick={() => run('card', () => onSetCard(app.appId, cardUrlOf(cardUrl), { register: !app.uri }))}
           >
-            {busy === 'card' ? 'Saving…' : 'Save'}
+            {busy === 'card' ? 'Signing…' : app.uri ? 'Save' : 'Register'}
           </button>
         </div>
+        {!app.uri && (
+          <p className={styles.colText}>
+            Mints the app's ERC-8004 agent from the Worker's card and binds the card to the
+            app, from your wallet.
+          </p>
+        )}
       </details>
       {error && <div className={styles.formError}>{error}</div>}
       <div className={styles.cardLinks}>
@@ -683,8 +755,8 @@ export default function Home() {
         </section>
 
         <section className={styles.section}>
-          <h2 className={styles.h2}>2. Set up Claude Code</h2>
-          <CliSetup wallet={wallet} exportKey={exportKey} appName={apps?.find((a) => a.name)?.name} />
+          <h2 className={styles.h2}>2. Getting started</h2>
+          <GettingStarted wallet={wallet} exportKey={exportKey} appName={apps?.find((a) => a.name)?.name} />
         </section>
       </main>
     </div>

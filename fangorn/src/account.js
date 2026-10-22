@@ -11,12 +11,8 @@ import { useCallback, useEffect, useState } from 'react';
 import { parseAbiItem, toHex } from 'viem';
 import { getLogsInWindows } from '@fangorn-network/sdk/lib/contracts/logs.js';
 import { AppRegistryClient } from '@fangorn-network/sdk/lib/contracts/app-registry/index.js';
-import { MembershipRegistryClient } from '@fangorn-network/sdk/lib/contracts/membership-registry/index.js';
 import { toAppId } from '@fangorn-network/sdk/lib/config.js';
-import {
-  APP_REGISTRY_ADDRESS, MEMBERSHIP_REGISTRY_ADDRESS, NETWORK, USDC_ADDRESS,
-  publicClient, walletClientFor,
-} from './fangorn.js';
+import { APP_REGISTRY_ADDRESS, NETWORK, USDC_ADDRESS, publicClient, walletClientFor } from './fangorn.js';
 import { useAuth } from './authContext.js';
 
 /** The SDK's FANGORN_APP_EXTENSION — where a card says what its records cost. */
@@ -177,7 +173,8 @@ const MEMBERSHIP_PERIOD = 30n * 86400n;
  *   create({ name, cardUrl?, price? }) – claim the app (pays the first period), then
  *       bind its agent card and set a reader price if given. Price is USDC base units.
  *   renew(appId)            – pay one more period
- *   setCard(appId, url)     – point the app at its agent card
+ *   setCard(appId, url, { register }) – point the app at its agent card; `register`
+ *       first mints the app's ERC-8004 agent from it (the first binding)
  *
  * Earnings are per wallet, not per app: an x402 sale is a USDC transfer to the
  * owner, and the transfer doesn't say which app it paid for.
@@ -211,19 +208,23 @@ export function useOwnedApps(address) {
     return () => { cancelled = true; };
   }, [address, tick]);
 
-  // A writer for one app, signing with the Privy wallet.
+  // A Fangorn client for one app, signing with the Privy wallet. Its signed-URL storage
+  // is billed to the app, so registering an agent pins its file with no Pinata JWT.
+  // Loaded on the first write: the SDK root pulls the graph engine and the ZK WASM,
+  // which the hub's reads never need.
   const writer = useCallback(async (appId) => {
     if (!wallet || !address) throw new Error('Connect a wallet first.');
-    const walletClient = await walletClientFor(wallet, address);
-    return {
-      apps: new AppRegistryClient(APP_REGISTRY_ADDRESS, appId, publicClient, walletClient, NETWORK.logWindow),
-      members: new MembershipRegistryClient(MEMBERSHIP_REGISTRY_ADDRESS, publicClient, walletClient),
-    };
+    const [walletClient, { Fangorn }] = await Promise.all([
+      walletClientFor(wallet, address),
+      import('@fangorn-network/sdk/lib/fangorn.js'),
+    ]);
+    return Fangorn.create({ walletClient, config: NETWORK, appId, storage: { signedUrl: {} } });
   }, [wallet, address]);
 
   const create = useCallback(async ({ name, cardUrl, price }) => {
     const appId = toAppId(name);
-    const { apps: reg, members } = await writer(appId);
+    const fangorn = await writer(appId);
+    const reg = fangorn.getAppRegistry();
     const owner = await reg.getAppOwner();
     if (owner !== ZERO_ADDRESS) {
       throw new Error(owner.toLowerCase() === address.toLowerCase()
@@ -236,23 +237,26 @@ export function useOwnedApps(address) {
     // The claim is the deploy; these are config on top. Each is its own tx, so a
     // failure here leaves a claimed app the card's manage actions can finish.
     if (cardUrl) await reg.setAppAgentUri(cardUrl);
-    if (price) await members.setPlan(appId, price, MEMBERSHIP_PERIOD);
+    if (price) await fangorn.getMembershipRegistry().setPlan(appId, price, MEMBERSHIP_PERIOD);
     refresh();
     return appId;
   }, [writer, address, refresh]);
 
   const renew = useCallback(async (appId) => {
-    await (await writer(appId)).apps.renewSubscription();
+    await (await writer(appId)).getAppRegistry().renewSubscription();
     refresh();
   }, [writer, refresh]);
 
-  const setCard = useCallback(async (appId, url) => {
-    await (await writer(appId)).apps.setAppAgentUri(url);
+  const setCard = useCallback(async (appId, url, { register = false } = {}) => {
+    await (await writer(appId)).registerAgent(url, { skipRegister: !register });
     refresh();
   }, [writer, refresh]);
 
   return { apps, received, error, ...terms, create, renew, setCard };
 }
+
+/** A Worker's URL, or its card's, as the card's URL. */
+export const cardUrlOf = (value) => (/\/agent-card\.json$/.test(value) ? value : `${value.replace(/\/+$/, '')}/.well-known/agent-card.json`);
 
 /** True when `value` reads as an http(s) URL — what an agent card URI has to be. */
 export const isCardUrl = (value) => {
