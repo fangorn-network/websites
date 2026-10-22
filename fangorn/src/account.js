@@ -201,6 +201,77 @@ export async function readAppOwner(name) {
   return owner === ZERO_ADDRESS ? null : owner;
 }
 
+// ── One app's activity ────────────────────────────────────────────────────────
+// What an owner can see of their app without touching its Worker: memberships from
+// the chain, and records and freshness from the catalog the Worker already serves in
+// public (even a private app's: it's what tells a buyer what's for sale).
+
+// Base makes a block every 2 seconds, so a block's age is its distance from the head.
+// ponytail: estimated, not read — one getBlock per membership would be exact and slow.
+const BLOCK_SECONDS = 2;
+export const ACTIVITY_WEEKS = 12;
+
+/**
+ * Memberships into weekly counts, oldest first, from each join's block and the head's.
+ * Pure, so the self-check drives it.
+ */
+export function joinsByWeek(blocks, head, weeks = ACTIVITY_WEEKS) {
+  const counts = Array(weeks).fill(0);
+  for (const b of blocks) {
+    const week = Math.floor((Number(head - b) * BLOCK_SECONDS) / (7 * 86400));
+    if (week >= 0 && week < weeks) counts[weeks - 1 - week] += 1;
+  }
+  return counts;
+}
+
+/**
+ * { memberships, weeks, catalog } for one app. Each half fails on its own to null —
+ * unknown, never zero: a refused RPC call must not tell an owner nobody joined.
+ *   memberships – { total, recent (last 30 days) }
+ *   weeks       – memberships per week, ACTIVITY_WEEKS of them, oldest first
+ *   catalog     – { indexedAt (unix secs), collections: [{ name, description, count, bytes, hosts }] }
+ */
+export async function readActivity(app) {
+  const joins = getLogsInWindows(publicClient, NETWORK.appRegistryFromBlock, undefined, (fromBlock, toBlock) =>
+    publicClient.getLogs({ address: MEMBERSHIP_REGISTRY_ADDRESS, event: JOINED, args: { app_id: app.appId }, fromBlock, toBlock }),
+  NETWORK.logWindow)
+    .then(async (logs) => {
+      const head = await publicClient.getBlockNumber();
+      const blocks = logs.map((l) => l.blockNumber);
+      const recent = blocks.filter((b) => Number(head - b) * BLOCK_SECONDS < 30 * 86400).length;
+      return { memberships: { total: blocks.length, recent }, weeks: joinsByWeek(blocks, head) };
+    })
+    .catch((err) => { console.warn('Membership scan failed:', err); return { memberships: null, weeks: null }; });
+
+  const catalog = !app.site ? Promise.resolve(null) : fetch(new URL('/view/cdn/catalog', app.site), { signal: AbortSignal.timeout(10_000) })
+    .then((r) => (r.ok ? r.json() : null))
+    .then((c) => c && {
+      indexedAt: Number(c.generated_at) || null,
+      collections: (c.domains ?? []).map((d) => ({
+        // Domains are named `<publisher>-<repo>-<name>` with short hex ids in front.
+        name: String(d.name ?? '').replace(/^([0-9a-f]{8}-){2}/, ''),
+        description: typeof d.description === 'string' ? d.description : null,
+        count: Number(d.count) || 0,
+        bytes: Number(d.bytes) || 0,
+        hosts: (d.link_hosts ?? []).filter((h) => typeof h === 'string'),
+      })),
+    })
+    .catch(() => null);
+
+  return { ...(await joins), catalog: await catalog };
+}
+
+/** readActivity as state: null while loading. */
+export function useActivity(app) {
+  const [activity, setActivity] = useState(null);
+  useEffect(() => {
+    let cancelled = false;
+    readActivity(app).then((a) => !cancelled && setActivity(a));
+    return () => { cancelled = true; };
+  }, [app]);
+  return activity;
+}
+
 // A month, in seconds — the membership period a reader price buys.
 const MEMBERSHIP_PERIOD = 30n * 86400n;
 

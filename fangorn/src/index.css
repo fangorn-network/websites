@@ -1,30 +1,68 @@
-@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Geist:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500..800&family=Figtree:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
+/* Canopy: morning light through leaves. Misty green paper, forest ink, moss for
+   action, one sunlit amber for the moments worth noticing. */
 :root {
-  --bg: #09090b;
-  --s1: #0c0c0e;
-  --s2: #111113;
-  --s3: #18181b;
-  --line: #1f1f23;
-  --line2: #2e2e33;
-  --text: #fafafa;
-  --sub: #a1a1aa;
-  --dim: #52525b;
-  --hi: #a78bfa;
-  --hi2: #7c5de8;
-  --g1: #22c55e;
-  --orange: #f97316;
-  --blue: #60a5fa;
-  --pink: #f472b6;
-  --glow: rgba(167, 139, 250, 0.18);
-  /* Frosted panels over the low-poly backdrop. */
-  --glass: rgba(14, 14, 18, 0.55);
-  --glass-blur: blur(14px) saturate(150%);
-  --glass-edge: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  --bg: #eef3ec;
+  --s1: #ffffff;
+  --s2: #f6f9f4;
+  --s3: #e5ede3;
+  --line: #d9e3d7;
+  --line2: #c2d1c0;
+  --text: #17251e;
+  --sub: #4c5f55;
+  --dim: #8a9b91;
+  --hi: #2f7d55;
+  --hi2: #236343;
+  --sun: #f2c14e;
+  --g1: #2f9e5b;
+  --orange: #d9622b;
+  --blue: #3b82c4;
+  --pink: #d9578f;
+  --ink: #17251e;
+  --night: #0f1a15;
+  --ledge: #236343;
+  --on-hi: #ffffff;
+  --glow: rgba(47, 125, 85, 0.16);
+  --shadow: 0 1px 2px rgba(23, 37, 30, 0.05), 0 10px 30px -14px rgba(23, 37, 30, 0.22);
+  /* Frosted panels: translucent white over the misty paper. */
+  --glass: rgba(255, 255, 255, 0.72);
+  --glass-blur: blur(14px) saturate(140%);
+  --glass-edge: inset 0 1px 0 rgba(255, 255, 255, 0.9);
   --mono: 'JetBrains Mono', monospace;
-  --sans: 'Geist', 'Inter', sans-serif;
+  --sans: 'Figtree', system-ui, sans-serif;
+  --display: 'Bricolage Grotesque', 'Figtree', sans-serif;
+  color-scheme: light;
+}
+
+/* Night canopy: the same forest after dark. Moss lifts to stay legible, buttons
+   carry dark text, and --ink flips so headings stay the strongest thing on screen.
+   data-theme is set before first paint in index.html: the saved choice, else the system's. */
+:root[data-theme="dark"] {
+  --bg: #0f1a15;
+  --s1: #16241d;
+  --s2: #1b2c23;
+  --s3: #233729;
+  --line: #26392e;
+  --line2: #35503f;
+  --text: #e3ece5;
+  --sub: #a2b6a9;
+  --dim: #6f8679;
+  --hi: #5fbf8a;
+  --hi2: #8fd6ad;
+  --ledge: #2e7a51;
+  --sun: #f2c14e;
+  --g1: #5fbf8a;
+  --orange: #f08a52;
+  --ink: #f1f6f2;
+  --on-hi: #0c1611;
+  --glow: rgba(95, 191, 138, 0.16);
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 12px 32px -14px rgba(0, 0, 0, 0.6);
+  --glass: rgba(22, 36, 29, 0.72);
+  --glass-edge: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  color-scheme: dark;
 }
 
 html { scroll-behavior: smooth; }
@@ -33,7 +71,7 @@ body {
   font-family: var(--sans);
   background: var(--bg);
   color: var(--text);
-  font-size: 14px;
+  font-size: 15px;
   line-height: 1.6;
   -webkit-font-smoothing: antialiased;
   overflow-x: hidden;
@@ -55,8 +93,12 @@ button { cursor: pointer; font-family: var(--sans); }
   font-size: 13px;
   font-weight: 500;
   background: var(--hi);
-  color: #fff;
-  padding: 10px 22px;
+  color: var(--on-hi);
+  padding: 11px 24px;
   border: none;
-  border-radius: 6px;
+  border-radius: 999px;
+  box-shadow: 0 3px 0 var(--ledge);
 }
+
+:focus-visible { outline: 2px solid var(--hi); outline-offset: 2px; }
+::selection { background: var(--sun); color: var(--night); }

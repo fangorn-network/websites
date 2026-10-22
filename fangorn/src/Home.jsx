@@ -3,8 +3,8 @@ import { formatEther, formatUnits, parseEther, parseUnits } from 'viem';
 import styles from './Home.module.css';
 import { useAuth } from './authContext';
 import { useBalances } from './fangorn';
-import { truncate, explorer } from './format';
-import { useOwnedApps, readAppOwner, isCardUrl, cardUrlOf } from './account';
+import { truncate, explorer, formatBytes } from './format';
+import { useOwnedApps, useActivity, readAppOwner, isCardUrl, cardUrlOf, ACTIVITY_WEEKS } from './account';
 
 const INSTALL_CMD = 'npm i @fangorn-network/sdk';
 const DOCS_URL = 'https://deepwiki.com/fangorn-network/fangorn';
@@ -428,7 +428,7 @@ function AppLine({ app }) {
         {app.expiresAt ? `Paid until ${formatDate(app.expiresAt)}` : app.expiresAt === 0n ? 'Cancelled' : ''}
         {app.expiresAt != null && ' · '}{priceLabel(app)}
       </span>
-      <span className={styles.resArrow} aria-hidden="true">→</span>
+      <svg className={styles.rowGo} viewBox="0 0 24 24" aria-hidden="true"><path d="M10 7l5 5-5 5" /></svg>
     </a>
   );
 }
@@ -515,6 +515,8 @@ function AppPage({ app, earned, onRenew, onSetCard }) {
         )}
       </div>
 
+      <Activity app={app} />
+
       {app.uri != null && <section className={styles.section}>
         <h2 className={styles.h2}>{app.uri ? 'Agent card' : 'Deploy'}</h2>
         {/* Claimed but not deployed (the chain says no card, not "couldn't read"):
@@ -561,6 +563,122 @@ function AppPage({ app, earned, onRenew, onSetCard }) {
         {error && <div className={styles.formError}>{error}</div>}
       </section>}
     </>
+  );
+}
+
+// "4 min ago", "3 h ago", "2 days ago": how long since a unix time.
+function ago(secs) {
+  const min = Math.round((Date.now() / 1000 - secs) / 60);
+  if (min < 1) return 'just now';
+  if (min < 60) return `${min} min ago`;
+  if (min < 48 * 60) return `${Math.round(min / 60)} h ago`;
+  return `${Math.round(min / 1440)} days ago`;
+}
+
+// The Worker's cron indexes every 5 minutes. An hour without a run means it's failing.
+const STALE_SECS = 3600;
+
+// Memberships per week, one bar each, this week on the right. A bar's title names its
+// count, and the whole run is read out for screen readers.
+function WeekBars({ weeks }) {
+  const max = Math.max(...weeks, 1);
+  const when = (i) => (i === weeks.length - 1 ? 'this week' : `${weeks.length - 1 - i} weeks ago`);
+  return (
+    <figure className={styles.barsFig}>
+      <div className={styles.bars} role="img" aria-label={`Memberships per week, oldest first: ${weeks.join(', ')}`}>
+        {weeks.map((n, i) => (
+          <span key={i} className={styles.bar} style={{ height: `${(n / max) * 100}%` }} title={`${n} ${n === 1 ? 'membership' : 'memberships'}, ${when(i)}`} />
+        ))}
+      </div>
+      <figcaption className={styles.barsAxis}><span>{weeks.length} weeks ago</span><span>This week</span></figcaption>
+    </figure>
+  );
+}
+
+// What the app has been doing, from what's public: its catalog (records, collections,
+// when it last indexed) and the chain (memberships). Nothing here needs the Worker
+// to change, or the owner's Cloudflare account.
+function Activity({ app }) {
+  const activity = useActivity(app);
+  const catalog = activity?.catalog;
+  const records = catalog?.collections.reduce((sum, c) => sum + c.count, 0);
+  const hosts = new Set(catalog?.collections.flatMap((c) => c.hosts)).size;
+  const stale = catalog?.indexedAt && Date.now() / 1000 - catalog.indexedAt > STALE_SECS;
+  const members = activity?.memberships;
+  const showMembers = isPaid(app) || members?.total > 0;
+
+  const [recordsState, recordsLabel] =
+    !app.site ? ['statePending', 'Not deployed']
+    : !activity ? ['statePending', 'Loading']
+    : !catalog ? ['stateWarn', 'Unreachable']
+    : !catalog.indexedAt ? ['stateGood', 'Live']
+    : [stale ? 'stateWarn' : 'stateGood', `Indexed ${ago(catalog.indexedAt)}`];
+
+  return (
+    <section className={styles.section}>
+      <h2 className={styles.h2}>Activity</h2>
+      <div className={styles.accountPanel}>
+        <Column title="Records" state={recordsState} stateLabel={recordsLabel}>
+          {!app.site ? (
+            <p className={styles.colText}>Counts show up here once the app's Worker is deployed and bound below.</p>
+          ) : !activity ? (
+            <><div className={styles.bigValue}><Skeleton width="5em" /></div><div className={styles.fieldValue}><Skeleton width="11em" /></div></>
+          ) : !catalog ? (
+            <p className={styles.colText}>The catalog at {new URL(app.site).host} didn't load. Check the Worker is running in your Cloudflare dashboard.</p>
+          ) : (
+            <>
+              <div className={styles.bigValue}>{records.toLocaleString()}</div>
+              <div className={styles.fieldValue}>
+                {catalog.collections.length} {catalog.collections.length === 1 ? 'collection' : 'collections'}
+                {hosts > 0 && <span className={styles.fieldNote}>, linking out to {hosts} {hosts === 1 ? 'site' : 'sites'}</span>}
+              </div>
+              {stale && (
+                <p className={`${styles.colText} ${styles.pendingNote}`}>
+                  The Worker re-indexes every 5 minutes, so a gap this long usually means its
+                  cron is failing. Its logs in Cloudflare will say why.
+                </p>
+              )}
+            </>
+          )}
+        </Column>
+
+        {(showMembers || !activity) && (
+          <Column
+            title="Members"
+            state={!activity ? 'statePending' : members ? 'stateGood' : 'stateWarn'}
+            stateLabel={!activity ? 'Loading' : members ? `Last ${ACTIVITY_WEEKS} weeks` : 'Unavailable'}
+          >
+            {!activity ? (
+              <><div className={styles.bigValue}><Skeleton width="3em" /></div><div className={styles.fieldValue}><Skeleton width="9em" /></div></>
+            ) : !members ? (
+              <p className={styles.colText}>The membership scan didn't finish. Reload to try again.</p>
+            ) : (
+              <>
+                <div className={styles.bigValue}>{members.total.toLocaleString()}</div>
+                <div className={styles.fieldValue}>
+                  {members.recent} <span className={styles.fieldNote}>in the last 30 days</span>
+                </div>
+                {members.total > 0 && <WeekBars weeks={activity.weeks} />}
+              </>
+            )}
+          </Column>
+        )}
+      </div>
+
+      {catalog?.collections.length > 0 && (
+        <div className={`${styles.rows} ${styles.collections}`}>
+          {catalog.collections.map((c) => (
+            <div key={c.name} className={styles.collection}>
+              <div className={styles.collectionHead}>
+                <span className={styles.rowName}>{c.name}</span>
+                <span className={styles.rowMeta}>{c.count.toLocaleString()} records, {formatBytes(c.bytes)}</span>
+              </div>
+              {c.description && <p className={styles.collectionDesc}>{c.description}</p>}
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
   );
 }
 

@@ -375,7 +375,7 @@ function AppGrid({ apps, limit }) {
       </p>
       {shown === null ? <p className={styles.caption}>Reading the registry…</p>
         : shown.length === 0 ? <p className={styles.caption}>No apps are live right now.</p>
-        : <div className={styles.caseGrid}>{shown.map((a) => <AppTile key={a.appId} app={a} />)}</div>}
+          : <div className={styles.caseGrid}>{shown.map((a) => <AppTile key={a.appId} app={a} />)}</div>}
     </section>
   );
 }
@@ -426,8 +426,7 @@ export default function Landing() {
       <section className={styles.hero}>
         <h1 className={styles.h1}>Turn any dataset into an app for people and agents.</h1>
         <p className={styles.sub}>
-          Publish your data once. People get a website they can search; agents plug in the same
-          data through one MCP, and pay for it if you charge.
+          Publish your data once. People get a searchable website. Agents get a standard interface to discover and use it. You control access and monetization.
         </p>
         <div className={styles.ctas}>
           <a href="#start" className={styles.btnA}>Get started</a>

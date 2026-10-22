@@ -73,3 +73,11 @@ assert.equal(e.sales, 10_000n, 'x402 sale counted');
 assert.equal(e.total, 5_010_000n, 'faucet drip and self-send left out');
 
 console.log('fangorn self-check OK');
+
+// 5. Weekly membership buckets: oldest first, this week last, anything older dropped.
+{
+  const { joinsByWeek } = await import('./account.js');
+  const week = 302400n; // 7 days of 2-second blocks
+  const head = 10_000_000n;
+  assert.deepEqual(joinsByWeek([head, head - 1n, head - week, head - 3n * week - 5n, head - 99n * week], head, 4), [1, 0, 1, 2]);
+}

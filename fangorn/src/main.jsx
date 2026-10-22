@@ -29,8 +29,9 @@ const tree = privyAppId ? (
     appId={privyAppId}
     config={{
       appearance: {
-        theme: 'dark',
-        accentColor: '#a78bfa',
+        // ponytail: read once at load; a toggle mid-session reaches Privy on the next reload.
+        theme: document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light',
+        accentColor: '#2f7d55',
         logo: '/favicon.svg',
       },
       // Surfaces the privacy policy inside the login modal — the point where we
