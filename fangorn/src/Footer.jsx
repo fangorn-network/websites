@@ -26,7 +26,7 @@ export function Contact() {
   return (
     <section className={styles.cta} id="contact">
       <h2 className={styles.ctaH2}>Get in touch</h2>
-      <p className={styles.ctaP}>Get in touch with the team to disucss questions, ideas, or an app you want to build.</p>
+      <p className={styles.ctaP}>Get in touch with the team to discuss questions, ideas, or an app you want to build.</p>
       <form className={styles.form} onSubmit={send}>
         <label className={styles.label}>
           What's it about?
