@@ -194,6 +194,13 @@
 .labelSub { font: 8px var(--mono); fill: var(--dim); }
 .grip { stroke: var(--hi2); stroke-width: 2; stroke-linecap: round; }
 
+/* Dark: --hi lifts to a pale mint for text, which made the shell a glaring slab
+   with grips nearly invisible on it. Deep moss body, mint edge and grips instead,
+   and a screen darker than the page so it doesn't vanish into --night. */
+:global(:root[data-theme="dark"]) .shell { fill: var(--ledge); stroke: var(--hi); }
+:global(:root[data-theme="dark"]) .grip { stroke: var(--hi); stroke-opacity: 0.7; }
+:global(:root[data-theme="dark"]) .screen { background: #070d0a; border-color: var(--s3); }
+
 .tab { fill: var(--s2); stroke: var(--line2); stroke-width: 1.5; }
 /* Edge-connector contacts: the one warm colour, it's what says "plugs in". */
 .pin { stroke: var(--sun); stroke-width: 2.4; }

@@ -8,7 +8,7 @@
 // claiming an app (AppRegistry.registerApp) pays its first period and mints the app's
 // ERC-5643 token to the owner, and renewing extends it.
 import { useCallback, useEffect, useState } from 'react';
-import { parseAbiItem, parseEventLogs, toHex } from 'viem';
+import { parseAbiItem, parseEventLogs } from 'viem';
 import { getLogsInWindows } from '@fangorn-network/sdk/lib/contracts/logs.js';
 import { AppRegistryClient } from '@fangorn-network/sdk/lib/contracts/app-registry/index.js';
 import { toAppId } from '@fangorn-network/sdk/lib/config.js';
@@ -20,9 +20,6 @@ const APP_EXTENSION = 'https://fangorn.network/a2a/app/v1';
 
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
 
-// ERC-721 Transfer — the same signature for USDC's ERC-20 one; the contract address
-// tells them apart. An app's token id IS its app id.
-const TRANSFER = parseAbiItem('event Transfer(address indexed from, address indexed to, uint256 indexed tokenId)');
 const ERC20_TRANSFER = parseAbiItem('event Transfer(address indexed from, address indexed to, uint256 value)');
 
 const reader = (appId) => new AppRegistryClient(APP_REGISTRY_ADDRESS, appId, publicClient, publicClient, NETWORK.logWindow);
@@ -156,41 +153,41 @@ async function readApp(appId) {
  *   { appId, owner, name, uri, listed, site, price, suspended, expiresAt, expired, renewable }
  * (`uri` and `expiresAt` are null when their read failed).
  *
- * Found through the app tokens sent to the wallet: claiming mints one, so this sees
- * an app the moment it's claimed, before it has a card or a commit. A token sent on
- * since is filtered out by the getAppOwner check.
+ * The AppRegistry lists each owner's apps (`appsOf`), so this sees an app the moment
+ * it's claimed, before it has a card or a commit. App tokens never move, so the list
+ * is exact.
  *
  * `listed: false` is an app the explorer won't show: no card bound yet, or one that
  * doesn't load or doesn't name the app.
  */
 export async function readOwnedApps(address) {
-  const logs = await getLogsInWindows(publicClient, NETWORK.appRegistryFromBlock, undefined, (fromBlock, toBlock) =>
-    publicClient.getLogs({ address: APP_REGISTRY_ADDRESS, event: TRANSFER, args: { to: address }, fromBlock, toBlock }),
-  NETWORK.logWindow);
-  const ids = [...new Set(logs.reverse().map((l) => toHex(l.args.tokenId, { size: 32 })))];
-  const apps = await Promise.all(ids.map(readApp));
-  return apps.filter((a) => a.owner.toLowerCase() === address.toLowerCase());
+  const ids = await reader(undefined).appsOf(address);
+  return Promise.all([...ids].reverse().map(readApp));
 }
 
 /**
- * Every app the network shows: claimed (a mint from the zero address), with a card
- * that names it, and paid up. The landing page's live grid, newest first.
+ * Every app the network shows: claimed (the AppRegistry's list), with a card that
+ * names it, and paid up. The landing page's live grid, newest first.
  * ponytail: reads every app's card on each visit. Fine for dozens; past that, page
  * it or let the explorer index.
  */
 export async function readAllApps() {
-  const logs = await getLogsInWindows(publicClient, NETWORK.appRegistryFromBlock, undefined, (fromBlock, toBlock) =>
-    publicClient.getLogs({ address: APP_REGISTRY_ADDRESS, event: TRANSFER, args: { from: ZERO_ADDRESS }, fromBlock, toBlock }),
-  NETWORK.logWindow);
-  const apps = await Promise.all(logs.reverse().map((l) => readApp(toHex(l.args.tokenId, { size: 32 }))));
+  const ids = await reader(undefined).allApps();
+  const apps = await Promise.all([...ids].reverse().map(readApp));
   return apps.filter((a) => a.listed && !a.expired && !a.suspended);
 }
 
 /** readAllApps as state: null while loading, [] on failure (logged). */
+// One read per page load, shared by the landing page and #/explorer: navigating
+// between them must not rescan the registry.
+let allApps = null;
 export function useAllApps() {
   const [apps, setApps] = useState(null);
   useEffect(() => {
-    readAllApps().then(setApps).catch((err) => { console.warn('App registry read failed:', err); setApps([]); });
+    allApps ??= readAllApps().catch((err) => { console.warn('App registry read failed:', err); allApps = null; return []; });
+    let cancelled = false;
+    allApps.then((a) => !cancelled && setApps(a));
+    return () => { cancelled = true; };
   }, []);
   return apps;
 }

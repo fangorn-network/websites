@@ -11,7 +11,19 @@ import { useAuth } from './authContext.js';
 //
 // ⚠️ NOT FangornConfig: since 2026.10.20 that is still the old Arbitrum Sepolia
 // deployment, kept for apps claimed there. New apps live on Base Sepolia.
-export const NETWORK = BaseSepoliaConfig;
+//
+// The SDK's logWindow is 10k blocks, but its RPC (publicnode) takes 50k, and every
+// window is one eth_getLogs: a scan from appRegistryFromBlock is ~1M blocks and
+// growing ~43k a day, so 10k windows was ~100 sequential calls per scan, and the
+// public RPC answered with 429s. Other free RPCs are worse (base.org 200, thirdweb 1k,
+// drpc 10k). VITE_RPC_URL + VITE_LOG_WINDOW point the site at a keyed RPC.
+// ponytail: still a full scan per read; an indexer (or a keyed RPC with no range cap)
+// is the upgrade once the registry is older.
+export const NETWORK = {
+  ...BaseSepoliaConfig,
+  rpcUrl: import.meta.env?.VITE_RPC_URL || BaseSepoliaConfig.rpcUrl,
+  logWindow: BigInt(import.meta.env?.VITE_LOG_WINDOW || 50_000),
+};
 export const CHAIN = NETWORK.chain;
 
 // The AppRegistry owns what an "app" is, and since 2026.10.20 also the storage

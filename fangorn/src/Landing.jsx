@@ -118,7 +118,7 @@ function AccountButton({ children, className = styles.btnB }) {
       type="button"
       className={className}
       disabled={!ready}
-      onClick={() => { location.hash = '#/account'; login(); }}
+      onClick={login}
     >
       {children}
     </button>
@@ -360,23 +360,20 @@ function AppTile({ app }) {
   );
 }
 
-// Every live app in the AppRegistry. The landing page passes the list it already
-// read; the #/explorer page reads its own.
-function AppGrid({ apps, limit }) {
-  const shown = apps && limit ? apps.slice(0, limit) : apps;
+// Every live app in the AppRegistry: the #/explorer page.
+function AppGrid({ apps }) {
   return (
     <section className={styles.section} id="apps">
       <div className={styles.casesHead}>
         <h2 className={styles.h2}>Live on Fangorn</h2>
-        {limit && apps?.length > limit && <a href="#/explorer" className={styles.link}>All {apps.length} apps</a>}
       </div>
       <p className={styles.sectionSub}>
         Read live from the app registry. Each one is a site you can search, and an agent any{' '}
         <code className={styles.inline}>fangorn-mcp</code> can open by name.
       </p>
-      {shown === null ? <p className={styles.caption}>Reading the registry…</p>
-        : shown.length === 0 ? <p className={styles.caption}>No apps are live right now.</p>
-          : <div className={styles.caseGrid}>{shown.map((a) => <AppTile key={a.appId} app={a} />)}</div>}
+      {apps === null ? <p className={styles.caption}>Reading the registry…</p>
+        : apps.length === 0 ? <p className={styles.caption}>No apps are live right now.</p>
+          : <div className={styles.caseGrid}>{apps.map((a) => <AppTile key={a.appId} app={a} />)}</div>}
     </section>
   );
 }
@@ -438,7 +435,6 @@ export default function Landing() {
 
       <Start />
       <TwoDoors apps={apps} />
-      <AppGrid apps={apps} limit={6} />
       <UsedBy />
       <Bento />
 
