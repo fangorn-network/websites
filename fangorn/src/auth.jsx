@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import {
   usePrivy,
+  useLogin,
   useFundWallet,
   useWallets,
   useExportWallet,
@@ -21,7 +22,14 @@ const TAB_KEY = 'privy-tab-session';
  * component calls usePrivy() directly, so nothing throws when Privy is absent.
  */
 export function PrivyAuthBridge({ children }) {
-  const { ready, authenticated, user, login, logout } = usePrivy();
+  const { ready, authenticated, user, logout } = usePrivy();
+  // A login made in this tab lands on the account page. A session Privy restores
+  // on load isn't a login (wasAlreadyAuthenticated), so a refresh stays put.
+  const { login } = useLogin({
+    onComplete: ({ wasAlreadyAuthenticated }) => {
+      if (!wasAlreadyAuthenticated) location.hash = '#/account';
+    },
+  });
   const { fundWallet } = useFundWallet();
   const { wallets } = useWallets();
   const { exportWallet } = useExportWallet();

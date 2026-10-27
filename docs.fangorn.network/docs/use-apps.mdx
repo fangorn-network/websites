@@ -1,0 +1,166 @@
+---
+sidebar_position: 2
+title: Use Fangorn apps
+---
+
+# Use Fangorn apps with `fangorn-mcp`
+
+`fangorn-mcp` is one MCP server for every Fangorn app. It reads the list of apps from
+the chain and checks each app's agent card. It then gives your agent tools to search that
+app's data. Each app answers from its own MCP server (its Worker at `/mcp`), so nothing
+is downloaded and no browser runs. You don't need an account or an API key. You only need
+a wallet for apps that charge.
+
+You need **Node 20 or later**.
+
+## Install
+
+### Claude Code plugin (recommended)
+
+Inside Claude Code:
+
+```text
+/plugin marketplace add fangorn-network/westmarch
+/plugin install fangorn-index@fangorn
+```
+
+This adds the `fangorn` server and the [`fangorn-index` skill](/index-skill). The server
+reads `FANGORN_MCP_WALLET_KEY`, `FANGORN_MCP_MAX_PRICE` and `FANGORN_NETWORK` from the
+environment Claude Code starts in, so set them in your shell, not in a config file (see
+[Paying for private apps](#paying-for-private-apps)).
+
+The plugin leaves out `@huggingface/transformers`, so `find-apps` matches words. To rank
+apps by meaning, use the manual install below.
+
+:::note
+Run Claude Code from outside a `westmarch` checkout. Inside one, `npx -p @fangorn-network/westmarch`
+resolves to the local checkout, where `fangorn-mcp` isn't on the path, and the server
+reports "Connection closed".
+:::
+
+### Claude Code, by hand
+
+```bash
+claude mcp add fangorn -- \
+  npx -y -p @fangorn-network/westmarch -p @huggingface/transformers fangorn-mcp
+```
+
+Then run `/mcp` in Claude Code and check that `fangorn` shows as connected.
+
+- `@huggingface/transformers` lets `find-apps` rank apps by meaning. It's about 500 MB.
+  Leave out `-p @huggingface/transformers` for a lighter install, and `find-apps` matches
+  words instead. Searching inside an app is handled by the app's own server either way.
+- For apps still on Arbitrum Sepolia, add `-e FANGORN_NETWORK=arbitrumSepolia` before
+  `--`. Each server reads one network.
+
+### Any other MCP client
+
+```json
+{
+  "mcpServers": {
+    "fangorn": {
+      "command": "npx",
+      "args": ["-y", "-p", "@fangorn-network/westmarch", "-p", "@huggingface/transformers", "fangorn-mcp"],
+      "env": { "FANGORN_NETWORK": "baseSepolia" }
+    }
+  }
+}
+```
+
+### One app, no install
+
+Every app serves its own MCP endpoint at `<app url>/mcp`, and its agent card names it as
+`mcp`. You can add a single app as a remote server:
+
+```bash
+claude mcp add --transport http my-app https://my-app.example/mcp
+```
+
+### First start
+
+The first start downloads about 130 MB of packages, which takes about 10 seconds on a
+fast connection. If `fangorn` shows as failed the first time, reconnect it once the
+download finishes (`/mcp` → reconnect). Later starts use npm's cache and are ready in
+under a second.
+
+`~/.cache/fangorn-mcp` holds the chain logs the server has already read, so each start
+reads only the new blocks. It also holds the embedding model for `find-apps`, which loads
+on the first query. You can safely delete this folder; the next call reads the chain from
+the start again.
+
+## Use it
+
+Ask your agent for Fangorn apps, or call the tools yourself:
+
+1. **`list-apps`** lists the apps whose cards pass the check, with a description of each.
+   **`find-apps`** ranks those apps against a question.
+2. **`open-app`** with `{ "app": "kingsfoil" }` adds that app's tools, named
+   `<app>__<tool>`, such as `kingsfoil__search` and `kingsfoil__get`. Every call goes to the
+   MCP endpoint named in the app's card. An app whose card names no endpoint can't be opened.
+3. Call those tools. Most apps have:
+   - `describe`: what the app holds
+   - `search`: find records that match a query
+   - `get`: fetch one record
+   - `similar`: records like a given one
+   - `count`: count the values of a field
+   - `browse`: list records without a query
+
+   If your client doesn't pick up new tools, call **`call-app-tool`** with the app, the
+   tool and its arguments.
+
+For example:
+
+> List the Fangorn apps, open nimbus, and find tornado warnings in Oklahoma this week.
+
+## Paying for private apps
+
+Only the MCP server pays; the skill never does. The server reads its wallet from the
+environment Claude Code starts in, so export these first:
+
+```bash
+export FANGORN_MCP_WALLET_KEY=0x…   # private key of a wallet holding USDC
+export FANGORN_MCP_MAX_PRICE=0.10   # most it pays for one call, in USDC (default 0.10)
+export FANGORN_NETWORK=baseSepolia  # optional
+claude
+```
+
+When a private app's tool answers with x402's `PaymentRequired`, the server pays if the
+price is at or under `FANGORN_MCP_MAX_PRICE`, then retries the call. With no wallet set,
+nothing is paid and the agent gets the price back so it can tell you.
+
+The server can also buy a pass instead (pay once rather than per call) when the app sells
+one at or under `FANGORN_MCP_MAX_PASS`. The plugin doesn't pass that variable through yet,
+so the plugin only pays per call. Use the manual install to buy passes.
+
+:::warning
+The server pays anything under the cap without asking. Use a separate wallet with a small
+balance, not one you care about.
+:::
+
+## Settings
+
+| Env var / flag | Default | What it does |
+|---|---|---|
+| `FANGORN_NETWORK` | `baseSepolia` | The network whose apps to list and open: `baseSepolia` or `arbitrumSepolia`. |
+| `FANGORN_MCP_WALLET_KEY` | none | A private key (with or without `0x`) to pay x402 prices with, in USDC on the network each app names. If unset, a paid call returns its price instead. |
+| `FANGORN_MCP_MAX_PRICE` | `0.10` | The most it pays for one call, in USDC. |
+| `FANGORN_MCP_MAX_PASS` | never | The most it pays for a pass, in USDC. When a pass costs this or less, it buys the pass instead of paying per call. |
+| `FANGORN_LOG_WINDOW` | the network's | Blocks read per chain request. Only for a private RPC that accepts wider ranges than the public one. |
+| `--from-block <n>` | registry deploy block | The block to start the app scan from, for other deployments. |
+| `FANGORN_MCP_TRACE=1` | off | Print step timings to stderr. |
+
+## Troubleshooting
+
+- **`list-apps` hangs for minutes:** `@fangorn-network/sdk` is older than `2026.10.20-dev`.
+  Later versions read each network's log window from its config.
+- **`list-apps` is empty but the app is live:** the app is on the other network. Set `FANGORN_NETWORK`.
+- **`... is not a function` right after an upgrade:** the server is still running the old
+  code. Reconnect it.
+- **`embedder unavailable, searching by words`:** add `-p @huggingface/transformers`.
+- **`... has no MCP server`:** the app's card names no `mcp` endpoint, so there's nothing
+  to call. The app has to deploy its Worker.
+- **`unverified: N` in `list-apps`:** those apps' cards didn't match their on-chain binding,
+  so they're hidden.
+
+To run the server from source, see
+[`docs/mcp.md`](https://github.com/fangorn-network/westmarch/blob/main/docs/mcp.md) in the westmarch repo.

@@ -5,6 +5,15 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Fangorn</title>
+    <script>
+      // Before first paint, so a dark-mode visitor never sees a light flash.
+      {
+        let saved;
+        try { saved = localStorage.theme; } catch {}
+        document.documentElement.dataset.theme =
+          saved || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+      }
+    </script>
   </head>
   <body>
     <div id="root"></div>

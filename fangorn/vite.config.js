@@ -11,14 +11,12 @@ import react from '@vitejs/plugin-react'
 //   PINATA_UPLOAD_RETRIES — module scope in lib/providers/storage/utils.js.
 //     `Number(undefined ?? 6)` keeps the SDK's own default of 6.
 //
-//   FANGORN_LOG_WINDOW — inside getStateCommittedLogs, which windows eth_getLogs.
-//     directory.js reads from block 0, and the SDK's 1000-block default would make that
-//     ~300,000 sequential RPC calls against an Arbitrum Sepolia head near block 300,000,000.
-//     10M is the most the public endpoint allows per StateCommitted query (it rejected
-//     the full range from 2026-10: "only 10000000 are allowed"), so ~32 calls, ~5s.
+//   FANGORN_LOG_WINDOW — read by the SDK's getLogsInWindows. `undefined` keeps each
+//     network's own window (AppConfig.logWindow: 10k blocks on Base Sepolia). A fixed
+//     value here would override it, and anything past the RPC's cap fails every scan.
 const SDK_ENV_SHIM = {
   'process.env.PINATA_UPLOAD_RETRIES': 'undefined',
-  'process.env.FANGORN_LOG_WINDOW': '"10000000"',
+  'process.env.FANGORN_LOG_WINDOW': 'undefined',
 }
 
 // https://vite.dev/config/
