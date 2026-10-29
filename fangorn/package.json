@@ -10,7 +10,7 @@
     "test": "node src/fangorn.test.mjs"
   },
   "dependencies": {
-    "@fangorn-network/sdk": "2026.10.26-dev",
+    "@fangorn-network/sdk": "2026.10.28",
     "@privy-io/react-auth": "^3.33.1",
     "buffer": "^6.0.3",
     "multiformats": "^14.0.0",

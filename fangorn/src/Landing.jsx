@@ -48,30 +48,27 @@ export FANGORN_MCP_MAX_PRICE=0.10   # most it pays per call, in USDC`;
 // The tools fangorn-mcp's open-app adds for most apps (see westmarch docs/mcp.md).
 const TOOLS = ['search', 'get', 'similar', 'browse'];
 
+// What each side gets out of Fangorn. Outcomes, not steps: no order implied.
 const FEATURES = [
   {
-    title: 'Fuse & Embed Any Dataset',
-    body: 'Combine datasets into one knowledge graph, generate embeddings, and publish it as an app: a website people search, and tools agents call.',
+    who: 'Publishers',
+    title: 'Publish Once, Open Anywhere',
+    body: 'Fangorn apps natively support interfaces for both humans and agents; a website searchable by meaning and a set of tools callable by an agent.',
   },
   {
-    title: 'Install One MCP, Access Every App',
-    body: 'One MCP server lists every app registered on chain, opens the one an agent needs and relays its tools. Nothing to download, no browser to drive.',
+    who: 'People',
+    title: 'Search and Discovery without Surveillance',
+    body: 'Search for data and discover apps without advertisements or surveillance. Fangorn makes it possible to be your own curator, owning your taste and preferences instead of giving it away for free.',
   },
   {
-    title: 'Get Paid Per Question',
-    body: 'Keep an app free, charge per record, or sell a pass. Agents pay automatically with x402, and the USDC goes straight to you.',
+    who: 'Everyone',
+    title: 'Programmable Payments',
+    body: 'Keep data free, charge per record, or sell a pass; agents pay with x402, and the USDC goes straight to the app owners and data publishers.',
   },
   {
-    title: 'Answers You Can Check',
-    body: 'Every app is registered on chain as an ERC-8004 agent and its records are committed there, so anyone can check a result is what was published.',
-  },
-  {
-    title: 'Taste That Travels',
-    body: 'Likes and dislikes live in one file on your machine, not in any app. Teach it in one app and it ranks the next.',
-  },
-  {
-    title: 'Apps That Improve Themselves',
-    body: 'Write the questions your app must answer. Each run fixes one weakness, proves it against them, and opens a pull request for you to merge.',
+    who: 'Builders',
+    title: 'Agent-Ready from Day One',
+    body: 'Runs on your own Cloudflare. Fangorn adds registration, payments, and an interface every connected agent already speaks.',
   },
 ];
 
@@ -242,7 +239,7 @@ function Start() {
     <section className={styles.section} id="start">
       <div className={styles.doors}>
         <div className={styles.door}>
-          <h2 className={styles.doorTitle}>Use apps</h2>
+          <h2 className={styles.doorTitle}>Use Apps</h2>
           <p className={styles.doorBody}>Give your agent every app on Fangorn. Run these inside Claude Code:</p>
           <div className={styles.terminal}><Cmd text={USE_CMD} /></div>
           <p className={styles.doorNext}>
@@ -250,8 +247,8 @@ function Start() {
           </p>
         </div>
         <div className={styles.door}>
-          <h2 className={styles.doorTitle}>Publish an app</h2>
-          <p className={styles.doorBody}>Turn your data into an app people and agents can use:</p>
+          <h2 className={styles.doorTitle}>Build Apps</h2>
+          <p className={styles.doorBody}>Build apps that both people and agents can use:</p>
           <div className={styles.terminal}><Cmd text={PUBLISH_CMD} /></div>
           <p className={styles.doorNext}>
             Create an account to claim your app’s name, then ask Claude: <q>{BUILD_PROMPT}</q>
@@ -261,6 +258,9 @@ function Start() {
       </div>
 
       <div className={styles.more}>
+        <p className={styles.doorNext}>
+          Own data but not a developer? <a href="#contact" className={styles.link}>Talk to us →</a>
+        </p>
         <details className={styles.disclose}>
           <summary>Paying for private apps</summary>
           <p>
@@ -287,6 +287,7 @@ function Start() {
 function TwoDoors({ apps }) {
   const [sel, setSel] = useState(0);
   const app = apps?.[sel];
+  if (apps?.length === 0) return null;
   return (
     <section className={styles.section}>
       <h2 className={styles.h2}>One app. Two front doors.</h2>
@@ -298,7 +299,7 @@ function TwoDoors({ apps }) {
         <Tabs items={apps.slice(0, 4).map(nameOf)} value={sel} onChange={setSel} />
       )}
       {!app ? (
-        <p className={styles.caption}>{apps === null ? 'Reading the registry…' : 'No apps are live right now.'}</p>
+        <p className={styles.caption}>Reading the registry…</p>
       ) : (
         <div className={styles.split}>
           <div className={styles.splitHub}>
@@ -325,12 +326,124 @@ function TwoDoors({ apps }) {
   );
 }
 
-function Bento() {
+// What Fangorn stands for (see About). Sits right under the doors, so it's the
+// first thing past the install commands.
+const PILLARS = [
+  {
+    title: 'Data belongs to no app',
+    body: 'Publishers keep their own data. An app chooses what to present, so anyone can build a new app on data that’s already published.',
+  },
+  {
+    title: 'Answers you can check',
+    body: 'Every app is registered on chain as an ERC-8004 agent and its records are committed there, so anyone can check a result is what was published.',
+  },
+  {
+    title: 'Your taste is yours',
+    body: 'Your preferences, likes, dislikes, and intent never leave your machine. Queries are executed locally, letting you own your own taste and drive your own curation. No platform decides what you see.',
+  },
+];
+
+// The question every developer asks first. Claims here must stay true to what
+// westmarch ships today.
+const VERSUS = [
+  {
+    title: 'vs. writing your own MCP server',
+    body: 'A server per source means one integration per source. With Fangorn your agent installs one MCP, finds apps in the on-chain registry and opens them by name. Publishers write no integration code.',
+  },
+  {
+    title: 'vs. an API directory',
+    body: 'A directory lists endpoints that someone else keeps running. A Fangorn app holds the data itself: committed on chain, served from the publisher’s own storage, and priced with x402.',
+  },
+  {
+    title: 'vs. your own vector DB',
+    body: 'Doing it yourself means crawling, cleaning and embedding every source, then keeping it up to date. Each app ships its own embeddings and its publisher keeps them current. You query the result.',
+  },
+];
+
+// Kinds of app, not live demos: the real ones are in "Live on Fangorn" and "Coming Soon".
+const USE_CASES = [
+  {
+    title: 'Memory your agent owns',
+    body: 'An agent publishes its notes and findings as data of its own. It can read them back in another session, on another device or under another model, and share them with other agents. The memory is held by your key, not by the platform that runs the agent.',
+  },
+  {
+    title: 'Public records people can actually use',
+    body: 'Minutes, filings and reports that the law requires to be published, turned into a site residents can search by meaning and tools their agents can call.',
+  },
+  {
+    title: 'Catalogs from anyone',
+    body: 'Films, music, books and courses from independent publishers, each setting its own price. Apps bring them together, and your agent searches them all by your taste, not a platform’s.',
+  },
+];
+
+// Side-by-side columns on one rule, rather than a card grid.
+function Steps({ title, sub, items }) {
   return (
     <section className={styles.section}>
-      <h2 className={styles.h2}>One stack, from raw data to agent</h2>
-      <div className={styles.bento}>
-        {FEATURES.map((f) => (
+      <h2 className={styles.h2}>{title}</h2>
+      {sub && <p className={styles.sectionSub}>{sub}</p>}
+      <ol className={styles.steps}>
+        {items.map((f) => (
+          <li key={f.title} className={styles.step}>
+            {f.who && <span className={styles.stepWho}>{f.who}</span>}
+            <h3 className={styles.cardTitle}>{f.title}</h3>
+            <p className={styles.cardBody}>{f.body}</p>
+          </li>
+        ))}
+      </ol>
+    </section>
+  );
+}
+
+// Asymmetric: one statement on the left, the principles as a ruled list on the right.
+function Principles() {
+  return (
+    <section className={`${styles.section} ${styles.principles}`}>
+      <div>
+        <h2 className={styles.h2}>Your data, your rules</h2>
+        <p className={styles.statement}>
+          A platform stores your data, decides which version is current, who gets to read it
+          and what you see. Fangorn does all of that without asking you to trust anyone.
+        </p>
+        <a href="#/about" className={styles.moreLink}>Why we built it →</a>
+      </div>
+      <ul className={styles.rules}>
+        {PILLARS.map((f) => (
+          <li key={f.title}>
+            <h3 className={styles.cardTitle}>{f.title}</h3>
+            <p className={styles.cardBody}>{f.body}</p>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+// Label left, answer right, one rule per row.
+function Versus() {
+  return (
+    <section className={styles.section}>
+      <h2 className={styles.h2}>Why not just…</h2>
+      <dl className={styles.versus}>
+        {VERSUS.map((f) => (
+          <div key={f.title} className={styles.versusRow}>
+            <dt className={styles.versusLabel}>{f.title}</dt>
+            <dd className={styles.cardBody}>{f.body}</dd>
+          </div>
+        ))}
+      </dl>
+    </section>
+  );
+}
+
+function Cards({ title, sub, items }) {
+  return (
+    <section className={styles.section}>
+      <h2 className={styles.h2}>{title}</h2>
+      {sub && <p className={styles.sectionSub}>{sub}</p>}
+      {/* No orphan cards: 3 across when the count divides by 3, else 2 across. */}
+      <div className={styles.bento} style={{ '--cols': items.length % 3 ? 2 : 3 }}>
+        {items.map((f) => (
           <div key={f.title} className={styles.card}>
             <h3 className={styles.cardTitle}>{f.title}</h3>
             <p className={styles.cardBody}>{f.body}</p>
@@ -401,7 +514,7 @@ const ADOPTERS = [
 function UsedBy() {
   return (
     <section className={styles.section} id="used-by">
-      <h2 className={styles.h2}>Coming Soon</h2>
+      <h2 className={styles.h2}>Coming soon</h2>
       <p className={styles.sectionSub}>Early teams putting real records on Fangorn.</p>
       <div className={styles.caseGrid}>
         {ADOPTERS.map((a) => (
@@ -422,9 +535,9 @@ export default function Landing() {
   return (
     <main>
       <section className={styles.hero}>
-        <h1 className={styles.h1}>Turn any dataset into an app for people and agents.</h1>
+        <h1 className={styles.h1}>Proof over permission.</h1>
         <p className={styles.sub}>
-          Publish your data once. People get a searchable website. Agents get a standard interface to discover and use it. You control access and monetization.
+          Publish data once. Anyone can build apps on it for people and agents, and you set the price instead of getting crawled for free.
         </p>
         <div className={styles.ctas}>
           <a href="#start" className={styles.btnA}>Get started</a>
@@ -434,9 +547,12 @@ export default function Landing() {
       </section>
 
       <Start />
+      <Steps title="Publish. Get found. Get paid." items={FEATURES} />
+      <div className={styles.bandNight}><Principles /></div>
       <TwoDoors apps={apps} />
+      <div className={styles.band}><Versus /></div>
+      <Cards title="What you can build" items={USE_CASES} />
       <UsedBy />
-      <Bento />
 
       {/* <section className={`${styles.section} ${styles.coda}`}>
         <h2 className={styles.h2}>Every view, rooted on-chain.</h2>

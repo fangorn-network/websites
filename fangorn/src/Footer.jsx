@@ -26,7 +26,7 @@ export function Contact() {
   return (
     <section className={styles.cta} id="contact">
       <h2 className={styles.ctaH2}>Get in touch</h2>
-      <p className={styles.ctaP}>Get in touch with the team to discuss questions, ideas, or an app you want to build.</p>
+      <p className={styles.ctaP}>Questions, ideas, or an app you want to build? Talk to the team.</p>
       <form className={styles.form} onSubmit={send}>
         <label className={styles.label}>
           What's it about?
@@ -35,7 +35,7 @@ export function Contact() {
           </select>
         </label>
         <label className={styles.label}>
-          Your name <span className={styles.optional}>(optional)</span>
+          <span>Your name <span className={styles.optional}>(optional)</span></span>
           <input name="name" className={styles.control} autoComplete="name" />
         </label>
         <label className={styles.label}>
@@ -56,7 +56,7 @@ export function Footer() {
   return (
     <footer className={styles.footer}>
       <span className={styles.fl}>Fangorn Network</span>
-      <span className={styles.fc}>Data your agent can use</span>
+      <span className={styles.fc}>Proof over permission</span>
       <div className={styles.flinks}>
         <a href="https://deepwiki.com/fangorn-network/fangorn" className={styles.flink}>Docs</a>
         <a href="https://github.com/fangorn-network" className={styles.flink}>GitHub</a>

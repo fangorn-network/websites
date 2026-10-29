@@ -35,6 +35,7 @@ export default function Nav() {
     <nav className={styles.nav}>
       <a href="#" className={styles.logo}>Fangorn</a>
       <div className={styles.right}>
+        <a href="#/about" className={styles.link}>About</a>
         <a href="#/explorer" className={styles.link}>Explorer</a>
         <a href="https://deepwiki.com/fangorn-network/fangorn" className={styles.link}>Docs</a>
         <a href="#contact" className={styles.link}>Contact</a>
