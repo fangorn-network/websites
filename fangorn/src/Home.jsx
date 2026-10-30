@@ -230,10 +230,27 @@ function nextStep(apps) {
 // ── The hub ─────────────────────────────────────────────────────────────────
 
 const SDK_INSTALL = 'npm i -g @fangorn-network/sdk';
-// Slash commands, typed inside Claude Code rather than the terminal. The builder
-// plugin carries the owner's skills: fangorn-app (build) and fangorn-improve.
-const PLUGIN_CMD = `/plugin marketplace add fangorn-network/westmarch
-/plugin install fangorn-builder@fangorn`;
+const GETTING_STARTED_PATHS = {
+  claude: {
+    label: 'With Claude Code',
+    agent: 'Claude Code',
+    pluginCommand: `/plugin marketplace add fangorn-network/westmarch
+/plugin install fangorn-builder@fangorn`,
+    pluginInstructions: 'Run these inside Claude Code.',
+    buildTitle: 'Ask Claude to build it',
+  },
+  codex: {
+    label: 'With Codex',
+    agent: 'Codex',
+    pluginCommand: `codex plugin marketplace add fangorn-network/westmarch
+codex plugin add fangorn-builder@fangorn`,
+    pluginInstructions: 'Run these in your terminal from the project root.',
+    buildTitle: 'Ask Codex to build it',
+  },
+  manual: {
+    label: 'Deploy to Cloudflare',
+  },
+};
 const BUILD_PROMPT = 'Build a Fangorn app from <your data>.';
 // Cloudflare's deploy button: it copies westmarch's template into the owner's GitHub, makes
 // the bucket and deploys the Worker, which builds itself with `westmarch build`.
@@ -282,15 +299,16 @@ function CopyKey({ exportKey }) {
   );
 }
 
-// Two ways in, one wallet either way: the CLI signs as it (the key exported above goes
+// Three ways in, one wallet: the CLI signs as it (the key exported above goes
 // into `fangorn init`), so the apps claimed here are the ones published to.
 function GettingStarted({ wallet, exportKey, appName }) {
   const [path, setPath] = useState('claude');
   const app = appName ?? '<your-app>';
+  const method = GETTING_STARTED_PATHS[path];
   return (
     <>
       <div className={styles.btnRow} role="tablist">
-        {[['claude', 'With Claude Code'], ['manual', 'Deploy to Cloudflare']].map(([id, label]) => (
+        {Object.entries(GETTING_STARTED_PATHS).map(([id, { label }]) => (
           <button
             key={id}
             type="button"
@@ -318,7 +336,7 @@ function GettingStarted({ wallet, exportKey, appName }) {
           <CopyKey exportKey={exportKey} />
           <p className={styles.colText}>
             Anyone with this key controls your wallet. Paste it only into your own terminal,
-            never into a chat (including with Claude), a website or an email.
+            never into a chat (including your AI agent), a website or an email.
           </p>
           <details className={styles.more}>
             <summary>Verify app ownership</summary>
@@ -330,18 +348,19 @@ function GettingStarted({ wallet, exportKey, appName }) {
             </p>
           </details>
         </li>
-        {path === 'claude' ? (
+        {method.agent ? (
           <>
             <li>
-              <div className={styles.cardTitle}>Add the builder skills to Claude Code</div>
-              <Cmd text={PLUGIN_CMD} />
+              <div className={styles.cardTitle}>Add the builder skills to {method.agent}</div>
+              <Cmd text={method.pluginCommand} />
               <p className={styles.colText}>
-                Run these inside Claude Code. <b>fangorn-app</b> builds and registers your app;{' '}
+                {method.pluginInstructions}{' '}
+                <b>fangorn-app</b> builds and registers your app;{' '}
                 <b>fangorn-improve</b> keeps it getting better, one pull request at a time.
               </p>
             </li>
             <li>
-              <div className={styles.cardTitle}>Ask Claude to build it</div>
+              <div className={styles.cardTitle}>{method.buildTitle}</div>
               <Cmd text={BUILD_PROMPT} />
               <p className={styles.colText}>
                 You'll need a free Cloudflare account for the site. Your app shows up on this page
