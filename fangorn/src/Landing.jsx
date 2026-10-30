@@ -402,8 +402,9 @@ function Principles() {
       <div>
         <h2 className={styles.h2}>Your data, your rules</h2>
         <p className={styles.statement}>
-          A platform stores your data, decides which version is current, who gets to read it
-          and what you see. Fangorn does all of that without asking you to trust anyone.
+          When you let a platform store your data, you trust it to decide what’s current, who can
+          read it and what gets seen, and it can change those rules whenever it likes. Fangorn
+          splits those jobs apart, so no one holds all of them.
         </p>
         <a href="#/about" className={styles.moreLink}>Why we built it →</a>
       </div>
@@ -537,7 +538,8 @@ export default function Landing() {
       <section className={styles.hero}>
         <h1 className={styles.h1}>Proof over permission.</h1>
         <p className={styles.sub}>
-          Publish data once. Anyone can build apps on it for people and agents, and you set the price instead of getting crawled for free.
+          Platforms decide what you see and sell what you search for. On Fangorn you publish data once,
+          anyone can build apps on it for people and agents, and your taste stays yours.
         </p>
         <div className={styles.ctas}>
           <a href="#start" className={styles.btnA}>Get started</a>

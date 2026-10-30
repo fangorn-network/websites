@@ -16,11 +16,14 @@
   z-index: -1;
   background:
     radial-gradient(circle at 50% 108%, color-mix(in srgb, var(--sun) 30%, transparent) 0 7%, transparent 22%),
+    /* Three ring periods that never line up, so the spacing wanders like real
+       growth rings instead of ticking like a ruler. */
     repeating-radial-gradient(ellipse 118% 100% at 50% 108%,
-      transparent 0 30px,
-      color-mix(in srgb, var(--hi) 16%, transparent) 30px 31.5px,
-      transparent 31.5px 52px,
-      color-mix(in srgb, var(--hi) 9%, transparent) 52px 53px);
+      transparent 0 37px, color-mix(in srgb, var(--hi) 15%, transparent) 37px 38.5px),
+    repeating-radial-gradient(ellipse 118% 100% at 50% 108%,
+      transparent 0 59px, color-mix(in srgb, var(--hi) 8%, transparent) 59px 60px),
+    repeating-radial-gradient(ellipse 118% 100% at 50% 108%,
+      transparent 0 97px, color-mix(in srgb, var(--hi) 11%, transparent) 97px 98px);
   -webkit-mask-image: linear-gradient(to bottom, transparent, #000 30%, #000 75%, transparent);
   mask-image: linear-gradient(to bottom, transparent, #000 30%, #000 75%, transparent);
 }
@@ -260,7 +263,7 @@
   --text: #e3ece5;
   --sub: #a2b6a9;
   --line: #2c4235;
-  --hi: #5fbf8a;
+  --hi: #4f9a72;
   color: var(--text);
 }
 :global(:root[data-theme="dark"]) .bandNight { background: var(--s2); --line: #35503f; }
