@@ -27,3 +27,5 @@ dist-ssr
 **/.claude
 
 tmp/
+
+/AGENTS.md
