@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
-import { formatEther, formatUnits, parseEther, parseUnits } from 'viem';
+import { formatEther, formatUnits, isAddress, parseEther } from 'viem';
 import styles from './Home.module.css';
 import { useAuth } from './authContext';
 import { useBalances } from './fangorn';
 import { truncate, explorer, formatBytes } from './format';
-import { useOwnedApps, useActivity, readAppOwner, isCardUrl, cardUrlOf, ACTIVITY_WEEKS } from './account';
+import { useOwnedApps, useActivity, readAppOwner, isCardUrl, cardUrlOf } from './account';
 
 const INSTALL_CMD = 'npm i @fangorn-network/sdk';
 const DOCS_URL = 'https://deepwiki.com/fangorn-network/fangorn';
@@ -14,8 +14,7 @@ const DOCS_URL = 'https://deepwiki.com/fangorn-network/fangorn';
 const LOW_ETH = parseEther('0.002');
 
 // Public Base Sepolia faucets. We don't run one: it was drainable infra to maintain,
-// and these cover the only thing a new owner needs — gas (and USDC if the app fee
-// ever goes above zero).
+// and these cover what a new publisher needs — gas, and USDC to buy records.
 const FAUCETS = [
   { label: 'ETH (Coinbase)', url: 'https://portal.cdp.coinbase.com/products/faucet' },
   { label: 'USDC (Circle)', url: 'https://faucet.circle.com' },
@@ -34,7 +33,6 @@ function friendlyError(err) {
   if (/rejected|denied/i.test(text)) return 'Transaction cancelled.';
   if (/insufficient funds/i.test(text)) return 'Not enough Base Sepolia ETH for gas. Grab some from a faucet and try again.';
   if (/AppAlreadyRegistered|AlreadyClaimed/i.test(text)) return 'That name is taken. Pick another.';
-  if (/cannot be renewed until/i.test(text)) return 'Renewal opens when less than one period is left.';
   if (/max fee per gas less than block base fee/i.test(text)) {
     return 'Network fees moved while confirming. Try again.';
   }
@@ -205,16 +203,7 @@ function Summary({ wallet, balances, earnings, onFund, funding, refreshBalances 
         stateLabel={earnings?.error ? 'Unavailable' : earnings ? 'All time' : 'Loading'}
       >
         <div className={styles.bigValue}>{earnings?.error ? '—' : earnings ? usdc(earnings.total) : <Skeleton width="8em" />}</div>
-        {earnings && !earnings.error && (
-          <>
-            <div className={styles.fieldValue}>
-              {usdc(earnings.total - earnings.sales)} <span className={styles.fieldNote}>from memberships</span>
-            </div>
-            <div className={styles.fieldValue}>
-              {usdc(earnings.sales)} <span className={styles.fieldNote}>from record sales</span>
-            </div>
-          </>
-        )}
+        <div className={styles.fieldNote}>From record sales</div>
       </Column>
     </div>
   );
@@ -255,8 +244,7 @@ const BUILD_PROMPT = 'Build a Fangorn app from <your data>.';
 // Cloudflare's deploy button: it copies westmarch's template into the owner's GitHub, makes
 // the bucket and deploys the Worker, which builds itself with `westmarch build`.
 const DEPLOY_URL = 'https://deploy.workers.cloudflare.com/?url=https://github.com/fangorn-network/westmarch/tree/main/template';
-const PUBLISH_CMD = (app) => `fangorn set-app ${app}
-fangorn repo init items
+const PUBLISH_CMD = `fangorn repo init items
 fangorn commit items.json -m "first items"
 fangorn push`;
 
@@ -301,9 +289,8 @@ function CopyKey({ exportKey }) {
 
 // Three ways in, one wallet: the CLI signs as it (the key exported above goes
 // into `fangorn init`), so the apps claimed here are the ones published to.
-function GettingStarted({ wallet, exportKey, appName }) {
+function GettingStarted({ wallet, exportKey }) {
   const [path, setPath] = useState('claude');
-  const app = appName ?? '<your-app>';
   const method = GETTING_STARTED_PATHS[path];
   return (
     <>
@@ -388,7 +375,7 @@ function GettingStarted({ wallet, exportKey, appName }) {
             </li>
             <li>
               <div className={styles.cardTitle}>Publish records</div>
-              <Cmd text={PUBLISH_CMD(app)} />
+              <Cmd text={PUBLISH_CMD} />
               <p className={styles.colText}>
                 The site indexes them within 5 minutes. The repo's README shows the record format.
               </p>
@@ -400,28 +387,15 @@ function GettingStarted({ wallet, exportKey, appName }) {
   );
 }
 
-const formatDate = (secs) => new Date(Number(secs) * 1000).toLocaleDateString();
-
-// An app whose subscription runs out within this many days is flagged in its row.
-const EXPIRING_DAYS = 7;
-
 // The one word the closed row leads with. Anything that stops the app working wins,
 // so it shows without opening the row.
 // A field whose read failed is null, and says so rather than guessing.
 function appStatus(app) {
   if (app.suspended) return { warn: true, label: 'Taken down' };
-  if (app.expired) return { warn: true, label: app.expiresAt ? 'Expired' : 'Cancelled' };
   if (app.uri === '') return { warn: true, label: 'Not deployed' };
-  if (app.uri == null || app.expiresAt == null) return { warn: false, label: 'Status unknown' };
-  if (Number(app.expiresAt) * 1000 - Date.now() < EXPIRING_DAYS * 86400_000) return { warn: true, label: 'Expiring soon' };
+  if (app.uri == null) return { warn: false, label: 'Status unknown' };
   return { warn: false, label: 'Live' };
 }
-
-// When the subscription runs to, for display: 0 is a cancelled one, null an unread one.
-const paidUntil = (app) => (app.expiresAt == null ? '—' : app.expiresAt ? formatDate(app.expiresAt) : 'Cancelled');
-
-// Free to read: no record price and no pass on its card, so nothing to earn or show.
-const isPaid = (app) => app.price != null || app.pass != null;
 
 // What a reader pays, in one phrase: per record, or for a pass.
 const priceLabel = (app) =>
@@ -444,21 +418,22 @@ function AppLine({ app }) {
       <span className={styles.rowName}>{app.name ?? truncate(app.appId, 10, 6)}</span>
       <span className={status.warn ? styles.badgeWarn : styles.badge}>{status.label}</span>
       <span className={styles.rowMeta}>
-        {app.expiresAt ? `Paid until ${formatDate(app.expiresAt)}` : app.expiresAt === 0n ? 'Cancelled' : ''}
-        {app.expiresAt != null && ' · '}{priceLabel(app)}
+        {app.curator?.repo ? `Repo ${app.curator.repo} · ` : ''}{priceLabel(app)}
       </span>
       <svg className={styles.rowGo} viewBox="0 0 24 24" aria-hidden="true"><path d="M10 7l5 5-5 5" /></svg>
     </a>
   );
 }
 
-// One owned app's page: everything an owner does with it — renew, see where its
-// storage goes and what it charges, deploy, bind the agent card the explorer lists
-// it by. Accepting other publishers stays in the CLI (`fangorn app accept`).
-function AppPage({ app, earned, onRenew, onSetCard }) {
+// One owned app's page: everything an owner does with it — point it at its repo of
+// citations and its payout address, see what it charges, deploy, bind the agent card
+// the explorer lists it by.
+function AppPage({ app, onSetCard, onSetRepo, onSetPayout }) {
   const worker = app.name ? app.name.replace(/[._]/g, '-') : '<your-app>';
   const [busy, setBusy] = useState(null);
   const [cardUrl, setCardUrl] = useState(app.uri ?? '');
+  const [repo, setRepo] = useState(app.curator?.repo ?? '');
+  const [payout, setPayout] = useState(app.payout ?? '');
   const [error, setError] = useState(null);
   const status = appStatus(app);
 
@@ -493,18 +468,29 @@ function AppPage({ app, earned, onRenew, onSetCard }) {
       </section>
 
       <div className={styles.accountPanel}>
-        <Column
-          title="Subscription"
-          state={app.expiresAt == null ? 'statePending' : app.expired || app.suspended || status.label === 'Expiring soon' ? 'stateWarn' : 'stateGood'}
-          stateLabel={app.expiresAt == null ? 'Unread' : app.suspended ? 'Taken down' : app.expired ? 'Expired' : status.label === 'Expiring soon' ? 'Expiring soon' : 'Paid'}
-        >
-          <Field label={app.expired ? 'Expired' : 'Paid until'}>
-            <div className={styles.bigValue}>{paidUntil(app)}</div>
-            {app.renewable && (
-              <button className={styles.ghostBtn} type="button" disabled={!!busy} onClick={() => run('renew', () => onRenew(app.appId))}>
-                {busy === 'renew' ? 'Renewing…' : 'Renew'}
-              </button>
-            )}
+        <Column title="App" state="stateGood" stateLabel="On chain">
+          <Field label="Repo of citations">
+            <input className={styles.input} value={repo} onChange={(event) => setRepo(event.target.value)} placeholder="picks" aria-label="Repo of citations" />
+            <button
+              className={styles.ghostBtn}
+              type="button"
+              disabled={!!busy || !repo.trim() || repo.trim() === app.curator?.repo}
+              onClick={() => run('repo', () => onSetRepo(app.appId, repo.trim()))}
+            >
+              {busy === 'repo' ? 'Signing…' : 'Save'}
+            </button>
+          </Field>
+          <Field label="Payout address">
+            <input className={styles.input} value={payout} onChange={(event) => setPayout(event.target.value)} placeholder="0x…" aria-label="Payout address" />
+            <button
+              className={styles.ghostBtn}
+              type="button"
+              disabled={!!busy || !isAddress(payout.trim()) || payout.trim().toLowerCase() === app.payout?.toLowerCase()}
+              onClick={() => run('payout', () => onSetPayout(app.appId, payout.trim()))}
+            >
+              {busy === 'payout' ? 'Signing…' : 'Save'}
+            </button>
+            <p className={styles.colText}>Where the app's referral share of a sale is paid.</p>
           </Field>
         </Column>
 
@@ -522,16 +508,6 @@ function AppPage({ app, earned, onRenew, onSetCard }) {
           )}
         </Column>
 
-        {isPaid(app) && (
-          <Column title="Earned" state={earned == null ? 'statePending' : 'stateGood'} stateLabel={earned == null ? 'Loading' : 'Memberships'}>
-            <div className={styles.bigValue}>{earned == null ? '…' : usdc(earned)}</div>
-            {/* A sale's transfer doesn't name its app, so sales are wallet-wide. */}
-            <p className={styles.colText}>
-              From reader memberships. Record and pass sales are paid straight to your wallet
-              without naming the app, so the dashboard counts them for all your apps together.
-            </p>
-          </Column>
-        )}
       </div>
 
       <Activity app={app} />
@@ -597,38 +573,19 @@ function ago(secs) {
 // The Worker's cron indexes every 5 minutes. An hour without a run means it's failing.
 const STALE_SECS = 3600;
 
-// Memberships per week, one bar each, this week on the right. A bar's title names its
-// count, and the whole run is read out for screen readers.
-function WeekBars({ weeks }) {
-  const max = Math.max(...weeks, 1);
-  const when = (i) => (i === weeks.length - 1 ? 'this week' : `${weeks.length - 1 - i} weeks ago`);
-  return (
-    <figure className={styles.barsFig}>
-      <div className={styles.bars} role="img" aria-label={`Memberships per week, oldest first: ${weeks.join(', ')}`}>
-        {weeks.map((n, i) => (
-          <span key={i} className={styles.bar} style={{ height: `${(n / max) * 100}%` }} title={`${n} ${n === 1 ? 'membership' : 'memberships'}, ${when(i)}`} />
-        ))}
-      </div>
-      <figcaption className={styles.barsAxis}><span>{weeks.length} weeks ago</span><span>This week</span></figcaption>
-    </figure>
-  );
-}
-
 // What the app has been doing, from what's public: its catalog (records, collections,
-// when it last indexed) and the chain (memberships). Nothing here needs the Worker
-// to change, or the owner's Cloudflare account.
+// when it last indexed). Nothing here needs the Worker to change, or the owner's
+// Cloudflare account.
 function Activity({ app }) {
-  const activity = useActivity(app);
-  const catalog = activity?.catalog;
+  const catalog = useActivity(app);
+  const loading = catalog === undefined;
   const records = catalog?.collections.reduce((sum, c) => sum + c.count, 0);
   const hosts = new Set(catalog?.collections.flatMap((c) => c.hosts)).size;
   const stale = catalog?.indexedAt && Date.now() / 1000 - catalog.indexedAt > STALE_SECS;
-  const members = activity?.memberships;
-  const showMembers = isPaid(app) || members?.total > 0;
 
   const [recordsState, recordsLabel] =
     !app.site ? ['statePending', 'Not deployed']
-    : !activity ? ['statePending', 'Loading']
+    : loading ? ['statePending', 'Loading']
     : !catalog ? ['stateWarn', 'Unreachable']
     : !catalog.indexedAt ? ['stateGood', 'Live']
     : [stale ? 'stateWarn' : 'stateGood', `Indexed ${ago(catalog.indexedAt)}`];
@@ -640,7 +597,7 @@ function Activity({ app }) {
         <Column title="Records" state={recordsState} stateLabel={recordsLabel}>
           {!app.site ? (
             <p className={styles.colText}>Counts show up here once the app's Worker is deployed and bound below.</p>
-          ) : !activity ? (
+          ) : loading ? (
             <><div className={styles.bigValue}><Skeleton width="5em" /></div><div className={styles.fieldValue}><Skeleton width="11em" /></div></>
           ) : !catalog ? (
             <p className={styles.colText}>The catalog at {new URL(app.site).host} didn't load. Check the Worker is running in your Cloudflare dashboard.</p>
@@ -661,27 +618,6 @@ function Activity({ app }) {
           )}
         </Column>
 
-        {(showMembers || !activity) && (
-          <Column
-            title="Members"
-            state={!activity ? 'statePending' : members ? 'stateGood' : 'stateWarn'}
-            stateLabel={!activity ? 'Loading' : members ? `Last ${ACTIVITY_WEEKS} weeks` : 'Unavailable'}
-          >
-            {!activity ? (
-              <><div className={styles.bigValue}><Skeleton width="3em" /></div><div className={styles.fieldValue}><Skeleton width="9em" /></div></>
-            ) : !members ? (
-              <p className={styles.colText}>The membership scan didn't finish. Reload to try again.</p>
-            ) : (
-              <>
-                <div className={styles.bigValue}>{members.total.toLocaleString()}</div>
-                <div className={styles.fieldValue}>
-                  {members.recent} <span className={styles.fieldNote}>in the last 30 days</span>
-                </div>
-                {members.total > 0 && <WeekBars weeks={activity.weeks} />}
-              </>
-            )}
-          </Column>
-        )}
       </div>
 
       {catalog?.collections.length > 0 && (
@@ -707,7 +643,7 @@ function NewAppCard({ onClick }) {
     <button className={`${styles.card} ${styles.cardNew}`} type="button" onClick={onClick}>
       <span className={styles.cardPlus} aria-hidden="true">+</span>
       <span className={styles.cardTitle}>Create a new app</span>
-      <span className={styles.cardBody}>Claim a name on chain and pay its first month of storage.</span>
+      <span className={styles.cardBody}>Claim a free name on chain for your repo of citations.</span>
     </button>
   );
 }
@@ -716,15 +652,11 @@ function NewAppCard({ onClick }) {
 // something a shell and a URL don't need quoting for.
 const APP_NAME = /^[a-z0-9][a-z0-9._-]{1,62}$/;
 
-// Configure-and-deploy. "Deploy" is the claim: registerApp pays the first period and
-// makes this wallet the owner and first publisher. The card and price are optional
-// config sent after it, and both can be set later.
-// ponytail: terms & conditions and validation rules have no on-chain home yet — add
-// fields here when the AppRegistry grows them.
-function CreateAppModal({ open, onClose, fee, period, balances, onCreate }) {
+// Configure-and-deploy. "Deploy" is the claim: registerApp is free and makes this
+// wallet the owner. The card is optional config sent after it, and can be set later.
+function CreateAppModal({ open, onClose, balances, onCreate }) {
   const [name, setName] = useState('');
   const [cardUrl, setCardUrl] = useState('');
-  const [price, setPrice] = useState('');
   // The last availability answer, tagged with the name it answers for.
   const [check, setCheck] = useState({ name: null, taken: null });
   const [deploying, setDeploying] = useState(false);
@@ -733,7 +665,6 @@ function CreateAppModal({ open, onClose, fee, period, balances, onCreate }) {
   const trimmed = name.trim();
   const validName = APP_NAME.test(trimmed);
   const validCard = !cardUrl.trim() || isCardUrl(cardUrl.trim());
-  const validPrice = !price.trim() || /^\d+(\.\d{1,6})?$/.test(price.trim());
   const taken = check.name === trimmed ? check.taken : null;
 
   // Availability as you type, debounced; a stale answer is dropped.
@@ -750,7 +681,7 @@ function CreateAppModal({ open, onClose, fee, period, balances, onCreate }) {
 
   function close() {
     if (deploying) return;
-    setName(''); setCardUrl(''); setPrice(''); setError(null);
+    setName(''); setCardUrl(''); setError(null);
     onClose();
   }
 
@@ -761,7 +692,6 @@ function CreateAppModal({ open, onClose, fee, period, balances, onCreate }) {
       await onCreate({
         name: trimmed,
         cardUrl: cardUrl.trim() || null,
-        price: price.trim() && Number(price) > 0 ? parseUnits(price.trim(), 6) : null,
       });
       setDeploying(false);
       close();
@@ -770,8 +700,6 @@ function CreateAppModal({ open, onClose, fee, period, balances, onCreate }) {
       setDeploying(false);
     }
   }
-
-  const days = period ? Number(period / 86400n) : 30;
 
   return (
     <Modal open={open} onClose={close} title="Create a new app">
@@ -806,22 +734,8 @@ function CreateAppModal({ open, onClose, fee, period, balances, onCreate }) {
         </div>
       </Field>
 
-      <Field label="Reader price, USDC / month (optional)">
-        <input
-          className={styles.input}
-          value={price}
-          onChange={(event) => setPrice(event.target.value)}
-          placeholder="0"
-          inputMode="decimal"
-          aria-label="Reader membership price in USDC per month"
-        />
-        <div className={styles.pending}>What a reader pays for a month's membership. Blank is free.</div>
-      </Field>
-
       <Field label="Cost">
-        <div className={styles.fieldValue}>
-          {fee == null ? '…' : fee === 0n ? 'Free' : `${formatUnits(fee, 6)} USDC`} for {days} days of storage, plus gas
-        </div>
+        <div className={styles.fieldValue}>Free, plus gas</div>
       </Field>
 
       {/* A warning, not a gate: the balance can be a drip behind. */}
@@ -837,14 +751,14 @@ function CreateAppModal({ open, onClose, fee, period, balances, onCreate }) {
           className={styles.primaryBtn}
           type="button"
           onClick={deploy}
-          disabled={deploying || !validName || taken !== false || !validCard || !validPrice}
+          disabled={deploying || !validName || taken !== false || !validCard}
         >
           {deploying ? 'Deploying…' : 'Deploy'}
         </button>
       </div>
       {deploying && (
         <div className={styles.pending}>
-          Claiming {trimmed}{cardUrl.trim() ? ', then binding its card' : ''}{price.trim() ? ', then setting its price' : ''}. Confirm each transaction.
+          Claiming {trimmed}{cardUrl.trim() ? ', then binding its card' : ''}. Confirm each transaction.
         </div>
       )}
     </Modal>
@@ -859,7 +773,7 @@ export default function Home({ appKey }) {
 
   const { name } = readIdentity(user);
   const wallet = user?.wallet?.address;
-  const { apps, earnings, error: appsError, fee, period, create, renew, setCard } = useOwnedApps(wallet);
+  const { apps, earnings, error: appsError, create, setCard, setRepo, setPayout } = useOwnedApps(wallet);
 
   async function addFunds() {
     setFunding(true);
@@ -894,9 +808,9 @@ export default function Home({ appKey }) {
             <AppPage
               key={app.appId}
               app={app}
-              earned={earnings && !earnings.error ? (earnings.byApp[app.appId.toLowerCase()] ?? 0n) : null}
-              onRenew={renew}
               onSetCard={setCard}
+              onSetRepo={setRepo}
+              onSetPayout={setPayout}
             />
           )}
         </main>
@@ -950,8 +864,6 @@ export default function Home({ appKey }) {
           <CreateAppModal
             open={creating}
             onClose={() => setCreating(false)}
-            fee={fee}
-            period={period}
             balances={balances}
             onCreate={onCreate}
           />
@@ -961,7 +873,7 @@ export default function Home({ appKey }) {
             itself when the apps land empty, without fighting the user's toggle after. */}
         <details key={String(apps?.length === 0)} className={styles.section} open={apps?.length === 0 || undefined}>
           <summary className={styles.h2}>Getting started</summary>
-          <GettingStarted wallet={wallet} exportKey={exportKey} appName={apps?.find((a) => a.name)?.name} />
+          <GettingStarted wallet={wallet} exportKey={exportKey} />
         </details>
       </main>
     </div>

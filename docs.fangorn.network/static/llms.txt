@@ -1,0 +1,27 @@
+# Fangorn
+
+> Fangorn is a place to publish data that people and agents can both use, and that pays the people who made it. Publishers commit records to repos (heads on chain on Base Sepolia, records on IPFS) and can seal fields and price them in USDC. Apps are Workers on their owners' Cloudflare accounts that serve a site searchable by meaning, an MCP endpoint, and an ERC-8004 agent card bound on chain. Agents find and open apps through one MCP server, `fangorn-mcp`, and buy sealed records over x402.
+
+Fangorn runs on Base Sepolia, a testnet; its USDC is test USDC from https://faucet.circle.com. Install from a coding agent: `/plugin marketplace add fangorn-network/westmarch`, then `/plugin install fangorn-index@fangorn` to use apps or `/plugin install fangorn-builder@fangorn` to build them.
+
+## Docs
+
+- [Overview](https://docs.fangorn.network/intro): what Fangorn is, the two plugins, and where to go next
+- [Use apps](https://docs.fangorn.network/use-apps): install `fangorn-mcp`, its tools (`list-apps`, `find-apps`, `open-app`, `buy`, `wallet`, `publish`), buying records and settings
+- [The fangorn-index skill](https://docs.fangorn.network/index-skill): find which app has what, and the taste kernel that ranks any corpus
+- [Build an app](https://docs.fangorn.network/build-an-app): claim a name, deploy the template Worker, bind its card, publish records
+- [Sell records](https://docs.fangorn.network/sell-records): seal fields and price them with `fangorn commit --paid`, and how an app quotes them
+- [How it works](https://docs.fangorn.network/how-it-works): repos and records, apps as views, the sale sequence, and what each piece is load-bearing for
+- [Deploy Fangorn](https://docs.fangorn.network/deploy): releasing the contracts, SDK, Workers and westmarch in order
+
+## Source
+
+- [westmarch](https://github.com/fangorn-network/westmarch): app framework, `fangorn-mcp`, the template, and the plugins
+- [App walkthrough](https://github.com/fangorn-network/westmarch/blob/main/docs/app-to-agent.md): building an app end to end, with every file's source
+- [fangorn-mcp reference](https://github.com/fangorn-network/westmarch/blob/main/docs/mcp.md): running the MCP server from source
+- [Fangorn on GitHub](https://github.com/fangorn-network): the SDK, contracts and Workers
+
+## Optional
+
+- [fangorn.network](https://fangorn.network): the hub, where apps are claimed and bound
+- [App explorer](https://fangorn.network/#/explorer): every registered app

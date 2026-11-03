@@ -26,14 +26,12 @@ export const NETWORK = {
 };
 export const CHAIN = NETWORK.chain;
 
-// The AppRegistry owns what an "app" is, and since 2026.10.20 also the storage
-// subscription: claiming an app pays its first period (account.js).
+// The AppRegistry names apps: an app is its owner, its curator repo, its payout
+// address and its agent card. Claiming one is free (account.js).
 export const APP_REGISTRY_ADDRESS = NETWORK.appRegistryContractAddress;
-export const MEMBERSHIP_REGISTRY_ADDRESS = NETWORK.membershipRegistryContractAddress;
 
-// USDC, for the balance display and the earnings scan (account.js). Circle's Base
-// Sepolia USDC, which is what AppRegistry.usdc() names; the SDK's own fee calls
-// read it from the contract.
+// USDC, for the balance display and the earnings scan (account.js): Circle's Base
+// Sepolia USDC.
 // import.meta.env is undefined under plain node (the self-check), so guard it.
 export const USDC_ADDRESS =
   import.meta.env?.VITE_USDC_ADDRESS ?? '0x036CbD53842c5426634e7929541eC2318f3dCF7e';

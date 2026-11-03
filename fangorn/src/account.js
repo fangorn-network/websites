@@ -1,18 +1,15 @@
 // The account hub's data: which apps this wallet owns, what each has earned, and the
 // writes that create and manage them.
 //
-// An app owner is its app's single publisher, and it's the same wallet in the
-// browser and in the CLI (the user exports the Privy key into `fangorn init`).
-//
-// Since SDK 2026.10.20 the storage subscription belongs to the app, not the wallet:
-// claiming an app (AppRegistry.registerApp) pays its first period and mints the app's
-// ERC-5643 token to the owner, and renewing extends it.
+// A publisher is a wallet, the same one in the browser and in the CLI (the user
+// exports the Privy key into `fangorn init`). It publishes without an app; an app is
+// a free name for a curator repo, paid through its payout address.
 import { useCallback, useEffect, useState } from 'react';
 import { parseAbiItem, parseEventLogs } from 'viem';
 import { getLogsInWindows } from '@fangorn-network/sdk/lib/contracts/logs.js';
 import { AppRegistryClient } from '@fangorn-network/sdk/lib/contracts/app-registry/index.js';
 import { toAppId } from '@fangorn-network/sdk/lib/config.js';
-import { APP_REGISTRY_ADDRESS, MEMBERSHIP_REGISTRY_ADDRESS, NETWORK, USDC_ADDRESS, publicClient, walletClientFor } from './fangorn.js';
+import { APP_REGISTRY_ADDRESS, NETWORK, USDC_ADDRESS, publicClient, walletClientFor } from './fangorn.js';
 import { useAuth } from './authContext.js';
 
 /** The SDK's FANGORN_APP_EXTENSION — where a card says what its records cost. */
@@ -70,44 +67,32 @@ function readCard(card, appId) {
   };
 }
 
-// The two ways an app pays its owner. A membership: MembershipRegistry.join pulls the
-// reader's USDC and forwards it to the owner in the same tx, next to Joined(app_id).
 // A record sale: x402 settles as an EIP-3009 transferWithAuthorization from the buyer,
 // which USDC marks with AuthorizationUsed(buyer).
-const JOINED = parseAbiItem('event Joined(bytes32 indexed app_id, uint256 indexed epoch, uint256 commitment)');
+// ponytail: wallet-wide sales only; split per record and referral once the
+// SettlementRegistry is deployed.
 const AUTH_USED = parseAbiItem('event AuthorizationUsed(address indexed authorizer, bytes32 indexed nonce)');
 
 const same = (a, b) => a?.toLowerCase() === b?.toLowerCase();
 
 /**
- * Sorts USDC transfers into `owner` by what paid them, given each tx's receipt logs
- * (`logsByTx`: tx hash → logs). Pure, so the self-check drives it.
- *   byApp – membership payouts, per app id (lowercase)
- *   sales – x402 record sales. The transfer doesn't name the app, so wallet-wide.
+ * The x402 record sales among USDC transfers into `owner`, given each tx's receipt
+ * logs (`logsByTx`: tx hash → logs). Pure, so the self-check drives it.
  * Anything else (faucet drips, funding, gifts, the owner's own sends) isn't earnings.
  */
 export function classifyEarnings(transfers, logsByTx, owner) {
-  const byApp = {};
-  let sales = 0n;
+  let total = 0n;
   for (const t of transfers) {
     const { from, value } = t.args;
     if (same(from, owner)) continue;
-    const events = parseEventLogs({ abi: [JOINED, AUTH_USED], logs: logsByTx.get(t.transactionHash) ?? [], strict: false });
-    if (same(from, MEMBERSHIP_REGISTRY_ADDRESS)) {
-      const joined = events.find((e) => e.eventName === 'Joined' && same(e.address, MEMBERSHIP_REGISTRY_ADDRESS));
-      if (!joined) continue;
-      const id = joined.args.app_id.toLowerCase();
-      byApp[id] = (byApp[id] ?? 0n) + value;
-    } else if (events.some((e) => e.eventName === 'AuthorizationUsed' && same(e.address, USDC_ADDRESS) && same(e.args.authorizer, from))) {
-      sales += value;
-    }
+    const events = parseEventLogs({ abi: [AUTH_USED], logs: logsByTx.get(t.transactionHash) ?? [], strict: false });
+    if (events.some((e) => same(e.address, USDC_ADDRESS) && same(e.args.authorizer, from))) total += value;
   }
-  const total = Object.values(byApp).reduce((s, v) => s + v, sales);
-  return { total, byApp, sales };
+  return { total };
 }
 
 /**
- * What `address` has earned from its apps: { total, byApp, sales } (USDC base units).
+ * What `address` has earned from record sales: { total } (USDC base units).
  * ponytail: one receipt per incoming tx, every load. Fine for a testnet wallet; past
  * a few hundred payments, index it (the explorer, or a subgraph).
  */
@@ -124,38 +109,35 @@ export async function readEarnings(address) {
 
 /**
  * One app's state, as the hub shows it. A read that fails is `null` — unknown — and
- * never a default that means something: `0n` reads as cancelled and `''` as "no
- * agent card", and a refused RPC call must not tell an owner their live app is
- * expired or undeployed.
+ * never a default that means something: `''` reads as "no agent card", and a
+ * refused RPC call must not tell an owner their live app is undeployed.
  */
 async function readApp(appId) {
   const reg = reader(appId);
-  const [owner, uri, suspended, expiresAt, renewable] = await Promise.all([
+  const [owner, uri, suspended, curator, payout] = await Promise.all([
     reg.getAppOwner(),
     reg.appAgentUri().catch(() => null),
     reg.isAppSuspended().catch(() => false),
-    reg.expiresAt().catch(() => null),
-    reg.isRenewable().catch(() => false),
+    reg.curatorOf().catch(() => null),
+    reg.payoutOf().catch(() => null),
   ]);
   const card = uri
     ? await fetch(uri, { signal: AbortSignal.timeout(10_000) }).then((r) => r.json()).catch(() => null)
     : null;
   const info = readCard(card, appId);
   return {
-    appId, owner, uri, suspended, expiresAt, renewable, ...info,
-    expired: expiresAt != null && expiresAt * 1000n <= BigInt(Date.now()),
+    appId, owner, uri, suspended, curator, payout, ...info,
     name: rememberedName(appId) ?? info.cardName ?? null,
   };
 }
 
 /**
  * Apps `address` owns, newest first:
- *   { appId, owner, name, uri, listed, site, price, suspended, expiresAt, expired, renewable }
- * (`uri` and `expiresAt` are null when their read failed).
+ *   { appId, owner, name, uri, listed, site, price, suspended, curator: { curator, repo }, payout }
+ * (`uri`, `curator` and `payout` are null when their read failed).
  *
  * The AppRegistry lists each owner's apps (`appsOf`), so this sees an app the moment
- * it's claimed, before it has a card or a commit. App tokens never move, so the list
- * is exact.
+ * it's claimed, before it has a card or a commit.
  *
  * `listed: false` is an app the explorer won't show: no card bound yet, or one that
  * doesn't load or doesn't name the app.
@@ -167,14 +149,14 @@ export async function readOwnedApps(address) {
 
 /**
  * Every app the network shows: claimed (the AppRegistry's list), with a card that
- * names it, and paid up. The landing page's live grid, newest first.
+ * names it, and not taken down. The landing page's live grid, newest first.
  * ponytail: reads every app's card on each visit. Fine for dozens; past that, page
  * it or let the explorer index.
  */
 export async function readAllApps() {
   const ids = await reader(undefined).allApps();
   const apps = await Promise.all([...ids].reverse().map(readApp));
-  return apps.filter((a) => a.listed && !a.expired && !a.suspended);
+  return apps.filter((a) => a.listed && !a.suspended);
 }
 
 /** readAllApps as state: null while loading, [] on failure (logged). */
@@ -199,48 +181,16 @@ export async function readAppOwner(name) {
 }
 
 // ── One app's activity ────────────────────────────────────────────────────────
-// What an owner can see of their app without touching its Worker: memberships from
-// the chain, and records and freshness from the catalog the Worker already serves in
-// public (even a private app's: it's what tells a buyer what's for sale).
-
-// Base makes a block every 2 seconds, so a block's age is its distance from the head.
-// ponytail: estimated, not read — one getBlock per membership would be exact and slow.
-const BLOCK_SECONDS = 2;
-export const ACTIVITY_WEEKS = 12;
+// What an owner can see of their app without touching its Worker: records and
+// freshness from the catalog the Worker already serves in public.
 
 /**
- * Memberships into weekly counts, oldest first, from each join's block and the head's.
- * Pure, so the self-check drives it.
- */
-export function joinsByWeek(blocks, head, weeks = ACTIVITY_WEEKS) {
-  const counts = Array(weeks).fill(0);
-  for (const b of blocks) {
-    const week = Math.floor((Number(head - b) * BLOCK_SECONDS) / (7 * 86400));
-    if (week >= 0 && week < weeks) counts[weeks - 1 - week] += 1;
-  }
-  return counts;
-}
-
-/**
- * { memberships, weeks, catalog } for one app. Each half fails on its own to null —
- * unknown, never zero: a refused RPC call must not tell an owner nobody joined.
- *   memberships – { total, recent (last 30 days) }
- *   weeks       – memberships per week, ACTIVITY_WEEKS of them, oldest first
- *   catalog     – { indexedAt (unix secs), collections: [{ name, description, count, bytes, hosts }] }
+ * The app's catalog, or null if it has no site or the catalog didn't load:
+ *   { indexedAt (unix secs), collections: [{ name, description, count, bytes, hosts }] }
  */
 export async function readActivity(app) {
-  const joins = getLogsInWindows(publicClient, NETWORK.appRegistryFromBlock, undefined, (fromBlock, toBlock) =>
-    publicClient.getLogs({ address: MEMBERSHIP_REGISTRY_ADDRESS, event: JOINED, args: { app_id: app.appId }, fromBlock, toBlock }),
-  NETWORK.logWindow)
-    .then(async (logs) => {
-      const head = await publicClient.getBlockNumber();
-      const blocks = logs.map((l) => l.blockNumber);
-      const recent = blocks.filter((b) => Number(head - b) * BLOCK_SECONDS < 30 * 86400).length;
-      return { memberships: { total: blocks.length, recent }, weeks: joinsByWeek(blocks, head) };
-    })
-    .catch((err) => { console.warn('Membership scan failed:', err); return { memberships: null, weeks: null }; });
-
-  const catalog = !app.site ? Promise.resolve(null) : fetch(new URL('/view/cdn/catalog', app.site), { signal: AbortSignal.timeout(10_000) })
+  if (!app.site) return null;
+  return fetch(new URL('/view/cdn/catalog', app.site), { signal: AbortSignal.timeout(10_000) })
     .then((r) => (r.ok ? r.json() : null))
     .then((c) => c && {
       indexedAt: Number(c.generated_at) || null,
@@ -254,13 +204,11 @@ export async function readActivity(app) {
       })),
     })
     .catch(() => null);
-
-  return { ...(await joins), catalog: await catalog };
 }
 
-/** readActivity as state: null while loading. */
+/** readActivity as state: undefined while loading, null when there's no catalog. */
 export function useActivity(app) {
-  const [activity, setActivity] = useState(null);
+  const [activity, setActivity] = useState(undefined);
   useEffect(() => {
     let cancelled = false;
     readActivity(app).then((a) => !cancelled && setActivity(a));
@@ -269,21 +217,17 @@ export function useActivity(app) {
   return activity;
 }
 
-// A month, in seconds — the membership period a reader price buys.
-const MEMBERSHIP_PERIOD = 30n * 86400n;
-
 /**
  * The hub's apps, earnings, and app writes. `apps` is null while loading.
- * `fee` (USDC base units) and `period` (seconds) are what claiming costs and buys.
  *
- *   create({ name, cardUrl?, price? }) – claim the app (pays the first period), then
- *       bind its agent card and set a reader price if given. Price is USDC base units.
- *   renew(appId)            – pay one more period
+ *   create({ name, cardUrl? }) – claim the app (free), then bind its agent card if given
  *   setCard(appId, url, { register }) – point the app at its agent card; `register`
  *       first mints the app's ERC-8004 agent from it (the first binding)
+ *   setRepo(appId, repo)       – point the app at the owner's repo of citations
+ *   setPayout(appId, address)  – where the app's referral share is paid
  *
- * `earnings` is readEarnings' { total, byApp, sales }, null while loading,
- * { error: true } if the scan failed.
+ * `earnings` is readEarnings' { total }, null while loading, { error: true } if the
+ * scan failed.
  */
 export function useOwnedApps(address) {
   const { wallet } = useAuth();
@@ -292,15 +236,6 @@ export function useOwnedApps(address) {
   const [error, setError] = useState(null);
   const [tick, setTick] = useState(0);
   const refresh = useCallback(() => setTick((n) => n + 1), []);
-  // What claiming costs and buys. Network-wide, so read once.
-  const [terms, setTerms] = useState({ fee: null, period: null });
-
-  useEffect(() => {
-    const reg = reader(undefined);
-    Promise.all([reg.subscriptionFee(), reg.subscriptionPeriod()])
-      .then(([fee, period]) => setTerms({ fee, period }))
-      .catch((err) => console.warn('Subscription terms lookup failed:', err));
-  }, []);
 
   useEffect(() => {
     if (!address) return;
@@ -315,9 +250,9 @@ export function useOwnedApps(address) {
   }, [address, tick]);
 
   // A Fangorn client for one app, signing with the Privy wallet. Its signed-URL storage
-  // is billed to the app, so registering an agent pins its file with no Pinata JWT.
-  // Loaded on the first write: the SDK root pulls the graph engine and the ZK WASM,
-  // which the hub's reads never need.
+  // is charged to the wallet's quota, so registering an agent pins its file with no
+  // Pinata JWT. Loaded on the first write: the SDK root pulls the graph engine and the
+  // ZK WASM, which the hub's reads never need.
   const writer = useCallback(async (appId) => {
     if (!wallet || !address) throw new Error('Connect a wallet first.');
     const [walletClient, { Fangorn }] = await Promise.all([
@@ -327,38 +262,39 @@ export function useOwnedApps(address) {
     return Fangorn.create({ walletClient, config: NETWORK, appId, storage: { signedUrl: {} } });
   }, [wallet, address]);
 
-  const create = useCallback(async ({ name, cardUrl, price }) => {
+  const create = useCallback(async ({ name, cardUrl }) => {
     const appId = toAppId(name);
-    const fangorn = await writer(appId);
-    const reg = fangorn.getAppRegistry();
+    const reg = (await writer(appId)).getAppRegistry();
     const owner = await reg.getAppOwner();
     if (owner !== ZERO_ADDRESS) {
       throw new Error(owner.toLowerCase() === address.toLowerCase()
         ? 'You already own this app.'
         : 'That name is taken. Pick another.');
     }
-    // Approves the fee if there is one, claims, and waits for the receipt.
     await reg.registerApp();
     rememberName(appId, name);
-    // The claim is the deploy; these are config on top. Each is its own tx, so a
-    // failure here leaves a claimed app the card's manage actions can finish.
+    // Its own tx, so a failure leaves a claimed app the app page can finish.
     if (cardUrl) await reg.setAppAgentUri(cardUrl);
-    if (price) await fangorn.getMembershipRegistry().setPlan(appId, price, MEMBERSHIP_PERIOD);
     refresh();
     return appId;
   }, [writer, address, refresh]);
-
-  const renew = useCallback(async (appId) => {
-    await (await writer(appId)).getAppRegistry().renewSubscription();
-    refresh();
-  }, [writer, refresh]);
 
   const setCard = useCallback(async (appId, url, { register = false } = {}) => {
     await (await writer(appId)).registerAgent(url, { skipRegister: !register });
     refresh();
   }, [writer, refresh]);
 
-  return { apps, earnings, error, ...terms, create, renew, setCard };
+  const setRepo = useCallback(async (appId, repo) => {
+    await (await writer(appId)).getAppRegistry().setCurator(address, repo);
+    refresh();
+  }, [writer, address, refresh]);
+
+  const setPayout = useCallback(async (appId, payout) => {
+    await (await writer(appId)).getAppRegistry().setPayout(payout);
+    refresh();
+  }, [writer, refresh]);
+
+  return { apps, earnings, error, create, setCard, setRepo, setPayout };
 }
 
 /** A Worker's URL, or its card's, as the card's URL. */

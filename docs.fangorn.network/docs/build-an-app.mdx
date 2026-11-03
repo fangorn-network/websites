@@ -1,83 +1,110 @@
 ---
-sidebar_position: 4
 title: Build an app
 ---
 
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 # Build an app
 
-A Fangorn app is a database with no server:
+An app is a view over what publishers have published: your choice of repos, your search, your
+site. It runs as a Worker on your own Cloudflare account, and nobody has to let you in.
 
-- Its records are committed on chain, on Base Sepolia.
-- A view of those records, made of content-addressed shards with embeddings, is hosted as
-  static files on Cloudflare Pages.
-- A page searches the view in the reader's tab.
-- An agent card bound on chain lets any agent find, verify and use the app.
+- **Agents find it.** Every agent with `fangorn-mcp` can list it, verify it and call its tools.
+- **People search it.** Its site searches by meaning, in the reader's tab.
+- **No server to run.** It runs on Cloudflare's free plan, and each push to its repo redeploys it.
 
-You bring the data, a Cloudflare account and Claude Code. The builder skills do the rest.
+You bring the data, a Cloudflare account and a wallet.
 
-## 1. Set up your account
-
-Sign in at [fangorn.network](https://fangorn.network/#/account). There you can:
-
-- Create your app. This claims its name and pays for its storage, in USDC.
-- Optionally, set a reader price.
-
-The hub then walks you through the CLI. It signs with the same wallet you used in the
-hub, so the apps you claim there are the ones Claude publishes to:
-
-```bash
-npm i -g @fangorn-network/sdk
-fangorn init            # choose Base Sepolia, then paste your exported private key
-fangorn set-app <your-app>
-fangorn wallet          # should print the same address as the hub
+```mermaid
+flowchart LR
+  C[1. Claim a name<br/>fangorn.network] --> D[2. Deploy the Worker<br/>your Cloudflare]
+  D --> B[3. Bind its card<br/>on chain]
+  B --> P[4. Publish records<br/>fangorn CLI]
+  P -. every 5 min .-> D
 ```
 
-:::warning
-Anyone with your private key controls your wallet. Paste it only into your own terminal,
-never into a chat (including with Claude), a website or an email.
-:::
+## The fast way: ask your agent
 
-## 2. Install the builder plugin
+Install the builder plugin, then say **"Build a Fangorn app from &lt;your data&gt;."**
 
-Inside Claude Code:
+<Tabs groupId="agent">
+<TabItem value="claude" label="Claude Code">
 
 ```text
 /plugin marketplace add fangorn-network/westmarch
 /plugin install fangorn-builder@fangorn
 ```
 
+</TabItem>
+<TabItem value="codex" label="Codex">
+
+```bash
+codex plugin marketplace add fangorn-network/westmarch
+codex plugin add fangorn-builder@fangorn
+```
+
+</TabItem>
+</Tabs>
+
 | Skill | What it does |
 |---|---|
-| **`fangorn-app`** | Builds an app: records → graph → schema → commit → view → page → agent card → on-chain binding. Triggers on anything like "put this dataset on Fangorn" or "make this searchable by agents". |
-| **`fangorn-improve`** | Keeps a live app improving. Each run picks one thing, such as a failing guardrail, a broken source, an accepted Observation, the largest coverage gap or the weakest question. It proves the fix locally with `westmarch-eval` and opens one pull request, which the app's `eval` gate then grades. It never publishes, deploys or merges. |
+| **`fangorn-app`** | Builds the app in two stages. **Register** (minutes): claim the name, put up a page and bind the card, so something real exists right away. **Build** (hours): your questions first, then your sources, then a local build graded against those questions. No record goes on chain until the build passes. |
+| **`fangorn-improve`** | Keeps a live app improving, one gated pull request at a time: a failing guardrail, a broken source, the largest coverage gap or the weakest question. It proves the fix with `westmarch-eval` and never publishes, deploys or merges. Run it by hand or on a schedule with `/loop`. |
 
-The skills run their commands from the published `@fangorn-network/westmarch` through `npx`.
+## By hand
 
-## 3. Ask Claude to build it
+### 1. Claim a name
 
-> Build a Fangorn app from &lt;your data&gt;.
+Sign in at [fangorn.network](https://fangorn.network/#/account) and claim your app's name.
+Claiming is free; the wallet that claims a name owns it.
 
-`fangorn-app` does this in two stages:
+### 2. Deploy the template
 
-1. **Register (minutes).** As soon as you know what the app is and what to call it, it
-   claims the name, puts an empty page at the app's address and binds the app's card, so
-   something real exists right away.
-2. **Build (hours).** It works from your questions, then your sources, then a local build
-   graded against those questions. No record goes on chain until the build passes.
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/fangorn-network/westmarch/tree/main/template)
 
-New records always ship. A change to *how* records are made only ships if your questions
-are answered no worse.
+Name the Worker after the app (`my-app`) and its R2 bucket `my-app-view`. Cloudflare copies
+the template into your GitHub, makes the bucket and deploys; every push to `main` deploys again.
+A name with a dot or an underscore can't be a Worker name: set `"app"` in `app.json` to the
+name you claimed.
 
-Your app shows up in the hub and in [the app explorer](https://fangorn.network/#/explorer)
-once it's published. Any `fangorn-mcp` can then [open it by name](/use-apps#use-it).
+The template holds the app's recipe, not its data:
 
-## 4. Keep it improving
+| File | What it is |
+|---|---|
+| `app.json` | The app: its name, description, the record types it shows and how their fields map to title, text and tags (`role_map`) |
+| `eval/` | What a good answer looks like: the questions the app must answer |
+| `wrangler.json` | The Worker, its R2 view and its 5-minute cron |
 
-Run `fangorn-improve` by hand, or on a schedule with `/loop`. Each run opens at most one
-pull request, and merging it stays your call.
+### 3. Bind it
+
+Back at fangorn.network, give the app its Worker's URL. Your wallet registers the app's
+ERC-8004 agent and binds its card on chain. From then on, `fangorn-mcp` lists it.
+
+### 4. Publish data
+
+Any wallet can commit records of the app's type, from anywhere:
+
+```bash
+npm i -g @fangorn-network/sdk
+fangorn init                     # choose Base Sepolia and give it a wallet key
+fangorn repo init items
+fangorn commit items.json
+fangorn push
+```
+
+`items.json` is `{"records":[{"id","type","payload"}]}`, with `type` one of the types in
+`app.json`. The Worker picks the push up on its next cron. To charge for some fields, see
+[Sell records](/sell-records).
+
+:::warning
+Anyone with your private key controls your wallet. Paste it only into your own terminal,
+never into a chat (including with an agent), a website or an email.
+:::
 
 ## Reference
 
-The full walkthrough, with every file's source, is
-[`docs/app-to-agent.md`](https://github.com/fangorn-network/westmarch/blob/main/docs/app-to-agent.md).
-The `fangorn-app` skill points at it section by section.
+- [`docs/app-to-agent.md`](https://github.com/fangorn-network/westmarch/blob/main/docs/app-to-agent.md):
+  the full walkthrough, with every file's source. The `fangorn-app` skill follows it section by section.
+- [westmarch README](https://github.com/fangorn-network/westmarch#readme): `westmarch-ship`,
+  `app.json` and the other CLIs.

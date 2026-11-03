@@ -5,6 +5,7 @@ import Landing, { LiveApps } from './Landing';
 import { Footer } from './Footer';
 import Home from './Home';
 import About from './About';
+import Build from './Build';
 import { useAuth, ACCOUNT_ENABLED } from './authContext';
 
 // ponytail: hash routes, a handful of pages. No router dep, no host fallback config.
@@ -48,6 +49,7 @@ export default function App() {
     // #/account is the dashboard, #/account/app/<name or id> one app's page.
     hash === '#/account' || hash.startsWith('#/account/') ? <Account route={hash.match(/^#\/account\/app\/(.+)$/)?.[1]} /> :
     hash === '#/about' ? <About /> :
+    hash === '#/build' ? <Build /> :
     hash === '#/explorer' ? <main><LiveApps /></main> :
     <Landing />;
 

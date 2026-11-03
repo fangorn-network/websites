@@ -185,26 +185,54 @@
 
 .shell { fill: var(--hi); stroke: var(--hi2); stroke-width: 1.5; transition: stroke 0.2s; }
 
-.label {
-  fill: var(--s2);
-  stroke: var(--tint);
-  stroke-opacity: 0.6;
-  transition: stroke 0.3s;
-}
+.well { fill: var(--hi2); }
 
-.labelTag { font: 500 8px var(--mono); letter-spacing: 0.14em; fill: var(--tint, var(--sub)); }
-.labelName { font: 600 17px var(--sans); letter-spacing: -0.02em; fill: var(--text); }
-.labelSub { font: 8px var(--mono); fill: var(--dim); }
+/* The sticker: a tag banner on top, the name clamped to two lines, the sub pinned
+   to the bottom. Sizes are SVG user units, so it scales with the console. */
+.sticker {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: 2px;
+  background: var(--s2);
+  outline: 1px solid color-mix(in srgb, var(--tint) 60%, transparent);
+  outline-offset: -1px;
+}
+.labelTag {
+  padding: 3px 6px;
+  font: 600 7px var(--mono);
+  letter-spacing: 0.14em;
+  color: var(--on-hi);
+  background: var(--tint);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.labelName {
+  margin: auto 0;
+  padding: 0 6px;
+  font: 800 13px/1.1 var(--display);
+  letter-spacing: -0.01em;
+  color: var(--text);
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+.labelSub { padding: 0 6px 4px; font: 6px var(--mono); color: var(--dim); white-space: nowrap; }
 .grip { stroke: var(--hi2); stroke-width: 2; stroke-linecap: round; }
 
 /* Dark: --hi lifts to a pale mint for text, which made the shell a glaring slab
    with grips nearly invisible on it. Deep moss body, mint edge and grips instead,
    and a screen darker than the page so it doesn't vanish into --night. */
 :global(:root[data-theme="dark"]) .shell { fill: var(--ledge); stroke: var(--hi); }
+:global(:root[data-theme="dark"]) .well { fill: var(--s1); }
 :global(:root[data-theme="dark"]) .grip { stroke: var(--hi); stroke-opacity: 0.7; }
 :global(:root[data-theme="dark"]) .screen { background: #070d0a; border-color: var(--s3); }
 
-.tab { fill: var(--s2); stroke: var(--line2); stroke-width: 1.5; }
+.cartTab { fill: var(--s2); stroke: var(--line2); stroke-width: 1.5; }
 /* Edge-connector contacts: the one warm colour, it's what says "plugs in". */
 .pin { stroke: var(--sun); stroke-width: 2.4; }
 

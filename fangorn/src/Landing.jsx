@@ -9,16 +9,32 @@ import { useAllApps } from './account';
 // has one command and one next step; everything else is one click down. Keep it
 // that way: a third choice at the top costs both doors.
 
-const MARKETPLACE = '/plugin marketplace add fangorn-network/westmarch';
-const USE_CMD = `${MARKETPLACE}\n/plugin install fangorn-index@fangorn`;
-const PUBLISH_CMD = `${MARKETPLACE}\n/plugin install fangorn-builder@fangorn`;
+// Same plugins either way; mirrors GETTING_STARTED_PATHS in Home.jsx.
+const AGENTS = [
+  {
+    tab: 'Claude Code',
+    name: 'Claude',
+    where: 'inside Claude Code',
+    install: (p) => `/plugin marketplace add fangorn-network/westmarch\n/plugin install ${p}@fangorn`,
+    mcp: 'claude mcp add',
+    mcpHttp: 'claude mcp add --transport http <app> https://<app-site>/mcp',
+  },
+  {
+    tab: 'Codex',
+    name: 'Codex',
+    where: 'in your terminal',
+    install: (p) => `codex plugin marketplace add fangorn-network/westmarch\ncodex plugin add ${p}@fangorn`,
+    mcp: 'codex mcp add',
+    mcpHttp: 'codex mcp add <app> --url https://<app-site>/mcp',
+  },
+];
 const BUILD_PROMPT = 'Build a Fangorn app from <your data>.';
 
 // The other ways in, for agents that aren't Claude Code or want less.
-const OTHER_INSTALLS = [
+const OTHER_INSTALLS = (agent) => [
   {
     tab: 'MCP only',
-    cmd: `claude mcp add fangorn -- \\
+    cmd: `${agent.mcp} fangorn -- \\
   npx -y -p @fangorn-network/westmarch -p @huggingface/transformers fangorn-mcp`,
     note: 'Paste into your terminal. Transformers (~500 MB) ranks apps by meaning; leave it out to match words.',
   },
@@ -36,12 +52,12 @@ const OTHER_INSTALLS = [
   },
   {
     tab: 'One app',
-    cmd: 'claude mcp add --transport http <app> https://<app-site>/mcp',
+    cmd: agent.mcpHttp,
     note: 'Every app serves its own MCP endpoint. Add just that one.',
   },
 ];
 
-// Only paid apps need this; the server reads it from the shell Claude starts in.
+// Only paid apps need this; the server reads it from the shell your agent starts in.
 const PAID_ENV = `export FANGORN_MCP_WALLET_KEY=0x…   # a wallet holding USDC
 export FANGORN_MCP_MAX_PRICE=0.10   # most it pays per call, in USDC`;
 
@@ -169,17 +185,23 @@ function Cartridge({ apps }) {
             <path d="M58 150 h204 l6 16 h-216z" className={styles.top} />
             <rect x="84" y="158" width="152" height="10" rx="2" className={styles.slot} />
             <g className={styles.cartBody} onAnimationIteration={() => setN((x) => x + 1)}>
-              <path d="M92 32 q0-14 14-14 h108 q14 0 14 14 v128 h-136z" className={styles.shell} />
-              <path d="M104 160 h112 v16 h-112z" className={styles.tab} />
+              {/* NES-style: square grey-ish shell, recessed label well, ribbed grip below. */}
+              <path d="M88 30 q0-8 8-8 h128 q8 0 8 8 v130 h-144z" className={styles.shell} />
+              <path d="M104 160 h112 v16 h-112z" className={styles.cartTab} />
               {Array.from({ length: 17 }, (_, i) => (
                 <line key={i} x1={109 + i * 6.3} y1="163" x2={109 + i * 6.3} y2="174" className={styles.pin} />
               ))}
-              <rect x="106" y="34" width="108" height="78" rx="4" className={styles.label} />
-              <text x="116" y="54" className={styles.labelTag}>{(c.tags[0] ?? 'app').toUpperCase()}</text>
-              <text x="116" y="80" className={styles.labelName}>{nameOf(c).slice(0, 12)}</text>
-              <text x="116" y="102" className={styles.labelSub}>fangorn · erc-8004</text>
-              {[126, 134, 142, 150].map((y) => (
-                <line key={y} x1="120" y1={y} x2="200" y2={y} className={styles.grip} />
+              <rect x="97" y="30" width="126" height="90" rx="3" className={styles.well} />
+              {/* HTML label so long names wrap and clamp instead of running off the shell. */}
+              <foreignObject x="101" y="34" width="118" height="82">
+                <div className={styles.sticker}>
+                  <div className={styles.labelTag}>{(c.tags[0] ?? 'app').toUpperCase()}</div>
+                  <div className={styles.labelName} title={nameOf(c)}>{nameOf(c)}</div>
+                  <div className={styles.labelSub}>fangorn · erc-8004</div>
+                </div>
+              </foreignObject>
+              {[130, 137, 144, 151].map((y) => (
+                <line key={y} x1="104" y1={y} x2="216" y2={y} className={styles.grip} />
               ))}
             </g>
             {/* Front half of the top face, then the front face, drawn over the cartridge. */}
@@ -234,14 +256,17 @@ function Cartridge({ apps }) {
 
 function Start() {
   const [i, setI] = useState(0);
-  const q = OTHER_INSTALLS[i];
+  const [a, setA] = useState(0);
+  const agent = AGENTS[a];
+  const q = OTHER_INSTALLS(agent)[i];
   return (
     <section className={styles.section} id="start">
+      <Tabs items={AGENTS.map((x) => x.tab)} value={a} onChange={setA} />
       <div className={styles.doors}>
         <div className={styles.door}>
           <h2 className={styles.doorTitle}>Use Apps</h2>
-          <p className={styles.doorBody}>Give your agent every app on Fangorn. Run these inside Claude Code:</p>
-          <div className={styles.terminal}><Cmd text={USE_CMD} /></div>
+          <p className={styles.doorBody}>Give your agent every app on Fangorn. Run these {agent.where}:</p>
+          <div className={styles.terminal}><Cmd text={agent.install('fangorn-index')} /></div>
           <p className={styles.doorNext}>
             Then ask: <q>Find a Fangorn app for…</q> Free apps need no account or wallet.
           </p>
@@ -249,9 +274,9 @@ function Start() {
         <div className={styles.door}>
           <h2 className={styles.doorTitle}>Build Apps</h2>
           <p className={styles.doorBody}>Build apps that both people and agents can use:</p>
-          <div className={styles.terminal}><Cmd text={PUBLISH_CMD} /></div>
+          <div className={styles.terminal}><Cmd text={agent.install('fangorn-builder')} /></div>
           <p className={styles.doorNext}>
-            Create an account to claim your app’s name, then ask Claude: <q>{BUILD_PROMPT}</q>
+            Create an account to claim your app’s name, then ask {agent.name}: <q>{BUILD_PROMPT}</q>
           </p>
           <AccountButton className={styles.btnA}>Create an account</AccountButton>
         </div>
@@ -264,7 +289,7 @@ function Start() {
         <details className={styles.disclose}>
           <summary>Paying for private apps</summary>
           <p>
-            Export a wallet key before starting Claude. The server pays x402 prices at or under
+            Export a wallet key before starting {agent.name}. The server pays x402 prices at or under
             your cap; with no key it hands the price back to your agent. Use a separate wallet with
             a small balance.
           </p>
@@ -273,7 +298,7 @@ function Start() {
         <details className={styles.disclose}>
           <summary>Other ways to connect</summary>
           <div className={styles.terminal}>
-            <Tabs items={OTHER_INSTALLS.map((x) => x.tab)} value={i} onChange={setI} />
+            <Tabs items={OTHER_INSTALLS(agent).map((x) => x.tab)} value={i} onChange={setI} />
             <Cmd text={q.cmd} />
           </div>
           <p>{q.note}</p>
