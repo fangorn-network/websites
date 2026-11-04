@@ -27,6 +27,20 @@ function save(name, data) {
   a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 1000); // revoking at once can cancel it in Firefox
 }
+// A file record downloads as the file itself (paid ones open as data: URLs, free ones are IPFS links).
+// Anything else falls back to the record as JSON.
+async function download(name, r, opened) {
+  const fields = opened ? { ...r.fields, ...opened } : r.fields;
+  if (!isUrl(fields.file)) return save(name, exportOf(r, opened));
+  // fetch → blob so the filename sticks; `download` is ignored on cross-origin links.
+  const blob = await fetch(fields.file).then((res) => res.blob());
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = fields.title ?? name;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+
 // What a download holds for one record: its open fields, and which are still sealed.
 const exportOf = (r, opened) => ({
   id: r.id, title: r.title, price: r.price, fields: opened ? { ...r.fields, ...opened } : r.fields,
@@ -103,7 +117,7 @@ function Listing({ publisher, repo, r }) {
             {state === 'busy' ? 'Buying… confirm in your wallet' : authenticated ? 'Buy' : 'Log in to buy'}
           </button>
         )}
-        <button className={styles.ghostBtnSm} type="button" onClick={() => save(`${repo}-${r.id}`, exportOf(r, opened))}>Download</button>
+        <button className={styles.ghostBtnSm} type="button" onClick={() => download(`${repo}-${r.id}`, r, opened).catch((err) => setState({ error: err.message }))}>Download</button>
         {r.price != null && <CopyButton text={buyPrompt(publisher, repo, r)} label="Copy buy prompt" className={styles.ghostBtnSm} />}
       </div>
       <Fields fields={opened ? { ...r.fields, ...opened } : r.fields} sealed={opened ? [] : r.sealed} />
