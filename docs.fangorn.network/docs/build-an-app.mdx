@@ -89,12 +89,15 @@ Any wallet can commit records of the app's type, from anywhere:
 npm i -g @fangorn-network/sdk
 fangorn init                     # choose Base Sepolia and give it a wallet key
 fangorn repo init items
-fangorn commit items.json
+fangorn add items.csv --type item
+fangorn commit
 fangorn push
 ```
 
-`items.json` is `{"records":[{"id","type","payload"}]}`, with `type` one of the types in
-`app.json`. The Worker picks the push up on its next cron. To charge for some fields, see
+`add` stages a record per row of a `.csv`, `.jsonl` or `.json` array (the `id` column is the
+record id), or one record per text file; `--type` must be one of the types in `app.json`. A
+`{"records":[{"id","type","payload"}]}` file also works, staged or passed straight to
+`fangorn commit items.json`. The Worker picks the push up on its next cron. To charge for some fields, see
 [Sell records](/sell-records).
 
 :::warning

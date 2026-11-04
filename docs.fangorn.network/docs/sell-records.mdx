@@ -22,7 +22,8 @@ With the `fangorn` CLI (`npm i -g @fangorn-network/sdk`, then `fangorn init`):
 
 ```bash
 fangorn repo init reports
-fangorn commit reports.json --paid body --price 0.01
+fangorn add reports.csv --type report
+fangorn commit --paid body --price 0.01
 fangorn push
 ```
 
