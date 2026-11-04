@@ -48,7 +48,7 @@ export default function About() {
           Fangorn decouples storage and discovery. Publishers commit records to <i>repos</i>: version-controlled, content-addressed data stores in IPFS, cryptographically anchored to a smart contract, providing decentralization, availability, and immutability.
         </p>
         <p className={`${styles.sectionSub} ${a.reveal}`}>
-          Your agent does the searching. Your preferences and intent stays priv and nobody is allowed to pay to interrupt you. Publish data on your terms with programmable pricing. Purchasers retain privacy while payments go directly to the publisher.
+          Your agent does the searching. Your preferences and intent stays private and nobody is allowed to pay to interrupt you. Publish data on your terms with programmable pricing. Purchasers retain privacy while payments go directly to the publisher.
         </p>
         <p className={`${styles.sectionSub} ${a.reveal}`}>
           Apps emerge out of the data they point to, as a view or "lens" over a collection of repos. Anyone can build one over anyone's data. An app that serves you badly can be replaced by a better one built on the very same data. You draw your own path.
