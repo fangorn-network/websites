@@ -5,5 +5,11 @@
     "directory": "./build",
     "not_found_handling": "404-page"
   },
-  "routes": [{ "pattern": "docs.fangorn.network", "custom_domain": true }]
+  "routes": [
+    {
+      "pattern": "docs.fangorn.network",
+      "custom_domain": true
+    }
+  ],
+  "previews": {}
 }
