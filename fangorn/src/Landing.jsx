@@ -362,15 +362,15 @@ const PILLARS = [
 // westmarch ships today.
 const VERSUS = [
   {
-    title: 'vs. writing your own MCP server',
+    title: 'Write your own MCP server',
     body: 'A server per source means one integration per source. With Fangorn your agent installs one MCP, finds apps in the on-chain registry and opens them by name. Publishers write no integration code.',
   },
   {
-    title: 'vs. an API directory',
+    title: 'Use an API directory',
     body: 'A directory lists endpoints that someone else keeps running. A Fangorn app holds the data itself: committed on chain, served from the publisher’s own storage, and priced with x402.',
   },
   {
-    title: 'vs. your own vector DB',
+    title: 'Populate your own vector DB',
     body: 'Doing it yourself means crawling, cleaning and embedding every source, then keeping it up to date. Each app ships its own embeddings and its publisher keeps them current. You query the result.',
   },
 ];
@@ -418,7 +418,7 @@ function Principles() {
         <h2 className={styles.h2}>Your data, your rules</h2>
         <p className={styles.statement}>
           When you let a platform store your data, you trust it to decide what’s current, who can
-          read it and what gets seen, and it can change those rules whenever it likes. Fangorn
+          read it, what gets seen, and it can change the rules whenever it likes. Fangorn
           splits those jobs apart, so no one holds all of them.
         </p>
         <a href="#/about" className={styles.moreLink}>Why we built it →</a>
@@ -512,8 +512,9 @@ export default function Landing() {
       <section className={styles.hero}>
         <h1 className={styles.h1}>Proof over permission.</h1>
         <p className={styles.sub}>
-          Platforms decide what you see and sell what you search for. On Fangorn you publish data once,
-          anyone can build apps on it for people and agents, and your taste stays yours.
+          <b>Platforms</b> decide what you see and <b>sell</b> what <b>you</b> search for.<br/>On Fangorn, you publish data once and
+          anyone can build apps on it, for people and agents alike. 
+          <br/>Your searches and your taste stays yours.
         </p>
         <div className={styles.ctas}>
           <a href="#start" className={styles.btnA}>Get started</a>
