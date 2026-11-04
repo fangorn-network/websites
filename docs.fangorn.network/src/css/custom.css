@@ -1,26 +1,81 @@
-/* Infima overrides: monochrome, to match fangorn.network's plain black. */
+/* Canopy, fangorn.network's palette: misty green paper, forest ink, moss for
+   action, one sunlit amber. Keep in step with websites/fangorn/src/index.css. */
 :root {
-  --ifm-color-primary: #3a3a3a;
-  --ifm-color-primary-dark: #343434;
-  --ifm-color-primary-darker: #313131;
-  --ifm-color-primary-darkest: #282828;
-  --ifm-color-primary-light: #404040;
-  --ifm-color-primary-lighter: #434343;
-  --ifm-color-primary-lightest: #4c4c4c;
-  --ifm-code-font-size: 95%;
-  --docusaurus-highlighted-code-line-bg: rgba(0, 0, 0, 0.1);
+  --fg-bg: #eef3ec;
+  --fg-s1: #ffffff;
+  --fg-s3: #e5ede3;
+  --fg-line: #d9e3d7;
+  --fg-text: #17251e;
+  --fg-sub: #4c5f55;
+  --fg-hi: #2f7d55;
+  --fg-ledge: #236343;
+  --fg-sun: #f2c14e;
+  --fg-on-hi: #ffffff;
+
+  --ifm-color-primary: #2f7d55;
+  --ifm-color-primary-dark: #2a704d;
+  --ifm-color-primary-darker: #286a48;
+  --ifm-color-primary-darkest: #21573b;
+  --ifm-color-primary-light: #348a5d;
+  --ifm-color-primary-lighter: #369062;
+  --ifm-color-primary-lightest: #3da36f;
+  --ifm-background-color: var(--fg-bg);
+  --ifm-background-surface-color: var(--fg-s1);
+  --ifm-navbar-background-color: rgba(238, 243, 236, 0.85);
+  --ifm-footer-background-color: #0f1a15;
+  --ifm-font-color-base: var(--fg-text);
+  --ifm-heading-color: var(--fg-text);
+  --ifm-toc-border-color: var(--fg-line);
+  --ifm-hr-border-color: var(--fg-line);
+  --ifm-table-border-color: var(--fg-line);
+  --ifm-code-background: var(--fg-s3);
+  --ifm-code-font-size: 92%;
+  --ifm-font-family-base: 'Figtree', system-ui, sans-serif;
+  --ifm-heading-font-family: 'Bricolage Grotesque', 'Figtree', sans-serif;
+  --ifm-font-family-monospace: 'JetBrains Mono', ui-monospace, monospace;
+  --ifm-global-radius: 10px;
+  --docusaurus-highlighted-code-line-bg: rgba(47, 125, 85, 0.12);
 }
 
 [data-theme='dark'] {
-  --ifm-color-primary: #e6e6e6;
-  --ifm-color-primary-dark: #cfcfcf;
-  --ifm-color-primary-darker: #c4c4c4;
-  --ifm-color-primary-darkest: #a1a1a1;
-  --ifm-color-primary-light: #fdfdfd;
-  --ifm-color-primary-lighter: #ffffff;
-  --ifm-color-primary-lightest: #ffffff;
-  --ifm-background-color: #000;
-  --ifm-navbar-background-color: #000;
-  --ifm-footer-background-color: #000;
-  --docusaurus-highlighted-code-line-bg: rgba(255, 255, 255, 0.08);
+  --fg-bg: #0f1a15;
+  --fg-s1: #16241d;
+  --fg-s3: #233729;
+  --fg-line: #26392e;
+  --fg-text: #e3ece5;
+  --fg-sub: #a2b6a9;
+  --fg-hi: #4f9a72;
+  --fg-ledge: #2d5f45;
+  --fg-on-hi: #0c1611;
+
+  --ifm-color-primary: #78b593;
+  --ifm-color-primary-dark: #65ab85;
+  --ifm-color-primary-darker: #5ba57d;
+  --ifm-color-primary-darkest: #498b67;
+  --ifm-color-primary-light: #8bbfa1;
+  --ifm-color-primary-lighter: #95c4a9;
+  --ifm-color-primary-lightest: #b1d4bf;
+  --ifm-navbar-background-color: rgba(15, 26, 21, 0.85);
+  --ifm-footer-background-color: #0a120e;
+  --docusaurus-highlighted-code-line-bg: rgba(255, 255, 255, 0.06);
 }
+
+h1, h2, h3 { letter-spacing: -0.02em; }
+h1 { font-weight: 800; }
+
+.navbar {
+  backdrop-filter: blur(14px) saturate(140%);
+  border-bottom: 1px solid var(--fg-line);
+  box-shadow: none;
+}
+.navbar__title { font-family: var(--ifm-heading-font-family); font-weight: 800; }
+
+table { display: table; width: 100%; font-size: 0.95em; }
+thead tr { background: var(--fg-s3); }
+table tr:nth-child(2n) { background: transparent; }
+
+/* Mermaid: centre it and give it room. */
+.docusaurus-mermaid-container { display: flex; justify-content: center; margin: 1.5rem 0; }
+
+.footer--dark { --ifm-footer-background-color: #0f1a15; }
+[data-theme='dark'] .footer--dark { --ifm-footer-background-color: #0a120e; }

@@ -1,37 +1,72 @@
 // Run: node src/fangorn.test.mjs
 // Guards the invariants the account hub depends on:
-//  1. the site runs against the Base Sepolia deployment, not the SDK's default
-//     FangornConfig (still the old Arbitrum one);
-//  2. the owned-app scan: an app's ERC-721 token id IS its app id, and Transfer
-//     indexes tokenId (the scan reads it from the topics);
-//  3. the storage meter maths;
-//  4. earnings count memberships and x402 sales, never faucet drips or self-sends.
+//  1. the site runs against the Base Sepolia deployment;
+//  2. a publisher's file parses into the records it publishes;
+//  3. earnings are the sales net of the referrer's cut;
+//  4. the storage meter maths.
 import assert from 'node:assert';
-import { encodeAbiParameters, encodeEventTopics, hexToBigInt, parseAbiItem, toHex } from 'viem';
-import { APP_REGISTRY_ABI } from '@fangorn-network/sdk/lib/contracts/app-registry/abi.js';
-import { toAppId } from '@fangorn-network/sdk/lib/config.js';
 
-const { NETWORK, CHAIN, APP_REGISTRY_ADDRESS, MEMBERSHIP_REGISTRY_ADDRESS } = await import('./fangorn.js');
+const { NETWORK, CHAIN } = await import('./fangorn.js');
 assert.equal(CHAIN.id, 84532, 'Base Sepolia');
-assert.equal(NETWORK.caip2, 84532);
-assert.match(APP_REGISTRY_ADDRESS, /^0x[0-9a-fA-F]{40}$/);
-assert.match(MEMBERSHIP_REGISTRY_ADDRESS, /^0x[0-9a-fA-F]{40}$/);
+assert.match(NETWORK.dataRegistryContractAddress, /^0x[0-9a-fA-F]{40}$/);
+assert.match(NETWORK.settlementRegistryContractAddress, /^0x[0-9a-fA-F]{40}$/);
 
-const transfer = APP_REGISTRY_ABI.find((x) => x.type === 'event' && x.name === 'Transfer');
-assert.deepEqual(transfer.inputs.map((i) => i.indexed), [true, true, true], 'tokenId is a topic');
-for (const fn of ['registerApp', 'renewSubscription', 'setAppAgentUri', 'expiresAt']) {
-  assert.ok(APP_REGISTRY_ABI.some((x) => x.name === fn), `AppRegistry has ${fn}`);
-}
+// Files → records.
+const { parseRecords, parseCsv, sumSales } = await import('./account.js');
+assert.deepEqual(parseCsv('a,b\n"x, ""y""",2\r\n"multi\nline",3\n'), [['a', 'b'], ['x, "y"', '2'], ['multi\nline', '3']]);
+let r = parseRecords('title,body\nKelp,the paid table\nVolcano,lava\n', 'notes.csv');
+assert.deepEqual(r.columns, ['title', 'body']);
+assert.deepEqual(r.records[0], { id: '1', type: 'record', payload: { title: 'Kelp', body: 'the paid table' } });
+r = parseRecords('[{"id":"k","title":"Kelp"},{"id":"v","title":"Volcano"}]', 'x.json');
+assert.deepEqual(r.records.map((x) => x.id), ['k', 'v'], 'distinct ids are kept');
+assert.deepEqual(r.columns, ['title'], 'id is not a column to sell');
+r = parseRecords('{"id":"a","n":1}\n{"id":"a","n":2}\n', 'x.jsonl');
+assert.deepEqual(r.records.map((x) => x.id), ['1', '2'], 'a repeated id numbers the rows instead');
+r = parseRecords('{"records":[{"id":"k","type":"note.v1","payload":{"title":"Kelp"}}]}', 'commit.json');
+assert.deepEqual(r.records[0].payload, { id: 'k', title: 'Kelp' }, 'a CLI commit file is read by its payloads');
+assert.throws(() => parseRecords('[1,2]', 'x.json'), /list of rows/);
+assert.throws(() => parseRecords('only-a-header\n', 'x.csv'), /header row/);
 
-// Token id → app id must round-trip, leading zero bytes included.
-for (const id of [toAppId('my-app'), `0x00${'ab'.repeat(31)}`]) {
-  assert.equal(toHex(hexToBigInt(id), { size: 32 }), id);
-}
+// Any file: rows from a CSV, one record per other file, ids prefixed when there are several.
+const { readFiles, toDataUrl } = await import('./account.js');
+const pdf = new File(['%PDF-1.4 hi'], 'report.pdf', { type: 'application/pdf' });
+r = await readFiles([pdf]);
+assert.deepEqual(r.records[0], { id: 'report.pdf', type: 'file', payload: { title: 'report.pdf', mime: 'application/pdf', size: 11, file: pdf } });
+r = await readFiles([new File(['a,b\n1,2\n'], 't.csv'), pdf, new File(['not json'], 'x.json')]);
+assert.deepEqual(r.records.map((x) => x.id), ['t.csv/1', 'report.pdf', 'x.json'], 'a .json that is not rows is a file');
+await assert.rejects(readFiles([pdf, new File(['x'], 'report.pdf')]), /share a name/);
+r = await readFiles([new File(['x'], "That boi ain't right_.jpg")]);
+assert.equal(r.records[0].id, "That-boi-ain't-right_.jpg", 'spaces in a name are not in its id');
+assert.equal(r.records[0].payload.title, "That boi ain't right_.jpg", 'the title keeps them');
+assert.equal(parseRecords('id,t\nné e,1\n', 'x.csv').records[0].id, 'n-e', 'a CSV id is cleaned too');
+await assert.rejects(readFiles([new File(['x'], 'a b.png'), new File(['y'], 'a-b.png')]), /share a name/);
+const url = await toDataUrl(new Blob([new Uint8Array([0, 255, 128])], { type: 'image/png' }));
+assert.equal(url, 'data:image/png;base64,AP+A');
 
-const { isCardUrl } = await import('./account.js');
-assert.ok(isCardUrl('https://x.dev/.well-known/agent-card.json'));
-assert.ok(!isCardUrl('javascript:alert(1)'), 'never a script url');
-assert.ok(!isCardUrl('not a url'));
+// A record as its page shows it: sealed fields named, never shown; the price from its terms.
+const { toListing } = await import('./account.js');
+const listing = toListing({ id: 'kelp', payload: { title: 'Kelp', text: 'otters', survey: { '@type': 'handle', cid: 'bafy' }, '@terms': { terms: { price: '10000' }, signature: '0x' } } });
+assert.equal(toListing({ id: 'k', payload: { '@terms': { terms: { price: '10000', shareBps: 500 } } } }).shareBps, 500);
+assert.deepEqual(listing, { id: 'kelp', title: 'Kelp', type: 'record', fields: { title: 'Kelp', text: 'otters' }, sealed: ['survey'], price: 10_000n, shareBps: 0 });
+assert.deepEqual(toListing({ id: 'n', type: 'note.v1', payload: { n: 1 } }), { id: 'n', title: 'n', type: 'note.v1', fields: { n: 1 }, sealed: [], price: null, shareBps: 0 }, 'free, untitled');
+assert.equal(toListing({ id: 'f', type: 'file', payload: { mime: 'image/png' } }).type, 'image/png', "a file's type is its mime");
+
+// Earnings: price less the referrer's cut; a free registration is no sale.
+const reg = (price, cut) => ({ args: { price, referrer_cut: cut } });
+assert.deepEqual(sumSales([reg(10_000n, 500n), reg(20_000n, 0n), reg(0n, 0n)]), { total: 29_500n, sales: 2 });
+
+// The weekly chart: times from the head at 2s a block; a sale older than the window is in the
+// total but not the chart.
+const { salesStats, netPrice } = await import('./account.js');
+const head = { number: 1_000_000n, timestamp: 1_800_000_000n };
+const sale = (price, cut, blockNumber) => ({ blockNumber, args: { price, referrer_cut: cut } });
+const weekBlocks = BigInt(7 * 86400 / 2);
+const st = salesStats([sale(10_000n, 500n, head.number - 2n * weekBlocks - 1n), sale(10_000n, 500n, head.number - 10n), sale(50_000n, 0n, head.number - 20n * weekBlocks)], head);
+assert.deepEqual([st.total, st.sales], [69_000n, 3]);
+assert.deepEqual(st.weekly.slice(-3), [9_500n, 0n, 9_500n], 'one sale this week, one two weeks back');
+assert.equal(st.weekly.reduce((a, b) => a + b), 19_000n);
+assert.equal(netPrice({ price: 10_000n, shareBps: 500 }), 9_500n, "a sale pays the price less the referrer's share");
+assert.equal(netPrice({ price: null, shareBps: 0 }), 0n, 'free');
 
 // The storage meters: the worker's KV counters are eventually consistent and are
 // debited on grant, so `used` can legitimately exceed the cap. The bar must clamp
@@ -49,35 +84,4 @@ const over = meterState(1500, 1000);
 assert.equal(over.pct, 100, 'overshoot clamps to a full bar');
 assert.equal(over.remaining, 0, 'headroom never goes negative');
 
-// Earnings: a transfer counts only with the receipt evidence of what paid it.
-const { classifyEarnings } = await import('./account.js');
-const { USDC_ADDRESS } = await import('./fangorn.js');
-const OWNER = `0x${'0a'.repeat(20)}`, BUYER = `0x${'0b'.repeat(20)}`, FAUCET = `0x${'0c'.repeat(20)}`;
-const APP = toAppId('my-app');
-const JOINED = parseAbiItem('event Joined(bytes32 indexed app_id, uint256 indexed epoch, uint256 commitment)');
-const AUTH_USED = parseAbiItem('event AuthorizationUsed(address indexed authorizer, bytes32 indexed nonce)');
-const tx = (n) => `0x${String(n).padStart(64, '0')}`;
-const xfer = (n, from, value) => ({ transactionHash: tx(n), args: { from, to: OWNER, value } });
-const logsByTx = new Map([
-  [tx(1), [{ address: MEMBERSHIP_REGISTRY_ADDRESS, topics: encodeEventTopics({ abi: [JOINED], args: { app_id: APP, epoch: 1n } }), data: encodeAbiParameters([{ type: 'uint256' }], [7n]) }]],
-  [tx(2), [{ address: USDC_ADDRESS, topics: encodeEventTopics({ abi: [AUTH_USED], args: { authorizer: BUYER, nonce: tx(9) } }), data: '0x' }]],
-  [tx(3), []],
-  // An AuthorizationUsed by someone else than the sender proves nothing.
-  [tx(4), [{ address: USDC_ADDRESS, topics: encodeEventTopics({ abi: [AUTH_USED], args: { authorizer: BUYER, nonce: tx(8) } }), data: '0x' }]],
-]);
-const e = classifyEarnings(
-  [xfer(1, MEMBERSHIP_REGISTRY_ADDRESS, 5_000_000n), xfer(2, BUYER, 10_000n), xfer(3, FAUCET, 10_000_000n), xfer(4, FAUCET, 1n), xfer(2, OWNER, 3n)],
-  logsByTx, OWNER);
-assert.equal(e.byApp[APP.toLowerCase()], 5_000_000n, 'membership payout lands on its app');
-assert.equal(e.sales, 10_000n, 'x402 sale counted');
-assert.equal(e.total, 5_010_000n, 'faucet drip and self-send left out');
-
 console.log('fangorn self-check OK');
-
-// 5. Weekly membership buckets: oldest first, this week last, anything older dropped.
-{
-  const { joinsByWeek } = await import('./account.js');
-  const week = 302400n; // 7 days of 2-second blocks
-  const head = 10_000_000n;
-  assert.deepEqual(joinsByWeek([head, head - 1n, head - week, head - 3n * week - 5n, head - 99n * week], head, 4), [1, 0, 1, 2]);
-}

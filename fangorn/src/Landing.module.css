@@ -16,11 +16,14 @@
   z-index: -1;
   background:
     radial-gradient(circle at 50% 108%, color-mix(in srgb, var(--sun) 30%, transparent) 0 7%, transparent 22%),
+    /* Three ring periods that never line up, so the spacing wanders like real
+       growth rings instead of ticking like a ruler. */
     repeating-radial-gradient(ellipse 118% 100% at 50% 108%,
-      transparent 0 30px,
-      color-mix(in srgb, var(--hi) 16%, transparent) 30px 31.5px,
-      transparent 31.5px 52px,
-      color-mix(in srgb, var(--hi) 9%, transparent) 52px 53px);
+      transparent 0 37px, color-mix(in srgb, var(--hi) 15%, transparent) 37px 38.5px),
+    repeating-radial-gradient(ellipse 118% 100% at 50% 108%,
+      transparent 0 59px, color-mix(in srgb, var(--hi) 8%, transparent) 59px 60px),
+    repeating-radial-gradient(ellipse 118% 100% at 50% 108%,
+      transparent 0 97px, color-mix(in srgb, var(--hi) 11%, transparent) 97px 98px);
   -webkit-mask-image: linear-gradient(to bottom, transparent, #000 30%, #000 75%, transparent);
   mask-image: linear-gradient(to bottom, transparent, #000 30%, #000 75%, transparent);
 }
@@ -52,7 +55,7 @@
   gap: 12px;
   justify-content: center;
   flex-wrap: wrap;
-  margin: 32px 0 24px;
+  margin-top: 32px;
 }
 
 .btnA, .btnB {
@@ -103,7 +106,7 @@
 
 /* ── cartridge ───────────────────────────────────────────────────────────── */
 
-.cart { max-width: 640px; margin: 0 auto; }
+.cart { max-width: 640px; margin: 48px auto 0; }
 
 .rig {
   --tint: var(--hi);
@@ -127,25 +130,28 @@
 
 /* ── screen: idle until the LED comes on, then shows the cartridge's demo ── */
 
+/* A little CRT set: cabinet, bulged glass with scanlines and glow, knobs on the
+   right, rabbit-ear antenna on top. */
 .screen {
   position: relative;
-  flex: 0 0 220px;
-  height: 132px;
+  flex: 0 0 248px;
+  height: 148px;
   margin-bottom: 14px;
+  padding: 10px 40px 10px 10px;
   --text: #eef3ec;
   --sub: #a9bdb1;
   --dim: #6e8478;
   --tint: var(--sun);
-  border: 4px solid var(--s1);
-  border-radius: 18px;
-  background: var(--night);
-  box-shadow: var(--shadow), inset 0 0 24px rgba(0, 0, 0, 0.5);
+  border: 1.5px solid var(--line2);
+  border-radius: 16px;
+  background: var(--s1);
+  box-shadow: var(--shadow), inset 0 -4px 0 rgba(0, 0, 0, 0.08);
   text-align: left;
   font-family: var(--mono);
   font-size: 12px;
 }
 
-/* Cable from the console to the screen. */
+/* Cable from the console to the set. */
 .screen::before {
   content: '';
   position: absolute;
@@ -156,7 +162,97 @@
   border-radius: 2px;
 }
 
-.idle, .result { position: absolute; inset: 0; padding: 16px; }
+/* Little feet. */
+.screen::after {
+  content: '';
+  position: absolute;
+  left: 18px;
+  right: 18px;
+  top: 100%;
+  height: 5px;
+  border-left: 18px solid var(--line2);
+  border-right: 18px solid var(--line2);
+  border-radius: 0 0 3px 3px;
+}
+
+.antenna {
+  position: absolute;
+  left: calc(50% - 15px);
+  bottom: 100%;
+  width: 30px;
+  height: 7px;
+  border-radius: 10px 10px 0 0;
+  background: var(--line2);
+}
+.antenna::before, .antenna::after {
+  content: '';
+  position: absolute;
+  bottom: 4px;
+  left: 50%;
+  width: 2px;
+  height: 38px;
+  background: var(--line2);
+  transform-origin: bottom;
+  transform: rotate(-28deg);
+}
+.antenna::after { transform: rotate(24deg); }
+
+/* The tube: rounded more than the cabinet so it reads as curved glass. */
+.glass {
+  position: relative;
+  height: 100%;
+  overflow: hidden;
+  border-radius: 22px / 28px;
+  background: radial-gradient(ellipse at 50% 45%, #13241b 0%, var(--night) 70%);
+  box-shadow: inset 0 0 18px rgba(0, 0, 0, 0.75), 0 0 0 3px var(--s3);
+  text-shadow: 0 0 6px color-mix(in srgb, currentColor 55%, transparent);
+  animation: flicker 6s steps(1) infinite;
+}
+/* Scanlines and a glare highlight over the content. */
+.glass::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse at 28% 18%, rgba(255, 255, 255, 0.1), transparent 45%),
+    repeating-linear-gradient(to bottom, rgba(0, 0, 0, 0.28) 0 1px, transparent 1px 3px);
+}
+@keyframes flicker { 0%, 100% { opacity: 1; } 47% { opacity: 0.93; } 48% { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .glass { animation: none; } }
+
+/* Two dials and a speaker grille. */
+.knobs {
+  position: absolute;
+  right: 9px;
+  top: 14px;
+  bottom: 14px;
+  width: 22px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+.knobs i {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--s3);
+  border: 1.5px solid var(--line2);
+  background-image: linear-gradient(var(--line2), var(--line2));
+  background-size: 2px 6px;
+  background-position: 50% 1px;
+  background-repeat: no-repeat;
+}
+.knobs i + i { transform: rotate(60deg); }
+.knobs b {
+  flex: 1;
+  width: 14px;
+  margin-top: 4px;
+  background: repeating-linear-gradient(to bottom, var(--line2) 0 2px, transparent 2px 5px);
+}
+
+.idle, .result { position: absolute; inset: 0; padding: 12px 14px; }
 .idle { color: var(--dim); animation: idle 4.5s step-end infinite; }
 .cursor { animation: blink 1s step-end infinite; }
 
@@ -164,6 +260,7 @@
 .prompt { color: var(--sub); }
 .hit { font-family: var(--mono); font-size: 12px; font-weight: 500; color: var(--text); margin: 14px 0 4px; }
 .via { font-size: 11px; color: var(--tint); }
+.prompt, .hit > div { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 @keyframes idle { 0% { opacity: 1; } 34% { opacity: 0; } 78% { opacity: 1; } }
 @keyframes show { 0% { opacity: 0; } 34% { opacity: 1; } 78% { opacity: 0; } }
@@ -182,26 +279,55 @@
 
 .shell { fill: var(--hi); stroke: var(--hi2); stroke-width: 1.5; transition: stroke 0.2s; }
 
-.label {
-  fill: var(--s2);
-  stroke: var(--tint);
-  stroke-opacity: 0.6;
-  transition: stroke 0.3s;
-}
+.well { fill: var(--hi2); }
 
-.labelTag { font: 500 8px var(--mono); letter-spacing: 0.14em; fill: var(--tint, var(--sub)); }
-.labelName { font: 600 17px var(--sans); letter-spacing: -0.02em; fill: var(--text); }
-.labelSub { font: 8px var(--mono); fill: var(--dim); }
+/* The sticker: a tag banner on top, the name clamped to two lines, the sub pinned
+   to the bottom. Sizes are SVG user units, so it scales with the console. */
+.sticker {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: 2px;
+  background: var(--s2);
+  outline: 1px solid color-mix(in srgb, var(--tint) 60%, transparent);
+  outline-offset: -1px;
+}
+.labelTag {
+  padding: 3px 6px;
+  font: 600 7px var(--mono);
+  letter-spacing: 0.14em;
+  color: var(--on-hi);
+  background: var(--tint);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.labelName {
+  margin: auto 0;
+  padding: 0 6px;
+  font: 800 13px/1.1 var(--display);
+  letter-spacing: -0.01em;
+  color: var(--text);
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+.labelSub { padding: 0 6px 4px; font: 6px var(--mono); color: var(--dim); white-space: nowrap; }
 .grip { stroke: var(--hi2); stroke-width: 2; stroke-linecap: round; }
 
 /* Dark: --hi lifts to a pale mint for text, which made the shell a glaring slab
    with grips nearly invisible on it. Deep moss body, mint edge and grips instead,
    and a screen darker than the page so it doesn't vanish into --night. */
 :global(:root[data-theme="dark"]) .shell { fill: var(--ledge); stroke: var(--hi); }
+:global(:root[data-theme="dark"]) .well { fill: var(--s1); }
 :global(:root[data-theme="dark"]) .grip { stroke: var(--hi); stroke-opacity: 0.7; }
-:global(:root[data-theme="dark"]) .screen { background: #070d0a; border-color: var(--s3); }
+:global(:root[data-theme="dark"]) .screen { background: var(--s2); border-color: var(--s3); }
+:global(:root[data-theme="dark"]) .glass { background: radial-gradient(ellipse at 50% 45%, #0f1c15 0%, #050a07 70%); }
 
-.tab { fill: var(--s2); stroke: var(--line2); stroke-width: 1.5; }
+.cartTab { fill: var(--s2); stroke: var(--line2); stroke-width: 1.5; }
 /* Edge-connector contacts: the one warm colour, it's what says "plugs in". */
 .pin { stroke: var(--sun); stroke-width: 2.4; }
 
@@ -246,7 +372,24 @@
 
 /* ── shared section bits ─────────────────────────────────────────────────── */
 
-.section { padding: 72px 5%; max-width: 1120px; margin: 0 auto; }
+.section { padding: 80px 5%; max-width: 1120px; margin: 0 auto; }
+
+/* Full-width bands that break up the page. A band holds one .section, which keeps
+   the content width; the band adds the color and a little more air. */
+.band, .bandNight { padding: 32px 0; }
+.band { background: var(--s3); --line: var(--line2); }
+/* Night: the dark palette inside the light page. In dark mode the page is already
+   night, so the band lifts to a surface tone instead. */
+.bandNight {
+  background: var(--night);
+  --ink: #f1f6f2;
+  --text: #e3ece5;
+  --sub: #a2b6a9;
+  --line: #2c4235;
+  --hi: #4f9a72;
+  color: var(--text);
+}
+:global(:root[data-theme="dark"]) .bandNight { background: var(--s2); --line: #35503f; }
 
 .h2 {
   font-family: var(--display);
@@ -428,7 +571,7 @@
 
 .bento {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(var(--cols, 2), minmax(0, 1fr));
   gap: 16px;
   margin-top: 24px;
 }
@@ -440,8 +583,83 @@
   box-shadow: var(--shadow);
 }
 
-.cardTitle { font-family: var(--display); font-size: 21px; font-weight: 700; letter-spacing: -0.02em; margin-bottom: 8px; }
+.cardTitle { font-family: var(--display); font-size: 21px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.25; margin-bottom: 10px; }
 .cardBody { font-size: 16px; color: var(--sub); line-height: 1.6; }
+
+/* ── steps: the loop, numbered, joined by one rule ─────────────────────── */
+
+.steps {
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 32px;
+  margin-top: 40px;
+  border-top: 1px solid var(--line);
+}
+
+.step { padding-top: 24px; position: relative; }
+/* A short accent on the rule marks where each step starts. */
+.step::before {
+  content: '';
+  position: absolute;
+  top: -2px;
+  left: 0;
+  width: 40px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--hi);
+}
+
+
+.stepWho {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--sub);
+  margin-bottom: 8px;
+}
+
+/* ── principles: statement left, ruled list right ─────────────────────── */
+
+.principles {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+  gap: 64px;
+  align-items: start;
+}
+
+.statement {
+  font-family: var(--display);
+  font-size: clamp(22px, 2.4vw, 30px);
+  font-weight: 600;
+  line-height: 1.3;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+  margin: 24px 0 28px;
+}
+
+.moreLink { font-weight: 600; color: var(--hi); }
+.moreLink:hover { text-decoration: underline; }
+
+.rules { list-style: none; }
+.rules li { padding: 24px 0; border-top: 1px solid var(--line); }
+.rules li:first-child { padding-top: 0; border-top: 0; }
+
+/* ── versus: label left, answer right ─────────────────────────────────── */
+
+.versus { margin-top: 32px; }
+.versusRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+  gap: 32px;
+  padding: 28px 0;
+  border-top: 1px solid var(--line);
+}
+.versusRow:last-child { border-bottom: 1px solid var(--line); }
+.versusLabel { font-family: var(--display); font-size: 22px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.25; }
+.versusRow dd { margin: 0; max-width: 620px; }
 
 /* ── live apps ──────────────────────────────────────────────────────────── */
 
@@ -459,7 +677,7 @@
   flex-direction: column;
   border: 1px solid var(--line);
   border-radius: 24px;
-  padding: 24px;
+  padding: 28px;
   background: var(--s1);
   box-shadow: var(--shadow);
   transition: border-color 0.2s, transform 0.2s cubic-bezier(0.3, 1.4, 0.5, 1);
@@ -512,8 +730,12 @@
 
 @media (max-width: 860px) {
   .hero { padding: 64px 16px 40px; }
-  .section { padding: 48px 16px; }
-  .bento, .caseGrid, .doors, .split { grid-template-columns: 1fr; }
+  .section { padding: 40px 16px; }
+  .band, .bandNight { padding: 16px 0; }
+  .bento, .caseGrid, .doors, .split, .principles, .versusRow { grid-template-columns: 1fr; }
+  .steps { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .principles { gap: 32px; }
+  .versusRow { gap: 8px; }
   .splitDoor::before { display: none; }
   .splitHub { grid-row: auto; }
 }
@@ -527,8 +749,10 @@
 
 /* Phones: console above its screen, both full width, no cable between them. */
 @media (max-width: 600px) {
+  .steps { grid-template-columns: 1fr; gap: 0; border-top: 0; }
+  .step { border-top: 1px solid var(--line); padding: 24px 0; }
   .rig { flex-direction: column; align-items: center; gap: 16px; }
   .cartBtn { flex: none; width: min(320px, 100%); }
-  .screen { flex: none; width: min(320px, 100%); margin-bottom: 0; }
+  .screen { flex: none; width: min(320px, 100%); margin: 40px 0 6px; }
   .screen::before { display: none; }
 }
