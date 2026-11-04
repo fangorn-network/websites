@@ -6,14 +6,10 @@ import { useAuth } from './authContext.js';
 // The deployment the site runs against: chain, RPC, registry addresses and the RPC's
 // getLogs window, all from the SDK so the site can't drift from what the CLI uses.
 // Deep imports on purpose: the SDK root entry pulls the graph engine, Pinata and
-// the ZK gadgets (bb.js/noir WASM) into the bundle, and the hub only touches the
-// AppRegistry.
-//
-// ⚠️ NOT FangornConfig: since 2026.10.20 that is still the old Arbitrum Sepolia
-// deployment, kept for apps claimed there. New apps live on Base Sepolia.
+// the ZK gadgets (bb.js/noir WASM) into the bundle, and the hub's reads need none of it.
 //
 // The SDK's logWindow is 10k blocks, but its RPC (publicnode) takes 50k, and every
-// window is one eth_getLogs: a scan from appRegistryFromBlock is ~1M blocks and
+// window is one eth_getLogs: a scan from the registry's deploy block is ~1M blocks and
 // growing ~43k a day, so 10k windows was ~100 sequential calls per scan, and the
 // public RPC answered with 429s. Other free RPCs are worse (base.org 200, thirdweb 1k,
 // drpc 10k). VITE_RPC_URL + VITE_LOG_WINDOW point the site at a keyed RPC.
@@ -26,12 +22,7 @@ export const NETWORK = {
 };
 export const CHAIN = NETWORK.chain;
 
-// The AppRegistry names apps: an app is its owner, its curator repo, its payout
-// address and its agent card. Claiming one is free (account.js).
-export const APP_REGISTRY_ADDRESS = NETWORK.appRegistryContractAddress;
-
-// USDC, for the balance display and the earnings scan (account.js): Circle's Base
-// Sepolia USDC.
+// USDC, for the balance display: Circle's Base Sepolia USDC.
 // import.meta.env is undefined under plain node (the self-check), so guard it.
 export const USDC_ADDRESS =
   import.meta.env?.VITE_USDC_ADDRESS ?? '0x036CbD53842c5426634e7929541eC2318f3dCF7e';

@@ -1,20 +1,19 @@
-import { useEffect, useRef, useState } from 'react';
-import { formatEther, formatUnits, isAddress, parseEther } from 'viem';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { formatEther, formatUnits, parseEther } from 'viem';
 import styles from './Home.module.css';
 import { useAuth } from './authContext';
 import { useBalances } from './fangorn';
-import { truncate, explorer, formatBytes } from './format';
-import { useOwnedApps, useActivity, readAppOwner, isCardUrl, cardUrlOf } from './account';
-
-const INSTALL_CMD = 'npm i @fangorn-network/sdk';
-const DOCS_URL = 'https://deepwiki.com/fangorn-network/fangorn';
+import { truncate, explorer, txExplorer } from './format';
+import { usePublisher, readFiles, repoLink, readRepoPage, readBuyers, netPrice, blockTime, EXPLORER_URL } from './account';
+import { buy, readLibrary, hasIdentity } from './library';
+import { Fields } from './RepoPage';
 
 // Enough ETH for a few app writes' gas. Below this the wallet is "Low" and a
 // testnet faucet is the thing to do next.
 const LOW_ETH = parseEther('0.002');
 
 // Public Base Sepolia faucets. We don't run one: it was drainable infra to maintain,
-// and these cover what a new publisher needs — gas, and USDC to buy records.
+// and these cover what a new publisher needs: gas to publish.
 const FAUCETS = [
   { label: 'ETH (Coinbase)', url: 'https://portal.cdp.coinbase.com/products/faucet' },
   { label: 'USDC (Circle)', url: 'https://faucet.circle.com' },
@@ -31,8 +30,9 @@ function friendlyError(err) {
   const msg = err?.shortMessage || err?.message || String(err);
   const text = `${msg}\n${err?.message ?? ''}`;
   if (/rejected|denied/i.test(text)) return 'Transaction cancelled.';
+  const mime = text.match(/detected MIME type: ([\w.+-]+\/[\w.+-]+)/);
+  if (mime) return `Fangorn's storage doesn't take ${mime[1]} files. Nothing was published.`;
   if (/insufficient funds/i.test(text)) return 'Not enough Base Sepolia ETH for gas. Grab some from a faucet and try again.';
-  if (/AppAlreadyRegistered|AlreadyClaimed/i.test(text)) return 'That name is taken. Pick another.';
   if (/max fee per gas less than block base fee/i.test(text)) {
     return 'Network fees moved while confirming. Try again.';
   }
@@ -53,7 +53,7 @@ function readIdentity(user) {
   return { name: 'there', contact: null };
 }
 
-function CopyButton({ text, label = 'Copy', className }) {
+export function CopyButton({ text, label = 'Copy', className }) {
   const [copied, setCopied] = useState(false);
   function copy() {
     navigator.clipboard.writeText(text);
@@ -85,7 +85,8 @@ function Field({ label, children }) {
 // close, inertness of the page behind, and top-layer stacking — all the parts of a
 // modal that are easy to get subtly wrong by hand.
 // ponytail: no library. `close` fires for Esc too, so state syncs back through onClose.
-function Modal({ open, onClose, title, children }) {
+// `side`: a drawer on the right edge instead, for a row's details beside its table.
+function Modal({ open, onClose, title, children, side }) {
   const ref = useRef(null);
 
   useEffect(() => {
@@ -98,7 +99,7 @@ function Modal({ open, onClose, title, children }) {
   return (
     <dialog
       ref={ref}
-      className={styles.modal}
+      className={side ? `${styles.modal} ${styles.drawer}` : styles.modal}
       onClose={onClose}
       // A click landing on the dialog element itself is a backdrop click — the
       // content sits in children, so anything inside targets those instead.
@@ -155,102 +156,516 @@ function FaucetLinks({ onRefresh }) {
   );
 }
 
-const usdc = (units) => `${Number(formatUnits(units, 6)).toFixed(2)} USDC`;
+const usdc = (units) => `${Number(formatUnits(units, 6)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 6 })} USDC`;
+const shortDate = (at) => (at ? new Date(at * 1000).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : '—');
 
-// The top of the hub: who you are on chain, what you hold, what your apps have made.
-function Summary({ wallet, balances, earnings, onFund, funding, refreshBalances }) {
-  // Don't call it low until the balances actually land — an orange dot on a
-  // still-loading wallet reads as a problem that isn't there.
-  const low = balances && balances.eth < LOW_ETH;
-
+function WalletColumn({ wallet }) {
   return (
-    <div className={styles.accountPanel}>
-      <Column title="Wallet" state="stateGood" stateLabel="Base Sepolia">
-        <Field label="Address">
-          <div className={styles.inlineValue}>
-            <span className={styles.fieldValueMono}>{truncate(wallet, 8, 6)}</span>
-            <CopyButton text={wallet} className={styles.ghostBtnSm} />
-          </div>
-          <a className={styles.resLink} href={explorer(wallet)} target="_blank" rel="noreferrer">
-            View on Basescan <span className={styles.resArrow}>↗</span>
-          </a>
-        </Field>
-      </Column>
+    <Column title="Wallet" state="stateGood" stateLabel="Base Sepolia">
+      <Field label="Address">
+        <div className={styles.inlineValue}>
+          <span className={styles.fieldValueMono}>{truncate(wallet, 8, 6)}</span>
+          <CopyButton text={wallet} className={styles.ghostBtnSm} />
+        </div>
+        <a className={styles.resLink} href={explorer(wallet)} target="_blank" rel="noreferrer">
+          View on Basescan <span className={styles.resArrow}>↗</span>
+        </a>
+      </Field>
+    </Column>
+  );
+}
 
-      <Column
-        title="Balance"
-        state={!balances ? 'statePending' : low ? 'stateWarn' : 'stateGood'}
-        stateLabel={!balances ? 'Loading' : low ? 'Low on gas' : 'Funded'}
-      >
-        <div className={styles.bigValue}>{balances ? usdc(balances.usdc) : <Skeleton width="8em" />}</div>
+// What the wallet holds. A buyer pays no gas (Barliman sends the transactions), so only a
+// publisher sees ETH and the low-gas warning.
+function BalanceColumn({ balances, onFund, funding, refreshBalances, gas }) {
+  // Don't call it low until the balances actually land: an orange dot on a
+  // still-loading wallet reads as a problem that isn't there.
+  const low = gas && balances && balances.eth < LOW_ETH;
+  return (
+    <Column
+      title="Balance"
+      state={!balances ? 'statePending' : low ? 'stateWarn' : 'stateGood'}
+      stateLabel={!balances ? 'Loading' : low ? 'Low on gas' : gas ? 'Funded' : 'USDC'}
+    >
+      <div className={styles.bigValue}>{balances ? usdc(balances.usdc) : <Skeleton width="8em" />}</div>
+      {gas && (
         <div className={styles.fieldValue}>
-          {balances ? `${Number(formatEther(balances.eth)).toFixed(4)} ETH` : <Skeleton width="6em" />}
+          {balances ? `${Number(formatEther(balances.eth)).toFixed(4)} ETH for gas` : <Skeleton width="6em" />}
         </div>
-        <div className={styles.btnRow}>
-          <button className={styles.ghostBtn} onClick={onFund} disabled={funding} type="button">
-            {funding ? 'Funding…' : 'Add funds'}
-          </button>
-        </div>
-        <details className={styles.more} open={low || undefined}>
-          <summary>Testnet faucets</summary>
-          <FaucetLinks onRefresh={refreshBalances} />
-        </details>
-      </Column>
+      )}
+      <div className={styles.btnRow}>
+        <button className={styles.ghostBtn} onClick={onFund} disabled={funding} type="button">
+          {funding ? 'Funding…' : 'Add funds'}
+        </button>
+      </div>
+      <details className={styles.more} open={low || undefined}>
+        <summary>Testnet faucets</summary>
+        <FaucetLinks onRefresh={refreshBalances} />
+      </details>
+    </Column>
+  );
+}
 
-      <Column
-        title="Earned"
-        state={earnings?.error ? 'stateWarn' : earnings ? 'stateGood' : 'statePending'}
-        stateLabel={earnings?.error ? 'Unavailable' : earnings ? 'All time' : 'Loading'}
-      >
-        <div className={styles.bigValue}>{earnings?.error ? '—' : earnings ? usdc(earnings.total) : <Skeleton width="8em" />}</div>
-        <div className={styles.fieldNote}>From record sales</div>
-      </Column>
+// Net earnings a week, the last twelve, as bars on a shared baseline.
+function WeeklyBars({ weekly }) {
+  const max = weekly.reduce((a, b) => (b > a ? b : a), 0n);
+  return (
+    <figure className={styles.barsFig} aria-label="Earnings a week, the last 12 weeks">
+      <div className={styles.bars}>
+        {weekly.map((w, i) => (
+          <div key={i} className={styles.bar} style={{ height: `${max ? Number((w * 100n) / max) : 0}%` }} title={`${['This week', 'Last week'][weekly.length - 1 - i] ?? `${weekly.length - 1 - i} weeks ago`}: ${usdc(w)}`} />
+        ))}
+      </div>
+      <figcaption className={styles.barsAxis}><span>12 weeks ago</span><span>This week</span></figcaption>
+    </figure>
+  );
+}
+
+function EarnedColumn({ earnings }) {
+  return (
+    <Column
+      title="Earned"
+      state={earnings?.error ? 'stateWarn' : earnings ? 'stateGood' : 'statePending'}
+      stateLabel={earnings?.error ? 'Unavailable' : earnings ? 'All time' : 'Loading'}
+    >
+      <div className={styles.bigValue}>{earnings?.error ? '—' : earnings ? usdc(earnings.total) : <Skeleton width="8em" />}</div>
+      <div className={styles.fieldNote}>
+        {earnings && !earnings.error ? `${earnings.sales} ${earnings.sales === 1 ? 'sale' : 'sales'}` : 'From record sales'}
+      </div>
+      {earnings?.weekly && <WeeklyBars weekly={earnings.weekly} />}
+    </Column>
+  );
+}
+
+function SpentColumn({ items }) {
+  const list = Array.isArray(items) ? items : null;
+  const spent = list?.reduce((s, it) => s + (it.price ?? 0n), 0n);
+  return (
+    <Column title="Library" state={list ? 'stateGood' : 'statePending'} stateLabel={list ? 'All time' : 'Locked'}>
+      <div className={styles.bigValue}>{list ? `${list.length} ${list.length === 1 ? 'record' : 'records'}` : '—'}</div>
+      <div className={styles.fieldNote}>{list ? `${usdc(spent)} spent` : 'Unlock it below'}</div>
+    </Column>
+  );
+}
+
+// ── Tables ──────────────────────────────────────────────────────────────────
+
+// A sortable table whose rows open something. Columns: { key, label, render, sort?, num?, hideSm? }.
+// Rows are keyboard-reachable: Enter or Space opens one, like a click.
+function DataTable({ label, columns, rows, rowKey, onOpen, empty }) {
+  const [sort, setSort] = useState(null); // { key, dir }
+  const col = columns.find((c) => c.key === sort?.key);
+  const sorted = col ? [...rows].sort((a, b) => {
+    const x = col.sort(a), y = col.sort(b);
+    return (x < y ? -1 : x > y ? 1 : 0) * sort.dir;
+  }) : rows;
+  const cls = (c) => [c.num && styles.num, c.hideSm && styles.hideSm].filter(Boolean).join(' ') || undefined;
+  return (
+    <div className={styles.tableWrap}>
+      <table className={styles.table} aria-label={label}>
+        <thead>
+          <tr>
+            {columns.map((c) => (
+              <th key={c.key} className={cls(c)} aria-sort={sort?.key === c.key ? (sort.dir > 0 ? 'ascending' : 'descending') : undefined}>
+                {c.sort ? (
+                  <button
+                    className={styles.sortBtn}
+                    type="button"
+                    // Numbers sort biggest first on the first click; names A to Z.
+                    onClick={() => setSort((s) => ({ key: c.key, dir: s?.key === c.key ? -s.dir : c.num ? -1 : 1 }))}
+                  >
+                    {c.label}<span aria-hidden="true">{sort?.key === c.key ? (sort.dir > 0 ? ' ↑' : ' ↓') : ''}</span>
+                  </button>
+                ) : c.label}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {sorted.map((r) => (
+            <tr
+              key={rowKey(r)}
+              tabIndex={0}
+              onClick={() => onOpen(r)}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpen(r); } }}
+            >
+              {columns.map((c) => <td key={c.key} className={cls(c)}>{c.render(r)}</td>)}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {!rows.length && empty && <div className={styles.tableEmpty}>{empty}</div>}
     </div>
   );
 }
 
-// The one thing to do next, in the order the contracts enforce.
-function nextStep(apps) {
-  if (apps === null) return 'Checking where you left off…';
-  if (!apps.length) return 'Start by creating your first app below.';
-  return "You're set up. Getting started, below, has the CLI steps.";
+// Rows whose text holds `q`, case-insensitively.
+const matching = (rows, q, text) => {
+  const needle = q.trim().toLowerCase();
+  return needle ? rows.filter((r) => text(r).toLowerCase().includes(needle)) : rows;
+};
+
+function FilterInput({ value, onChange, label }) {
+  return (
+    <input
+      className={`${styles.input} ${styles.filter}`}
+      type="search"
+      placeholder="Filter"
+      aria-label={label}
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+    />
+  );
 }
 
-// ── The hub ─────────────────────────────────────────────────────────────────
+// Facts about the open row, label over value.
+function Facts({ items }) {
+  return (
+    <dl className={styles.facts}>
+      {items.map(([k, v]) => (
+        <div key={k}><dt className={styles.fieldLabel}>{k}</dt><dd>{v}</dd></div>
+      ))}
+    </dl>
+  );
+}
 
-const SDK_INSTALL = 'npm i -g @fangorn-network/sdk';
-const GETTING_STARTED_PATHS = {
-  claude: {
-    label: 'With Claude Code',
-    agent: 'Claude Code',
-    pluginCommand: `/plugin marketplace add fangorn-network/westmarch
-/plugin install fangorn-builder@fangorn`,
-    pluginInstructions: 'Run these inside Claude Code.',
-    buildTitle: 'Ask Claude to build it',
-  },
-  codex: {
-    label: 'With Codex',
-    agent: 'Codex',
-    pluginCommand: `codex plugin marketplace add fangorn-network/westmarch
-codex plugin add fangorn-builder@fangorn`,
-    pluginInstructions: 'Run these in your terminal from the project root.',
-    buildTitle: 'Ask Codex to build it',
-  },
-  manual: {
-    label: 'Deploy to Cloudflare',
-  },
-};
-const BUILD_PROMPT = 'Build a Fangorn app from <your data>.';
-// Cloudflare's deploy button: it copies westmarch's template into the owner's GitHub, makes
-// the bucket and deploys the Worker, which builds itself with `westmarch build`.
-const DEPLOY_URL = 'https://deploy.workers.cloudflare.com/?url=https://github.com/fangorn-network/westmarch/tree/main/template';
-const PUBLISH_CMD = `fangorn repo init items
-fangorn commit items.json -m "first items"
-fangorn push`;
+// ── Buying ──────────────────────────────────────────────────────────────────
+
+const keyOf = (it) => `${it.publisher}/${it.repo}/${it.id}`;
+const repoHref = (publisher, repo) => `#/data/${publisher}/${encodeURIComponent(repo)}`;
+
+// One purchase, opened. Reopening pays nothing: buyRecord sees the reader can already read.
+// `opened` is kept by the tab, so closing and reopening the drawer doesn't fetch again.
+function PurchaseDrawer({ item, opened, onOpen, onClose }) {
+  const o = item && opened[keyOf(item)];
+  useEffect(() => {
+    if (item && item.id != null && !o) onOpen(item);
+  }, [item, o, onOpen]);
+  return (
+    <Modal open={Boolean(item)} onClose={onClose} title={item?.title ?? ''} side>
+      {item && <>
+        <Facts items={[
+          ['From', <a key="from" className={styles.resLink} href={repoHref(item.publisher, item.repo)}>{item.repo} · {truncate(item.publisher)}</a>],
+          ['Paid', item.price != null ? usdc(item.price) : '—'],
+          ['Bought', shortDate(item.at)],
+        ]} />
+        {item.id == null && <p className={styles.colText}>The whole repo: open any record on <a className={styles.resLink} href={repoHref(item.publisher, item.repo)}>its page</a>.</p>}
+        {(o === 'busy' || (item.id != null && !o)) && <div className={styles.pending}>Opening the sealed fields…</div>}
+        {o?.error && <div className={styles.formError}>{o.error} <button className={styles.ghostBtnSm} type="button" onClick={() => onOpen(item)}>Try again</button></div>}
+        {o?.fields && <>
+          <div className={styles.drawerHead}>Fields</div>
+          <Fields fields={o.fields} />
+        </>}
+      </>}
+    </Modal>
+  );
+}
+
+function BuyingTab({ wallet, balances, onFund, funding, refreshBalances }) {
+  const { wallet: privyWallet } = useAuth();
+  // Bought something this session: the signature is already in hand, so it loads without asking.
+  const [items, setItems] = useState(() => (hasIdentity(wallet) ? null : undefined)); // undefined not asked, null loading, [...], { error }
+  const [opened, setOpened] = useState({}); // item key → 'busy' | { fields } | { error }
+  const [selected, setSelected] = useState(null);
+  const [q, setQ] = useState('');
+
+  const fetchLibrary = useCallback(() => readLibrary(privyWallet, wallet)
+    .then(setItems, (err) => setItems({ error: friendlyError(err) })), [privyWallet, wallet]);
+  const load = () => { setItems(null); fetchLibrary(); };
+
+  useEffect(() => {
+    if (privyWallet && hasIdentity(wallet)) fetchLibrary();
+  }, [privyWallet, wallet, fetchLibrary]);
+
+  const open = useCallback(async (it) => {
+    const k = keyOf(it);
+    setOpened((o) => ({ ...o, [k]: 'busy' }));
+    const next = await buy(privyWallet, wallet, { ...it, maxPrice: it.price ?? 0n })
+      .then(({ fields }) => ({ fields }), (err) => ({ error: friendlyError(err) }));
+    setOpened((o) => ({ ...o, [k]: next }));
+  }, [privyWallet, wallet]);
+
+  const list = Array.isArray(items) ? matching(items, q, (it) => `${it.title} ${it.repo} ${it.publisher}`) : [];
+  const columns = [
+    { key: 'title', label: 'Record', sort: (it) => it.title.toLowerCase(), render: (it) => <span className={styles.cellName}>{it.title}</span> },
+    { key: 'from', label: 'From', hideSm: true, sort: (it) => it.repo, render: (it) => <span className={styles.cellSub}>{it.repo} · {truncate(it.publisher)}</span> },
+    { key: 'price', label: 'Paid', num: true, sort: (it) => it.price ?? -1n, render: (it) => (it.price != null ? usdc(it.price) : '—') },
+    { key: 'at', label: 'Bought', num: true, hideSm: true, sort: (it) => it.at ?? 0, render: (it) => shortDate(it.at) },
+  ];
+
+  return (
+    <>
+      <div className={styles.accountPanel}>
+        <WalletColumn wallet={wallet} />
+        <BalanceColumn balances={balances} onFund={onFund} funding={funding} refreshBalances={refreshBalances} />
+        <SpentColumn items={items} />
+      </div>
+
+      <section className={styles.section}>
+        <div className={styles.toolbar}>
+          <h2 className={styles.h2}>Library</h2>
+          {Array.isArray(items) && items.length > 0 && <FilterInput value={q} onChange={setQ} label="Filter your library" />}
+        </div>
+        {items === undefined && (
+          <div className={styles.tableEmpty}>
+            <p className={styles.colText}>
+              What you buy is tied to your wallet by a signature, so nobody else can list it. Sign once to
+              see your library (it pays nothing).
+            </p>
+            <button className={styles.primaryBtn} type="button" onClick={load} disabled={!privyWallet}>Show my library</button>
+          </div>
+        )}
+        {items === null && (
+          <div className={styles.tableWrap} role="status" aria-label="Reading your library">
+            {[0, 1, 2].map((i) => <div key={i} className={styles.rowLink}><Skeleton width="10em" /><Skeleton width="7em" /><Skeleton width="5em" /></div>)}
+          </div>
+        )}
+        {items?.error && <div className={styles.formError}>{items.error} <button className={styles.ghostBtnSm} type="button" onClick={load}>Try again</button></div>}
+        {Array.isArray(items) && (
+          <DataTable
+            label="Your library"
+            columns={columns}
+            rows={list}
+            rowKey={keyOf}
+            onOpen={setSelected}
+            empty={items.length ? 'Nothing matches.' : <>Nothing bought yet. Find data on the <a className={styles.resLink} href={EXPLORER_URL}>explorer</a>: paid records have a Buy button on their repo's page.</>}
+          />
+        )}
+        <PurchaseDrawer item={selected} opened={opened} onOpen={open} onClose={() => setSelected(null)} />
+      </section>
+
+      <section className={styles.section}>
+        <h2 className={styles.h2}>Buy with an agent</h2>
+        <p className={styles.colText}>
+          Agents search and buy on Fangorn with the Fangorn plugin, added to Claude Code with:
+        </p>
+        <Cmd text={MCP_INSTALL} />
+      </section>
+    </>
+  );
+}
+
+// ── Publishing ──────────────────────────────────────────────────────────────
+
+const dataHref = (repo) => `#/account/data${repo ? `/${encodeURIComponent(repo)}` : ''}`;
+
+// A repo's state on the explorer, and whether it's an app.
+function RepoBadges({ repo }) {
+  return (
+    <>
+      {repo.app && <span className={styles.badge} title={repo.app.card}>App{repo.app.name ? `: ${repo.app.name}` : ''}</span>}
+      <span className={repo.listing ? styles.badge : styles.badgeWarn} title={repo.listing ? undefined : 'The explorer indexes new data every few minutes.'}>
+        {repo.listing ? 'Listed' : 'Not listed yet'}
+      </span>
+    </>
+  );
+}
+
+// Every repo: what the explorer lists of it. Sales are per record, inside a repo.
+function RepoTable({ repos, earnings }) {
+  const updated = (r) => (earnings?.head ? blockTime(earnings.head, r.block) : null);
+  const columns = [
+    { key: 'repo', label: 'Repo', sort: (r) => r.repo, render: (r) => <span className={styles.cellName}>{r.repo}</span> },
+    { key: 'status', label: 'Status', hideSm: true, render: (r) => <span className={styles.cellBadges}><RepoBadges repo={r} /></span> },
+    { key: 'records', label: 'Records', num: true, sort: (r) => r.listing?.count ?? -1, render: (r) => (r.listing ? r.listing.count.toLocaleString() : '—') },
+    { key: 'updated', label: 'Updated', num: true, sort: (r) => r.block, render: (r) => shortDate(updated(r)) },
+  ];
+  return <DataTable label="Your repos" columns={columns} rows={repos} rowKey={(r) => r.repo} onOpen={(r) => { location.hash = dataHref(r.repo); }} />;
+}
+
+// A record's buyers and what they paid it, or a stand-in while the registry answers.
+const buyersCell = (r, pick) => (r.buyers === undefined ? <Skeleton width="3em" /> : r.buyers === null ? '—' : pick(r));
+const earnedOf = (r) => BigInt(r.buyers ?? 0) * netPrice(r);
+
+// One record in the drawer: what it shows, what it sells for, how many bought it.
+function RecordDrawer({ record, address, repo, onClose }) {
+  return (
+    <Modal open={Boolean(record)} onClose={onClose} title={record?.title ?? ''} side>
+      {record && <>
+        <Facts items={[
+          ['Price', record.price != null ? usdc(record.price) : 'Free'],
+          ['Buyers', buyersCell(record, (r) => r.buyers.toLocaleString())],
+          ['Earned', buyersCell(record, (r) => usdc(earnedOf(r)))],
+          ['Type', record.type],
+        ]} />
+        <div className={styles.drawerHead}>Fields</div>
+        <Fields fields={record.fields} sealed={record.sealed} />
+        <p className={`${styles.colText} ${styles.drawerFoot}`}>
+          Id <span className={styles.fieldValueMono}>{record.id}</span> ·{' '}
+          <a className={styles.resLink} href={`#/data/${address}/${encodeURIComponent(repo)}`}>Its public page</a>
+        </p>
+      </>}
+    </Modal>
+  );
+}
+
+// One repo, opened: its records, and how many bought each. A record's buyers are its group in
+// the SettlementRegistry, so a count is a read, not a scan.
+function RepoView({ repo, address, onAdd }) {
+  const [records, setRecords] = useState(undefined); // undefined loading, null failed, [...]
+  const [buyers, setBuyers] = useState(undefined); // undefined loading, null failed, Map id → count
+  const [q, setQ] = useState('');
+  const [selected, setSelected] = useState(null);
+
+  // Re-read when the repo moves (a publish adds records).
+  useEffect(() => {
+    let cancelled = false;
+    readRepoPage(address, repo.repo).then((p) => {
+      if (cancelled) return;
+      setRecords(p.records);
+      return readBuyers(address, repo.repo, p.records.map((r) => r.id)).then((b) => !cancelled && setBuyers(b), (err) => {
+        console.warn('Buyer counts failed:', err);
+        if (!cancelled) setBuyers(null);
+      });
+    }, (err) => {
+      console.warn(`Reading ${repo.repo} failed:`, err);
+      if (!cancelled) setRecords(null);
+    });
+    return () => { cancelled = true; };
+  }, [address, repo.repo, repo.block]);
+
+  const rows = (records ?? []).map((r) => ({ ...r, buyers: buyers === undefined ? undefined : buyers?.get(r.id) ?? null }));
+  const total = buyers ? rows.reduce((t, r) => ({ n: t.n + (r.buyers ?? 0), earned: t.earned + earnedOf(r) }), { n: 0, earned: 0n }) : null;
+  const columns = [
+    { key: 'title', label: 'Record', sort: (r) => r.title.toLowerCase(), render: (r) => <span className={styles.cellName}>{r.title}</span> },
+    { key: 'type', label: 'Type', hideSm: true, sort: (r) => r.type, render: (r) => <span className={styles.cellSub}>{r.type}</span> },
+    { key: 'price', label: 'Price', num: true, sort: (r) => r.price ?? -1n, render: (r) => (r.price != null ? usdc(r.price) : 'Free') },
+    { key: 'buyers', label: 'Buyers', num: true, sort: (r) => r.buyers ?? -1, render: (r) => buyersCell(r, (x) => x.buyers.toLocaleString()) },
+    { key: 'earned', label: 'Earned', num: true, sort: earnedOf, render: (r) => buyersCell(r, (x) => usdc(earnedOf(x))) },
+  ];
+  return (
+    <>
+      <div className={styles.toolbar}>
+        <div className={styles.repoTitle}>
+          <RepoBadges repo={repo} />
+          {total && <span className={styles.rowMeta}>{total.n} {total.n === 1 ? 'buyer' : 'buyers'} · {usdc(total.earned)} earned</span>}
+        </div>
+        <span className={styles.cardLinks}>
+          {repo.app?.site && <a className={styles.resLink} href={repo.app.site} target="_blank" rel="noreferrer">Site <span className={styles.resArrow}>↗</span></a>}
+          <a className={styles.resLink} href={`#/data/${address}/${encodeURIComponent(repo.repo)}`}>Public page</a>
+          <CopyButton text={repoLink(address, repo.repo)} label="Copy link" className={styles.ghostBtnSm} />
+          <button className={styles.ghostBtnSm} type="button" onClick={onAdd}>+ Add files</button>
+        </span>
+      </div>
+      {records === undefined && <div className={styles.pending}>Reading {repo.repo}…</div>}
+      {records === null && <div className={styles.formError}>Couldn't read {repo.repo}. Reload to try again.</div>}
+      {records && <>
+        {records.length > 8 && <div className={styles.toolbar}><span /><FilterInput value={q} onChange={setQ} label={`Filter ${repo.repo}`} /></div>}
+        <DataTable
+          label={`Records in ${repo.repo}`}
+          columns={columns}
+          rows={matching(rows, q, (r) => `${r.title} ${r.id} ${r.type}`)}
+          rowKey={(r) => r.id}
+          onOpen={setSelected}
+          empty={records.length ? 'Nothing matches.' : 'No records yet.'}
+        />
+      </>}
+      <RecordDrawer record={selected && rows.find((r) => r.id === selected.id)} address={address} repo={repo.repo} onClose={() => setSelected(null)} />
+    </>
+  );
+}
+
+function PublishingTab({ wallet, path, balances, onFund, funding, refreshBalances, publisher, onPublish }) {
+  const { repos, earnings, error } = publisher;
+  // null when closed, else { repo }: the repo to add to, or null for the default.
+  const [publishing, setPublishing] = useState(null);
+  const open = path[1] != null ? decodeURIComponent(path.slice(1).join('/')) : null;
+  const repo = open != null ? repos?.find((r) => r.repo === open) : null;
+  const { exportKey } = useAuth();
+
+  return (
+    <>
+      <div className={styles.accountPanel}>
+        <WalletColumn wallet={wallet} />
+        <BalanceColumn balances={balances} onFund={onFund} funding={funding} refreshBalances={refreshBalances} gas />
+        <EarnedColumn earnings={earnings} />
+      </div>
+
+      <section className={styles.section}>
+        <div className={styles.toolbar}>
+          <nav className={styles.crumbs} aria-label="Breadcrumb">
+            {open != null ? <><a href={dataHref()}>Your data</a><span aria-hidden="true">/</span><span aria-current="page">{open}</span></>
+              : <h2 className={styles.h2}>Your data</h2>}
+          </nav>
+          {open == null && repos?.length > 0 && (
+            <button className={styles.ghostBtnSm} type="button" onClick={() => setPublishing({ repo: null })}>+ Publish data</button>
+          )}
+        </div>
+        {error && <div className={styles.formError}>{error}</div>}
+        {repos === null && (
+          <div className={styles.tableWrap} role="status" aria-label="Reading your data from the chain">
+            {[0, 1].map((i) => <div key={i} className={styles.rowLink}><Skeleton width="9em" /><Skeleton width="6em" /><Skeleton width="12em" /></div>)}
+          </div>
+        )}
+        {open == null && repos?.length === 0 && (
+          <button className={`${styles.card} ${styles.cardNew}`} type="button" onClick={() => setPublishing({ repo: null })}>
+            <span className={styles.cardPlus} aria-hidden="true">+</span>
+            <span className={styles.cardTitle}>Publish data</span>
+            <span className={styles.cardBody}>Any files. Choose what's paid and the price.</span>
+          </button>
+        )}
+        {open == null && repos?.length > 0 && <RepoTable repos={repos} earnings={earnings} />}
+        {open != null && repos && !repo && <div className={styles.pending}>You have no repo called {open}.</div>}
+        {repo && <RepoView key={repo.repo} repo={repo} address={wallet} onAdd={() => setPublishing({ repo: repo.repo })} />}
+        {publishing && <PublishModal
+          key={publishing.repo ?? ''}
+          open
+          onClose={() => setPublishing(null)}
+          target={publishing.repo}
+          repos={repos}
+          balances={balances}
+          onPublish={onPublish}
+        />}
+      </section>
+
+      {open == null && <>
+        <section className={styles.section}>
+          <h2 className={styles.h2}>How people find it</h2>
+          <p className={styles.colText}>
+            The <a className={styles.resLink} href={EXPLORER_URL} target="_blank" rel="noreferrer">Fangorn explorer <span className={styles.resArrow}>↗</span></a> lists
+            every publisher. Agents search it through the Fangorn plugin, which anyone adds to Claude Code with:
+          </p>
+          <Cmd text={MCP_INSTALL} />
+          <p className={styles.colText}>
+            Each repo also has its own public page: share its link to send someone straight to your
+            data's storefront.
+          </p>
+        </section>
+
+        <details className={styles.section}>
+          <summary className={styles.h2}>Publish from the command line</summary>
+          <ol className={styles.onboard}>
+            <li>
+              <div className={styles.cardTitle}>Install the Fangorn CLI</div>
+              <Cmd text="npm i -g @fangorn-network/sdk" />
+            </li>
+            <li>
+              <div className={styles.cardTitle}>Configure it with this wallet's key</div>
+              <Cmd text="fangorn init" />
+              <p className={styles.colText}>
+                Pick <b>Base Sepolia</b>, then paste your private key. Anyone with it controls your
+                wallet: paste it only into your own terminal, never into a chat, a website or an email.
+              </p>
+              <CopyKey exportKey={exportKey} />
+            </li>
+            <li>
+              <div className={styles.cardTitle}>Publish</div>
+              <Cmd text={CLI_PUBLISH} />
+              <p className={styles.colText}>
+                For files too big for the browser, or to publish on a schedule. It shows up here
+                the same way.
+              </p>
+            </li>
+          </ol>
+        </details>
+      </>}
+    </>
+  );
+}
 
 // A command with a copy button. Wraps instead of scrolling: a command you can't
 // see the end of gets pasted wrong.
-function Cmd({ text }) {
+export function Cmd({ text }) {
   return (
     <div className={styles.cmd}>
       <pre>{text}</pre>
@@ -260,9 +675,8 @@ function Cmd({ text }) {
 }
 
 // The key is copied from Privy's export dialog, not from this page: Privy rebuilds
-// it inside its own iframe on its own origin, and the SDK gives us no way to read
-// it (by design — nothing on fangorn.network can leak what it never holds).
-// `exportKey` is null for an external wallet (MetaMask etc.), which holds its own.
+// it inside its own iframe on its own origin (nothing on fangorn.network can leak what
+// it never holds). `exportKey` is null for an external wallet, which holds its own.
 function CopyKey({ exportKey }) {
   const [error, setError] = useState(null);
   if (!exportKey) {
@@ -287,493 +701,202 @@ function CopyKey({ exportKey }) {
   );
 }
 
-// Three ways in, one wallet: the CLI signs as it (the key exported above goes
-// into `fangorn init`), so the apps claimed here are the ones published to.
-function GettingStarted({ wallet, exportKey }) {
-  const [path, setPath] = useState('claude');
-  const method = GETTING_STARTED_PATHS[path];
-  return (
-    <>
-      <div className={styles.btnRow} role="tablist">
-        {Object.entries(GETTING_STARTED_PATHS).map(([id, { label }]) => (
-          <button
-            key={id}
-            type="button"
-            role="tab"
-            aria-selected={path === id}
-            className={`${styles.ghostBtn} ${path === id ? styles.tabActive : ''}`}
-            onClick={() => setPath(id)}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-      <ol className={styles.onboard}>
-        <li>
-          <div className={styles.cardTitle}>Install the Fangorn CLI</div>
-          <Cmd text={SDK_INSTALL} />
-        </li>
-        <li>
-          <div className={styles.cardTitle}>Configure it with your key</div>
-          <Cmd text="fangorn init" />
-          <p className={styles.colText}>
-            Pick <b>Base Sepolia</b> as the chain, then paste your private key. Press Enter
-            to accept the defaults for the rest.
-          </p>
-          <CopyKey exportKey={exportKey} />
-          <p className={styles.colText}>
-            Anyone with this key controls your wallet. Paste it only into your own terminal,
-            never into a chat (including your AI agent), a website or an email.
-          </p>
-          <details className={styles.more}>
-            <summary>Verify app ownership</summary>
-            <Cmd text={'fangorn set-app <your-app>\nfangorn wallet'} />
-            <p className={styles.colText}>
-              {wallet
-                ? <>The address should be <span className={styles.fieldValueMono}>{wallet}</span>, the owner of the app you set.</>
-                : <>The address should be the wallet that claimed the app you set.</>}
-            </p>
-          </details>
-        </li>
-        {method.agent ? (
-          <>
-            <li>
-              <div className={styles.cardTitle}>Add the builder skills to {method.agent}</div>
-              <Cmd text={method.pluginCommand} />
-              <p className={styles.colText}>
-                {method.pluginInstructions}{' '}
-                <b>fangorn-app</b> builds and registers your app;{' '}
-                <b>fangorn-improve</b> keeps it getting better, one pull request at a time.
-              </p>
-            </li>
-            <li>
-              <div className={styles.cardTitle}>{method.buildTitle}</div>
-              <Cmd text={BUILD_PROMPT} />
-              <p className={styles.colText}>
-                You'll need a free Cloudflare account for the site. Your app shows up on this page
-                once it publishes.
-              </p>
-            </li>
-          </>
-        ) : (
-          <>
-            <li>
-              <div className={styles.cardTitle}>Deploy it to Cloudflare</div>
-              <p className={styles.colText}>
-                Open your app above and press <b>Deploy to Cloudflare</b>. Cloudflare copies the
-                app's template into your GitHub, makes its storage and deploys it as a Worker on
-                your free plan; every push to the repo deploys again. The repo holds the recipe,
-                never the data, so it can be public.
-              </p>
-            </li>
-            <li>
-              <div className={styles.cardTitle}>Register its agent</div>
-              <p className={styles.colText}>
-                Paste the Worker's URL into the app's page and press <b>Register</b>. Your wallet mints
-                the app's ERC-8004 agent and binds its card, and the app shows in the explorer.
-              </p>
-            </li>
-            <li>
-              <div className={styles.cardTitle}>Publish records</div>
-              <Cmd text={PUBLISH_CMD} />
-              <p className={styles.colText}>
-                The site indexes them within 5 minutes. The repo's README shows the record format.
-              </p>
-            </li>
-          </>
-        )}
-      </ol>
-    </>
-  );
-}
+const MCP_INSTALL = `/plugin marketplace add fangorn-network/westmarch
+/plugin install fangorn-index@fangorn`;
+const CLI_PUBLISH = `fangorn repo init my-data
+fangorn commit records.json --paid body --price 0.01
+fangorn push`;
 
-// The one word the closed row leads with. Anything that stops the app working wins,
-// so it shows without opening the row.
-// A field whose read failed is null, and says so rather than guessing.
-function appStatus(app) {
-  if (app.suspended) return { warn: true, label: 'Taken down' };
-  if (app.uri === '') return { warn: true, label: 'Not deployed' };
-  if (app.uri == null) return { warn: false, label: 'Status unknown' };
-  return { warn: false, label: 'Live' };
-}
 
-// What a reader pays, in one phrase: per record, or for a pass.
-const priceLabel = (app) =>
-  app.price != null ? `${formatUnits(app.price, 6)} USDC / record`
-    : app.pass ? `${formatUnits(app.pass.price, 6)} USDC pass` : 'Free';
+// A repo name is what the explorer and agents see; keep it to what a URL doesn't quote.
+const REPO_NAME = /^[a-z0-9][a-z0-9._-]{1,62}$/;
+// ponytail: every paid record is one wallet signature and every sealed value one upload.
+// Bigger files go through the CLI.
+const MAX_ROWS = 1000;
 
-// An app's address in the hub: its name when this browser knows it, else its id.
-const appHref = (app) => `#/account/app/${encodeURIComponent(app.name ?? app.appId)}`;
-const findApp = (apps, key) => {
-  const k = decodeURIComponent(key).toLowerCase();
-  // Card names carry case ("FAR Desk"), so match them the way the key was lowered.
-  return apps.find((a) => a.name?.toLowerCase() === k || a.appId.toLowerCase() === k);
-};
-
-// One app on the dashboard: enough to see it's healthy, and the way into its page.
-function AppLine({ app }) {
-  const status = appStatus(app);
-  return (
-    <a className={styles.rowLink} href={appHref(app)}>
-      <span className={styles.rowName}>{app.name ?? truncate(app.appId, 10, 6)}</span>
-      <span className={status.warn ? styles.badgeWarn : styles.badge}>{status.label}</span>
-      <span className={styles.rowMeta}>
-        {app.curator?.repo ? `Repo ${app.curator.repo} · ` : ''}{priceLabel(app)}
-      </span>
-      <svg className={styles.rowGo} viewBox="0 0 24 24" aria-hidden="true"><path d="M10 7l5 5-5 5" /></svg>
-    </a>
-  );
-}
-
-// One owned app's page: everything an owner does with it — point it at its repo of
-// citations and its payout address, see what it charges, deploy, bind the agent card
-// the explorer lists it by.
-function AppPage({ app, onSetCard, onSetRepo, onSetPayout }) {
-  const worker = app.name ? app.name.replace(/[._]/g, '-') : '<your-app>';
-  const [busy, setBusy] = useState(null);
-  const [cardUrl, setCardUrl] = useState(app.uri ?? '');
-  const [repo, setRepo] = useState(app.curator?.repo ?? '');
-  const [payout, setPayout] = useState(app.payout ?? '');
+// One repo: whether the explorer lists it yet, and its page to share.
+// Upload a file, choose what's paid and for how much, publish. That's the whole product.
+// Mounted per opening, so it starts on `target`, else the newest repo, else a new one.
+function PublishModal({ open, onClose, target, repos, balances, onPublish }) {
+  const [file, setFile] = useState(null); // { records, columns } | { error }
+  // The repo the files go into; '' is a new one, named below.
+  const [choice, setChoice] = useState(target ?? repos?.[0]?.repo ?? '');
+  const [name, setName] = useState(repos?.length ? '' : 'data');
+  const [paid, setPaid] = useState([]);
+  const [price, setPrice] = useState('0.01');
+  const [step, setStep] = useState(null);
   const [error, setError] = useState(null);
-  const status = appStatus(app);
+  const [done, setDone] = useState(null);
 
-  async function run(what, fn) {
-    setError(null);
-    setBusy(what);
-    try {
-      await fn();
-    } catch (err) {
-      setError(friendlyError(err));
-    } finally {
-      setBusy(null);
-    }
+  const repo = choice || name.trim();
+  const validName = !!choice || REPO_NAME.test(repo);
+  const exists = repos?.some((r) => r.repo === repo);
+  const validPrice = !paid.length || Number(price) > 0;
+  const rows = file?.records?.length ?? 0;
+  const ready = rows > 0 && rows <= MAX_ROWS && validName && validPrice && !step;
+
+  function reset() {
+    setFile(null); setPaid([]); setPrice('0.01'); setError(null); setDone(null);
   }
-
-  return (
-    <>
-      <section className={styles.welcome}>
-        <a className={styles.resLink} href="#/account">← All apps</a>
-        <h1 className={styles.h1}>
-          {app.name ?? truncate(app.appId, 10, 6)}
-          <span className={status.warn ? styles.badgeWarn : styles.badge}>{status.label}</span>
-        </h1>
-        <div className={styles.inlineValue}>
-          <span className={styles.fieldValueMono}>{app.appId}</span>
-          <CopyButton text={app.appId} className={styles.ghostBtnSm} />
-        </div>
-        <div className={styles.cardLinks}>
-          {app.site && <a className={styles.resLink} href={app.site} target="_blank" rel="noreferrer">Site <span className={styles.resArrow}>↗</span></a>}
-          {app.listed && <a className={styles.resLink} href="#/explorer">Explorer</a>}
-        </div>
-      </section>
-
-      <div className={styles.accountPanel}>
-        <Column title="App" state="stateGood" stateLabel="On chain">
-          <Field label="Repo of citations">
-            <input className={styles.input} value={repo} onChange={(event) => setRepo(event.target.value)} placeholder="picks" aria-label="Repo of citations" />
-            <button
-              className={styles.ghostBtn}
-              type="button"
-              disabled={!!busy || !repo.trim() || repo.trim() === app.curator?.repo}
-              onClick={() => run('repo', () => onSetRepo(app.appId, repo.trim()))}
-            >
-              {busy === 'repo' ? 'Signing…' : 'Save'}
-            </button>
-          </Field>
-          <Field label="Payout address">
-            <input className={styles.input} value={payout} onChange={(event) => setPayout(event.target.value)} placeholder="0x…" aria-label="Payout address" />
-            <button
-              className={styles.ghostBtn}
-              type="button"
-              disabled={!!busy || !isAddress(payout.trim()) || payout.trim().toLowerCase() === app.payout?.toLowerCase()}
-              onClick={() => run('payout', () => onSetPayout(app.appId, payout.trim()))}
-            >
-              {busy === 'payout' ? 'Signing…' : 'Save'}
-            </button>
-            <p className={styles.colText}>Where the app's referral share of a sale is paid.</p>
-          </Field>
-        </Column>
-
-        {/* What the app's card says it charges. Read-only: setting prices is next. */}
-        <Column title="Pricing" state="stateGood" stateLabel="From its card">
-          <Field label="Per record (x402)">
-            <div className={styles.fieldValue}>{app.price != null ? `${formatUnits(app.price, 6)} USDC` : 'Free'}</div>
-          </Field>
-          {app.pass && (
-            <Field label="Access pass">
-              <div className={styles.fieldValue}>
-                {formatUnits(app.pass.price, 6)} USDC{app.pass.days ? ` for ${app.pass.days} days` : ''}
-              </div>
-            </Field>
-          )}
-        </Column>
-
-      </div>
-
-      <Activity app={app} />
-
-      {app.uri != null && <section className={styles.section}>
-        <h2 className={styles.h2}>{app.uri ? 'Agent card' : 'Deploy'}</h2>
-        {/* Claimed but not deployed (the chain says no card, not "couldn't read"):
-            Cloudflare makes the repo and the Worker, then the wallet registers the
-            agent from the Worker's card. */}
-        {app.uri === '' && (
-          <div className={styles.field}>
-            <a href={DEPLOY_URL} target="_blank" rel="noreferrer">
-              <img src="https://deploy.workers.cloudflare.com/button" alt="Deploy to Cloudflare" height="32" />
-            </a>
-            <p className={styles.colText}>
-              Name the Worker <b>{worker}</b> and its R2 bucket <b>{worker}-view</b>.
-              {app.name && /[._]/.test(app.name) && <> Then set <b>"app": "{app.name}"</b> in the new repo's app.json.</>}
-              {' '}Cloudflare copies the app's template into your GitHub and deploys it on your
-              free plan. Then paste the Worker's URL below.
-            </p>
-          </div>
-        )}
-        <Field label={app.uri ? 'Agent card URL' : 'Register the agent'}>
-          <input
-            className={styles.input}
-            value={cardUrl}
-            onChange={(event) => setCardUrl(event.target.value)}
-            placeholder={`https://${worker}.<you>.workers.dev`}
-            aria-label="Worker or agent card URL"
-          />
-          <div className={styles.btnRow}>
-            <button
-              className={styles.ghostBtn}
-              type="button"
-              disabled={!!busy || !isCardUrl(cardUrl) || cardUrlOf(cardUrl) === app.uri}
-              onClick={() => run('card', () => onSetCard(app.appId, cardUrlOf(cardUrl), { register: !app.uri }))}
-            >
-              {busy === 'card' ? 'Signing…' : app.uri ? 'Save' : 'Register'}
-            </button>
-          </div>
-          {!app.uri && (
-            <p className={styles.colText}>
-              Mints the app's ERC-8004 agent from the Worker's card and binds the card to the
-              app, from your wallet.
-            </p>
-          )}
-        </Field>
-        {error && <div className={styles.formError}>{error}</div>}
-      </section>}
-    </>
-  );
-}
-
-// "4 min ago", "3 h ago", "2 days ago": how long since a unix time.
-function ago(secs) {
-  const min = Math.round((Date.now() / 1000 - secs) / 60);
-  if (min < 1) return 'just now';
-  if (min < 60) return `${min} min ago`;
-  if (min < 48 * 60) return `${Math.round(min / 60)} h ago`;
-  return `${Math.round(min / 1440)} days ago`;
-}
-
-// The Worker's cron indexes every 5 minutes. An hour without a run means it's failing.
-const STALE_SECS = 3600;
-
-// What the app has been doing, from what's public: its catalog (records, collections,
-// when it last indexed). Nothing here needs the Worker to change, or the owner's
-// Cloudflare account.
-function Activity({ app }) {
-  const catalog = useActivity(app);
-  const loading = catalog === undefined;
-  const records = catalog?.collections.reduce((sum, c) => sum + c.count, 0);
-  const hosts = new Set(catalog?.collections.flatMap((c) => c.hosts)).size;
-  const stale = catalog?.indexedAt && Date.now() / 1000 - catalog.indexedAt > STALE_SECS;
-
-  const [recordsState, recordsLabel] =
-    !app.site ? ['statePending', 'Not deployed']
-    : loading ? ['statePending', 'Loading']
-    : !catalog ? ['stateWarn', 'Unreachable']
-    : !catalog.indexedAt ? ['stateGood', 'Live']
-    : [stale ? 'stateWarn' : 'stateGood', `Indexed ${ago(catalog.indexedAt)}`];
-
-  return (
-    <section className={styles.section}>
-      <h2 className={styles.h2}>Activity</h2>
-      <div className={styles.accountPanel}>
-        <Column title="Records" state={recordsState} stateLabel={recordsLabel}>
-          {!app.site ? (
-            <p className={styles.colText}>Counts show up here once the app's Worker is deployed and bound below.</p>
-          ) : loading ? (
-            <><div className={styles.bigValue}><Skeleton width="5em" /></div><div className={styles.fieldValue}><Skeleton width="11em" /></div></>
-          ) : !catalog ? (
-            <p className={styles.colText}>The catalog at {new URL(app.site).host} didn't load. Check the Worker is running in your Cloudflare dashboard.</p>
-          ) : (
-            <>
-              <div className={styles.bigValue}>{records.toLocaleString()}</div>
-              <div className={styles.fieldValue}>
-                {catalog.collections.length} {catalog.collections.length === 1 ? 'collection' : 'collections'}
-                {hosts > 0 && <span className={styles.fieldNote}>, linking out to {hosts} {hosts === 1 ? 'site' : 'sites'}</span>}
-              </div>
-              {stale && (
-                <p className={`${styles.colText} ${styles.pendingNote}`}>
-                  The Worker re-indexes every 5 minutes, so a gap this long usually means its
-                  cron is failing. Its logs in Cloudflare will say why.
-                </p>
-              )}
-            </>
-          )}
-        </Column>
-
-      </div>
-
-      {catalog?.collections.length > 0 && (
-        <div className={`${styles.rows} ${styles.collections}`}>
-          {catalog.collections.map((c) => (
-            <div key={c.name} className={styles.collection}>
-              <div className={styles.collectionHead}>
-                <span className={styles.rowName}>{c.name}</span>
-                <span className={styles.rowMeta}>{c.count.toLocaleString()} records, {formatBytes(c.bytes)}</span>
-              </div>
-              {c.description && <p className={styles.collectionDesc}>{c.description}</p>}
-            </div>
-          ))}
-        </div>
-      )}
-    </section>
-  );
-}
-
-// The empty state: no apps yet, so creating one is the whole page's next step.
-function NewAppCard({ onClick }) {
-  return (
-    <button className={`${styles.card} ${styles.cardNew}`} type="button" onClick={onClick}>
-      <span className={styles.cardPlus} aria-hidden="true">+</span>
-      <span className={styles.cardTitle}>Create a new app</span>
-      <span className={styles.cardBody}>Claim a free name on chain for your repo of citations.</span>
-    </button>
-  );
-}
-
-// App names are what `fangorn set-app` takes and what the id hashes, so keep them to
-// something a shell and a URL don't need quoting for.
-const APP_NAME = /^[a-z0-9][a-z0-9._-]{1,62}$/;
-
-// Configure-and-deploy. "Deploy" is the claim: registerApp is free and makes this
-// wallet the owner. The card is optional config sent after it, and can be set later.
-function CreateAppModal({ open, onClose, balances, onCreate }) {
-  const [name, setName] = useState('');
-  const [cardUrl, setCardUrl] = useState('');
-  // The last availability answer, tagged with the name it answers for.
-  const [check, setCheck] = useState({ name: null, taken: null });
-  const [deploying, setDeploying] = useState(false);
-  const [error, setError] = useState(null);
-
-  const trimmed = name.trim();
-  const validName = APP_NAME.test(trimmed);
-  const validCard = !cardUrl.trim() || isCardUrl(cardUrl.trim());
-  const taken = check.name === trimmed ? check.taken : null;
-
-  // Availability as you type, debounced; a stale answer is dropped.
-  useEffect(() => {
-    if (!validName) return;
-    let cancelled = false;
-    const t = setTimeout(() => {
-      readAppOwner(trimmed)
-        .then((owner) => !cancelled && setCheck({ name: trimmed, taken: Boolean(owner) }))
-        .catch(() => {});
-    }, 400);
-    return () => { cancelled = true; clearTimeout(t); };
-  }, [trimmed, validName]);
-
   function close() {
-    if (deploying) return;
-    setName(''); setCardUrl(''); setError(null);
+    if (step) return;
+    reset();
     onClose();
   }
 
-  async function deploy() {
-    setError(null);
-    setDeploying(true);
+  async function pick(event) {
+    const files = [...(event.target.files ?? [])];
+    if (!files.length) return;
+    setPaid([]); setDone(null); setError(null);
     try {
-      await onCreate({
-        name: trimmed,
-        cardUrl: cardUrl.trim() || null,
-      });
-      setDeploying(false);
-      close();
+      setFile(await readFiles(files));
     } catch (err) {
-      setError(friendlyError(err));
-      setDeploying(false);
+      setFile({ error: err.message });
     }
   }
 
+  async function go() {
+    setError(null);
+    try {
+      setDone(await onPublish({ repo, records: file.records, paid, price }, setStep));
+    } catch (err) {
+      setError(friendlyError(err));
+    } finally {
+      setStep(null);
+    }
+  }
+
+  if (done) {
+    return (
+      <Modal open={open} onClose={close} title="Published">
+        <p className={styles.colText}>
+          <b>{repo}</b> is on chain: {rows} {rows === 1 ? 'record' : 'records'}
+          {paid.length ? `, ${paid.join(', ')} sold at ${price} USDC a record` : ', free to read'}.
+          The explorer lists it within a few minutes, and from then on any agent with the Fangorn
+          plugin can find it{paid.length ? ' and buy it. Sales are paid straight to this wallet' : ''}.
+        </p>
+        <div className={styles.cardLinks}>
+          <a className={styles.resLink} href={txExplorer(done.txHash)} target="_blank" rel="noreferrer">Transaction <span className={styles.resArrow}>↗</span></a>
+        </div>
+        <div className={styles.btnRow}>
+          <button className={styles.primaryBtn} type="button" onClick={close}>Done</button>
+        </div>
+      </Modal>
+    );
+  }
+
   return (
-    <Modal open={open} onClose={close} title="Create a new app">
-      <Field label="App name">
-        <input
-          className={styles.input}
-          value={name}
-          onChange={(event) => setName(event.target.value.toLowerCase())}
-          placeholder="my-app"
-          aria-label="App name"
-          autoFocus
-        />
+    <Modal open={open} onClose={close} title="Publish data">
+      <Field label="Repo">
+        {repos?.length > 0 && (
+          <select className={styles.input} value={choice} onChange={(event) => setChoice(event.target.value)} disabled={!!step} aria-label="Repo">
+            {repos.map((r) => <option key={r.repo} value={r.repo}>{r.repo}</option>)}
+            <option value="">New repo…</option>
+          </select>
+        )}
+        {!choice && (
+          <input className={styles.input} value={name} onChange={(event) => setName(event.target.value.toLowerCase())} placeholder="kelp-surveys" aria-label="New repo name" disabled={!!step} />
+        )}
         <div className={styles.pending}>
-          {!trimmed ? 'Lowercase letters, digits, dot, dash or underscore. This is what `fangorn set-app` takes.'
-            : !validName ? '2–63 characters: lowercase letters, digits, dot, dash or underscore.'
-              : taken === null ? 'Checking…'
-                : taken ? 'Taken. Pick another name.' : 'Available.'}
+          {choice ? 'Adds to this repo. A record with an id it already has is replaced.'
+            : !repo ? 'Name it: what agents and the explorer call it.'
+              : !validName ? '2–63 characters: lowercase letters, digits, dot, dash or underscore.'
+                : exists ? 'You already have a repo of this name: these add to it.'
+                  : 'A new repo, made when you publish.'}
         </div>
       </Field>
 
-      <Field label="Agent card URL (optional)">
-        <input
-          className={styles.input}
-          value={cardUrl}
-          onChange={(event) => setCardUrl(event.target.value)}
-          placeholder="https://…/.well-known/agent-card.json"
-          aria-label="Agent card URL"
-        />
+      <Field label="Files">
+        <input type="file" multiple onChange={pick} disabled={!!step} aria-label="Files" />
         <div className={styles.pending}>
-          How the explorer and agents find your app. `westmarch-ship` sets it for you if you
-          leave it blank.
+          {!file ? 'Any files, up to 50 MB each. Each file is a record; a CSV or JSON file of rows is a record per row.'
+            : file.error ? <span className={styles.formError}>{file.error}</span>
+              : rows > MAX_ROWS ? <span className={styles.formError}>{rows.toLocaleString()} records. The browser publishes up to {MAX_ROWS.toLocaleString()}; use the CLI below for more.</span>
+                : `${rows.toLocaleString()} ${rows === 1 ? 'record' : 'records'}: ${file.columns.join(', ')}`}
         </div>
       </Field>
 
-      <Field label="Cost">
-        <div className={styles.fieldValue}>Free, plus gas</div>
-      </Field>
+
+      {file?.columns?.length > 0 && (
+        <Field label="Paid columns">
+          <div className={styles.chipRow}>
+            {file.columns.map((c) => (
+              <button
+                key={c}
+                type="button"
+                className={styles.chip}
+                aria-pressed={paid.includes(c)}
+                disabled={!!step}
+                onClick={() => setPaid((p) => (p.includes(c) ? p.filter((x) => x !== c) : [...p, c]))}
+              >
+                {c}
+              </button>
+            ))}
+          </div>
+          <div className={styles.pending}>
+            {paid.length
+              ? 'Sealed: a buyer pays to open them. The other columns are public, and are what search finds, so leave enough of them open to describe each row.'
+              : 'None: everything is free to read. Pick the columns people should pay for.'}
+          </div>
+        </Field>
+      )}
+
+      {paid.length > 0 && (
+        <Field label="Price per record (USDC)">
+          <input className={styles.input} type="number" min="0.01" step="0.01" value={price} onChange={(event) => setPrice(event.target.value)} aria-label="Price per record in USDC" disabled={!!step} />
+          <div className={styles.pending}>
+            Paid to this wallet when someone buys a record.
+            Your wallet signs at least {rows * (1 + paid.length)} times to seal and price {rows} {rows === 1 ? 'record' : 'records'}.
+          </div>
+        </Field>
+      )}
 
       {/* A warning, not a gate: the balance can be a drip behind. */}
       {balances && balances.eth < LOW_ETH && (
         <div className={styles.formError}>
-          Your wallet needs a little Base Sepolia ETH for gas.
+          Publishing needs a little Base Sepolia ETH for gas.
           <FaucetLinks />
         </div>
       )}
       {error && <div className={styles.formError}>{error}</div>}
       <div className={styles.btnRow}>
-        <button
-          className={styles.primaryBtn}
-          type="button"
-          onClick={deploy}
-          disabled={deploying || !validName || taken !== false || !validCard}
-        >
-          {deploying ? 'Deploying…' : 'Deploy'}
+        <button className={styles.primaryBtn} type="button" onClick={go} disabled={!ready}>
+          {step ? 'Publishing…' : 'Publish'}
         </button>
       </div>
-      {deploying && (
-        <div className={styles.pending}>
-          Claiming {trimmed}{cardUrl.trim() ? ', then binding its card' : ''}. Confirm each transaction.
-        </div>
-      )}
+      <div className={styles.pending}>
+        {step ?? 'Public and permanent: free columns can be read by anyone, for good.'}
+      </div>
     </Modal>
   );
 }
 
-export default function Home({ appKey }) {
-  const { user, fundWallet, exportKey } = useAuth();
+// ── The hub ─────────────────────────────────────────────────────────────────
+
+// Buying and publishing are separate tabs: most people do one. The tab is in the URL
+// (#/account/library, #/account/data/<repo>); a bare #/account opens the last one used,
+// else Publishing for a wallet with repos and Buying for one without.
+const TABS = [['library', 'Buying'], ['data', 'Publishing']];
+const TAB_KEY = 'fangorn-account-tab';
+const savedTab = () => { try { return localStorage.getItem(TAB_KEY); } catch { return null; } };
+
+export default function Home({ path = [] }) {
+  const { user, fundWallet } = useAuth();
   const { balances, refresh: refreshBalances } = useBalances();
   const [funding, setFunding] = useState(false);
-  const [creating, setCreating] = useState(false);
 
   const { name } = readIdentity(user);
   const wallet = user?.wallet?.address;
-  const { apps, earnings, error: appsError, create, setCard, setRepo, setPayout } = useOwnedApps(wallet);
+  // ponytail: read for buyers too, since the default tab hangs on whether there are repos.
+  const publisher = usePublisher(wallet);
+  const { repos } = publisher;
+
+  const asked = TABS.some(([k]) => k === path[0]) ? path[0] : null;
+  const saved = savedTab();
+  const tab = asked ?? (TABS.some(([k]) => k === saved) ? saved : repos === null ? null : repos.length ? 'data' : 'library');
+  useEffect(() => {
+    if (asked) try { localStorage.setItem(TAB_KEY, asked); } catch { /* private mode: the default still works */ }
+  }, [asked]);
 
   async function addFunds() {
     setFunding(true);
@@ -787,36 +910,13 @@ export default function Home({ appKey }) {
     }
   }
 
-  async function onCreate(config) {
-    await create(config);
+  async function onPublish(job, onStep) {
+    const out = await publisher.publish(job, onStep);
     refreshBalances();
+    return out;
   }
 
-  if (appKey) {
-    const app = apps && findApp(apps, appKey);
-    return (
-      <div className={styles.page}>
-        <main className={styles.main}>
-          {apps === null && <div className={styles.pending}>Reading your apps from the chain…</div>}
-          {apps && !app && (
-            <section className={styles.welcome}>
-              <a className={styles.resLink} href="#/account">← All apps</a>
-              <p className={styles.sub}>This wallet doesn't own an app called {decodeURIComponent(appKey)}.</p>
-            </section>
-          )}
-          {app && (
-            <AppPage
-              key={app.appId}
-              app={app}
-              onSetCard={setCard}
-              onSetRepo={setRepo}
-              onSetPayout={setPayout}
-            />
-          )}
-        </main>
-      </div>
-    );
-  }
+  const money = { balances, onFund: addFunds, funding, refreshBalances };
 
   return (
     <div className={styles.page}>
@@ -824,57 +924,25 @@ export default function Home({ appKey }) {
         <section className={styles.welcome}>
           <span className={styles.eyebrow}>Account</span>
           <h1 className={styles.h1}>Welcome, {name}.</h1>
-          <p className={styles.sub}>{nextStep(apps)}</p>
+          <p className={styles.sub}>
+            {tab === 'library' ? 'Data you buy is paid from this wallet, with no gas, and kept in your library.'
+              : tab === 'data' ? (repos?.length ? 'Your data is published. Each sale is paid to your wallet.'
+                : 'Publish a file and set a price. Agents discover it on the explorer, and sales are paid to your wallet.')
+                : 'Reading your account from the chain…'}
+          </p>
         </section>
 
-        {wallet && (
-          <Summary
-            wallet={wallet}
-            balances={balances}
-            earnings={earnings}
-            onFund={addFunds}
-            funding={funding}
-            refreshBalances={refreshBalances}
-          />
-        )}
+        <nav className={styles.tabs} aria-label="Account">
+          {TABS.map(([k, label]) => (
+            <a key={k} href={`#/account/${k}`} className={tab === k ? `${styles.tab} ${styles.tabOn}` : styles.tab} aria-current={tab === k ? 'page' : undefined}>
+              {label}
+            </a>
+          ))}
+        </nav>
 
-        <section className={styles.section}>
-          <div className={styles.rowsHead}>
-            <h2 className={styles.h2}>Your apps</h2>
-            {apps?.length > 0 && (
-              <button className={styles.ghostBtnSm} type="button" onClick={() => setCreating(true)}>+ New app</button>
-            )}
-          </div>
-          {appsError && <div className={styles.formError}>{appsError}</div>}
-          {apps === null && (
-            <div className={styles.rows} role="status" aria-label="Reading your apps from the chain">
-              {[0, 1, 2].map((i) => (
-                <div key={i} className={styles.rowLink}>
-                  <Skeleton width="9em" /><Skeleton width="4em" /><Skeleton width="14em" />
-                </div>
-              ))}
-            </div>
-          )}
-          {apps?.length === 0 && <NewAppCard onClick={() => setCreating(true)} />}
-          {apps?.length > 0 && (
-            <div className={styles.rows}>
-              {apps.map((app) => <AppLine key={app.appId} app={app} />)}
-            </div>
-          )}
-          <CreateAppModal
-            open={creating}
-            onClose={() => setCreating(false)}
-            balances={balances}
-            onCreate={onCreate}
-          />
-        </section>
-
-        {/* Needed once: open until there's an app, one line after. Keyed so it opens
-            itself when the apps land empty, without fighting the user's toggle after. */}
-        <details key={String(apps?.length === 0)} className={styles.section} open={apps?.length === 0 || undefined}>
-          <summary className={styles.h2}>Getting started</summary>
-          <GettingStarted wallet={wallet} exportKey={exportKey} />
-        </details>
+        {wallet && tab === 'library' && <BuyingTab wallet={wallet} {...money} />}
+        {wallet && tab === 'data' && <PublishingTab wallet={wallet} path={asked ? path : ['data']} publisher={publisher} onPublish={onPublish} {...money} />}
+        {tab === null && <div className={styles.pending} role="status">Loading…</div>}
       </main>
     </div>
   );

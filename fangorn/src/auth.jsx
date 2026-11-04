@@ -27,7 +27,8 @@ export function PrivyAuthBridge({ children }) {
   // on load isn't a login (wasAlreadyAuthenticated), so a refresh stays put.
   const { login } = useLogin({
     onComplete: ({ wasAlreadyAuthenticated }) => {
-      if (!wasAlreadyAuthenticated) location.hash = '#/account';
+      // Except on a repo's page: someone logging in to buy stays with what they're buying.
+      if (!wasAlreadyAuthenticated && !location.hash.startsWith('#/data/')) location.hash = '#/account';
     },
   });
   const { fundWallet } = useFundWallet();

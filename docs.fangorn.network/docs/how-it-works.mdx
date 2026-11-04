@@ -95,7 +95,7 @@ sequenceDiagram
   A-->>B: 402: signed terms, sealed handles, deposit
   B->>A: GET again, with a USDC authorization
   A->>F: verify, settle
-  F->>S: register (USDC: publisher 95%, treasury 5%)
+  F->>S: register (USDC to the publisher)
   B->>F: Semaphore proof naming a reading address
   F->>S: settle (reader may now read)
   B->>K: key for this record, signed as the reader

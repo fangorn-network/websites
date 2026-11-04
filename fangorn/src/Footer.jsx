@@ -58,7 +58,7 @@ export function Footer() {
       <span className={styles.fl}>Fangorn Network</span>
       <span className={styles.fc}>Proof over permission</span>
       <div className={styles.flinks}>
-        <a href="https://deepwiki.com/fangorn-network/fangorn" className={styles.flink}>Docs</a>
+        <a href="https://docs.fangorn.network" className={styles.flink}>Docs</a>
         <a href="https://github.com/fangorn-network" className={styles.flink}>GitHub</a>
         <a href="https://discord.gg/JDj8RdCVyU" className={styles.flink}>Discord</a>
         <a href="#contact" className={styles.flink}>Contact</a>

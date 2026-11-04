@@ -130,25 +130,28 @@
 
 /* ── screen: idle until the LED comes on, then shows the cartridge's demo ── */
 
+/* A little CRT set: cabinet, bulged glass with scanlines and glow, knobs on the
+   right, rabbit-ear antenna on top. */
 .screen {
   position: relative;
-  flex: 0 0 220px;
-  height: 132px;
+  flex: 0 0 248px;
+  height: 148px;
   margin-bottom: 14px;
+  padding: 10px 40px 10px 10px;
   --text: #eef3ec;
   --sub: #a9bdb1;
   --dim: #6e8478;
   --tint: var(--sun);
-  border: 4px solid var(--s1);
-  border-radius: 18px;
-  background: var(--night);
-  box-shadow: var(--shadow), inset 0 0 24px rgba(0, 0, 0, 0.5);
+  border: 1.5px solid var(--line2);
+  border-radius: 16px;
+  background: var(--s1);
+  box-shadow: var(--shadow), inset 0 -4px 0 rgba(0, 0, 0, 0.08);
   text-align: left;
   font-family: var(--mono);
   font-size: 12px;
 }
 
-/* Cable from the console to the screen. */
+/* Cable from the console to the set. */
 .screen::before {
   content: '';
   position: absolute;
@@ -159,7 +162,97 @@
   border-radius: 2px;
 }
 
-.idle, .result { position: absolute; inset: 0; padding: 16px; }
+/* Little feet. */
+.screen::after {
+  content: '';
+  position: absolute;
+  left: 18px;
+  right: 18px;
+  top: 100%;
+  height: 5px;
+  border-left: 18px solid var(--line2);
+  border-right: 18px solid var(--line2);
+  border-radius: 0 0 3px 3px;
+}
+
+.antenna {
+  position: absolute;
+  left: calc(50% - 15px);
+  bottom: 100%;
+  width: 30px;
+  height: 7px;
+  border-radius: 10px 10px 0 0;
+  background: var(--line2);
+}
+.antenna::before, .antenna::after {
+  content: '';
+  position: absolute;
+  bottom: 4px;
+  left: 50%;
+  width: 2px;
+  height: 38px;
+  background: var(--line2);
+  transform-origin: bottom;
+  transform: rotate(-28deg);
+}
+.antenna::after { transform: rotate(24deg); }
+
+/* The tube: rounded more than the cabinet so it reads as curved glass. */
+.glass {
+  position: relative;
+  height: 100%;
+  overflow: hidden;
+  border-radius: 22px / 28px;
+  background: radial-gradient(ellipse at 50% 45%, #13241b 0%, var(--night) 70%);
+  box-shadow: inset 0 0 18px rgba(0, 0, 0, 0.75), 0 0 0 3px var(--s3);
+  text-shadow: 0 0 6px color-mix(in srgb, currentColor 55%, transparent);
+  animation: flicker 6s steps(1) infinite;
+}
+/* Scanlines and a glare highlight over the content. */
+.glass::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse at 28% 18%, rgba(255, 255, 255, 0.1), transparent 45%),
+    repeating-linear-gradient(to bottom, rgba(0, 0, 0, 0.28) 0 1px, transparent 1px 3px);
+}
+@keyframes flicker { 0%, 100% { opacity: 1; } 47% { opacity: 0.93; } 48% { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .glass { animation: none; } }
+
+/* Two dials and a speaker grille. */
+.knobs {
+  position: absolute;
+  right: 9px;
+  top: 14px;
+  bottom: 14px;
+  width: 22px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+.knobs i {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--s3);
+  border: 1.5px solid var(--line2);
+  background-image: linear-gradient(var(--line2), var(--line2));
+  background-size: 2px 6px;
+  background-position: 50% 1px;
+  background-repeat: no-repeat;
+}
+.knobs i + i { transform: rotate(60deg); }
+.knobs b {
+  flex: 1;
+  width: 14px;
+  margin-top: 4px;
+  background: repeating-linear-gradient(to bottom, var(--line2) 0 2px, transparent 2px 5px);
+}
+
+.idle, .result { position: absolute; inset: 0; padding: 12px 14px; }
 .idle { color: var(--dim); animation: idle 4.5s step-end infinite; }
 .cursor { animation: blink 1s step-end infinite; }
 
@@ -167,6 +260,7 @@
 .prompt { color: var(--sub); }
 .hit { font-family: var(--mono); font-size: 12px; font-weight: 500; color: var(--text); margin: 14px 0 4px; }
 .via { font-size: 11px; color: var(--tint); }
+.prompt, .hit > div { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 @keyframes idle { 0% { opacity: 1; } 34% { opacity: 0; } 78% { opacity: 1; } }
 @keyframes show { 0% { opacity: 0; } 34% { opacity: 1; } 78% { opacity: 0; } }
@@ -230,7 +324,8 @@
 :global(:root[data-theme="dark"]) .shell { fill: var(--ledge); stroke: var(--hi); }
 :global(:root[data-theme="dark"]) .well { fill: var(--s1); }
 :global(:root[data-theme="dark"]) .grip { stroke: var(--hi); stroke-opacity: 0.7; }
-:global(:root[data-theme="dark"]) .screen { background: #070d0a; border-color: var(--s3); }
+:global(:root[data-theme="dark"]) .screen { background: var(--s2); border-color: var(--s3); }
+:global(:root[data-theme="dark"]) .glass { background: radial-gradient(ellipse at 50% 45%, #0f1c15 0%, #050a07 70%); }
 
 .cartTab { fill: var(--s2); stroke: var(--line2); stroke-width: 1.5; }
 /* Edge-connector contacts: the one warm colour, it's what says "plugs in". */
@@ -658,6 +753,6 @@
   .step { border-top: 1px solid var(--line); padding: 24px 0; }
   .rig { flex-direction: column; align-items: center; gap: 16px; }
   .cartBtn { flex: none; width: min(320px, 100%); }
-  .screen { flex: none; width: min(320px, 100%); margin-bottom: 0; }
+  .screen { flex: none; width: min(320px, 100%); margin: 40px 0 6px; }
   .screen::before { display: none; }
 }

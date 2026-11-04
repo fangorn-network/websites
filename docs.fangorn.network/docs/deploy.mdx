@@ -112,12 +112,14 @@ Storage is append-only. The contracts repo's README covers the rules and the saf
 
 ## 3. Choose the key server's URL
 
-Do this before the SDK release, because the release carries it.
-
 Every paid repo's `@deposit` record names the key server that holds its key, for good. So the
 key server must live at a URL you control and will never move, a custom domain on Cloudflare,
 not a `workers.dev` address. Choose it now (for example `keys.fangorn.network`) and route it
 to the `fangorn-access-worker` Worker in step 5.
+
+The SDK's network config doesn't carry it: `sealRecords` takes `keyServer` on every call, and
+the CLI takes `--key-server`, whose default (in `fangorn/src/cli/cli.ts`) is what new
+publishers get. Switching key servers is a flag, not a release.
 
 ## 4. Release the SDK
 
@@ -129,10 +131,8 @@ In `fangorn/src/config.ts`, the network's entry holds everything the rest reads:
 | `fromBlock` | the DataRegistry's deployment block |
 | `rpcUrl` | an RPC that allows wide `eth_getLogs` ranges (public `sepolia.base.org` caps them at 200 blocks) |
 | `signedUrlWorker` | the storage worker's URL |
-| `keyServer` | step 3. Leave it unset until the key server is actually up: `fangorn commit --paid` refuses to seal without one |
 
-Then publish a release (`2026.MM.DD` or `…-dev`). Until `keyServer` is set, publishers can pass
-`FANGORN_KEY_SERVER=<url>` to the CLI.
+Then publish a release (`2026.MM.DD` or `…-dev`).
 
 ## 5. Deploy the Workers
 
@@ -166,8 +166,7 @@ Before deploying, `deploy.sh`:
 - prints which SDK version and contracts each package resolves;
 - refuses a set whose SDK versions disagree;
 - refuses Barliman without `TREASURY`;
-- warns about secrets that aren't set;
-- prints the key server URL the SDK will deposit with. If it isn't the URL you chose in step 3, stop.
+- warns about secrets that aren't set.
 
 Check each one answers:
 
@@ -191,11 +190,11 @@ Fangorn's runs the same Worker on their own account and seals with their own URL
 
 ## 6. Release westmarch
 
-In `westmarch`, move `@fangorn-network/sdk` to the new release (the dev dependency points at
-the sibling checkout, `file:../fangorn`; the release must not) and run `npm test` and
+In `westmarch`, move `@fangorn-network/sdk` to the new release, both the peer range and the
+dev dependency (never a link to the sibling checkout: check `package-lock.json`) and run `npm test` and
 `npm run e2e:paid` again. Then publish. Apps take it on their next `westmarch-ship app.json`,
 which rebuilds and redeploys their Worker. A paid app names Barliman in `app.json`
-(`"paid": true`, `"facilitator": "<barliman URL>"`).
+(`"paid": true`, `"facilitator": "https://barliman.fangorn.network"`).
 
 ## 7. Verify with a real sale
 

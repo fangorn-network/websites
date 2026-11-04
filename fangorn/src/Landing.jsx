@@ -3,7 +3,22 @@ import { Contact } from './Footer';
 import styles from './Landing.module.css';
 import { formatUnits } from 'viem';
 import { useAuth } from './authContext';
-import { useAllApps } from './account';
+import { useListings, EXPLORER_URL } from './account';
+
+// ponytail: the explorer's repos in the shape the tiles below were built for (apps, from
+// the AppRegistry the SDK has since dropped). Rewrite the tiles around repos when the
+// landing copy moves off apps.
+function useAllApps() {
+  const listings = useListings();
+  return listings && [...listings.values()].map((d) => ({
+    appId: d.domain,
+    name: d.repo,
+    description: d.description ?? `${d.count.toLocaleString()} records from ${d.publisher.slice(0, 10)}…`,
+    tags: d.types,
+    site: EXPLORER_URL,
+    price: null,
+  }));
+}
 
 // The page is a funnel with two doors, Use and Publish (see #start). Each door
 // has one command and one next step; everything else is one click down. Keep it
@@ -165,9 +180,22 @@ function Tabs({ items, value, onChange }) {
 // adds, not an invented query.
 const PLACEHOLDER = { appId: 'your-data', name: 'Your data', tags: ['yours'] };
 
+// Featured: a random few of the registry, picked fresh each day (UTC) so every app gets its turn.
+// The seed is today's date, so everyone sees the same picks all day; ordering by a seeded hash
+// of the id keeps render pure.
+// ponytail: no filtering yet. When some apps shouldn't be featured, filter `apps` before the sort.
+const FEATURED = 6;
+const SEED = Math.imul(Number(new Date().toISOString().slice(0, 10).replaceAll('-', '')), 2654435761) >>> 0;
+const luck = (id) => {
+  let h = SEED;
+  for (const ch of String(id)) h = Math.imul(h ^ ch.charCodeAt(0), 2654435761);
+  return Math.imul(h ^ (h >>> 15), 2246822507) >>> 0;
+};
+const featured = (apps) => [...apps].sort((a, b) => luck(a.appId) - luck(b.appId)).slice(0, FEATURED);
+
 function Cartridge({ apps }) {
   const [n, setN] = useState(0);
-  const list = apps?.length ? apps : [PLACEHOLDER];
+  const list = apps?.length ? featured(apps) : [PLACEHOLDER];
   const c = list[n % list.length];
   const next = list[(n + 1) % list.length];
   const slug = slugOf(c);
@@ -228,6 +256,8 @@ function Cartridge({ apps }) {
           </svg>
         </button>
         <div className={styles.screen} aria-hidden="true">
+          <div className={styles.antenna} />
+          <div className={styles.glass}>
           <div className={styles.idle}>insert cartridge<span className={styles.cursor}>_</span></div>
           <div className={styles.result}>
             {c === PLACEHOLDER ? (
@@ -243,10 +273,12 @@ function Cartridge({ apps }) {
               </>
             )}
           </div>
+          </div>
+          <div className={styles.knobs}><i /><i /><b /></div>
         </div>
       </div>
       <figcaption className={styles.cartCaption}>
-        Live apps from the registry. Click the cartridge to swap it.
+        Featured apps are randomly selected every day. Click the cartridge to swap it.
       </figcaption>
     </figure>
   );
@@ -308,48 +340,6 @@ function Start() {
   );
 }
 
-// One real app, and the two ways into it. Defaults to the first live app.
-function TwoDoors({ apps }) {
-  const [sel, setSel] = useState(0);
-  const app = apps?.[sel];
-  if (apps?.length === 0) return null;
-  return (
-    <section className={styles.section}>
-      <h2 className={styles.h2}>One app. Two front doors.</h2>
-      <p className={styles.sectionSub}>
-        Every app is a website people can search and a set of tools agents can call. Same data,
-        same source, checked against the same on-chain record.
-      </p>
-      {apps?.length > 1 && (
-        <Tabs items={apps.slice(0, 4).map(nameOf)} value={sel} onChange={setSel} />
-      )}
-      {!app ? (
-        <p className={styles.caption}>Reading the registry…</p>
-      ) : (
-        <div className={styles.split}>
-          <div className={styles.splitHub}>
-            <span className={styles.pill}>{app.tags[0] ?? 'app'}</span>
-            <div className={styles.caseName}>{nameOf(app)}</div>
-            <p className={styles.caseBody}>{app.description}</p>
-          </div>
-          <div className={styles.splitDoor}>
-            <div className={styles.splitWho}>For people</div>
-            <p className={styles.splitText}>A website that searches by meaning, right in the browser.</p>
-            {app.site
-              ? <a href={app.site} className={styles.btnSm}>Open the website ↗</a>
-              : <span className={styles.caption}>No website yet</span>}
-          </div>
-          <div className={styles.splitDoor}>
-            <div className={styles.splitWho}>For agents</div>
-            <p className={styles.splitText}>Tools any agent connected to Fangorn can call by name.</p>
-            <code className={styles.splitCode}>open-app {slugOf(app)}</code>
-            <div className={styles.splitTools}>{TOOLS.map((t) => `${slugOf(app)}__${t}`).join(' · ')}</div>
-          </div>
-        </div>
-      )}
-    </section>
-  );
-}
 
 // What Fangorn stands for (see About). Sits right under the doors, so it's the
 // first thing past the install commands.
@@ -480,47 +470,6 @@ function Cards({ title, sub, items }) {
   );
 }
 
-// One registered app, straight from its agent card.
-function AppTile({ app }) {
-  return (
-    <div className={styles.case}>
-      <div className={styles.caseTop}>
-        <span className={styles.pill}>{app.tags[0] ?? 'app'}</span>
-        <span className={styles.badge}>ERC-8004</span>
-      </div>
-      <div className={styles.caseName}>{nameOf(app)}</div>
-      <p className={styles.caseBody}>{app.description}</p>
-      <div className={styles.stat}>{costOf(app)}</div>
-      <div className={styles.caseLinks}>
-        {app.site && <a href={app.site} className={styles.btnSm}>Open App ↗</a>}
-        <a href={app.uri} className={styles.link}>Agent card</a>
-      </div>
-    </div>
-  );
-}
-
-// Every live app in the AppRegistry: the #/explorer page.
-function AppGrid({ apps }) {
-  return (
-    <section className={styles.section} id="apps">
-      <div className={styles.casesHead}>
-        <h2 className={styles.h2}>Live on Fangorn</h2>
-      </div>
-      <p className={styles.sectionSub}>
-        Read live from the app registry. Each one is a site you can search, and an agent any{' '}
-        <code className={styles.inline}>fangorn-mcp</code> can open by name.
-      </p>
-      {apps === null ? <p className={styles.caption}>Reading the registry…</p>
-        : apps.length === 0 ? <p className={styles.caption}>No apps are live right now.</p>
-          : <div className={styles.caseGrid}>{apps.map((a) => <AppTile key={a.appId} app={a} />)}</div>}
-    </section>
-  );
-}
-
-export function LiveApps() {
-  return <AppGrid apps={useAllApps()} />;
-}
-
 // Early adopters. Hand-written: these aren't (all) in the Base registry yet.
 const ADOPTERS = [
   {
@@ -568,7 +517,7 @@ export default function Landing() {
         </p>
         <div className={styles.ctas}>
           <a href="#start" className={styles.btnA}>Get started</a>
-          <a href="#/explorer" className={styles.btnB}>Explore Apps</a>
+          <a href={EXPLORER_URL} className={styles.btnB}>Explore Apps</a>
         </div>
         <Cartridge apps={apps} />
       </section>
@@ -576,7 +525,6 @@ export default function Landing() {
       <Start />
       <Steps title="Publish. Get found. Get paid." items={FEATURES} />
       <div className={styles.bandNight}><Principles /></div>
-      <TwoDoors apps={apps} />
       <div className={styles.band}><Versus /></div>
       <Cards title="What you can build" items={USE_CASES} />
       <UsedBy />
@@ -586,7 +534,7 @@ export default function Landing() {
         <p className={styles.sectionSub}>Every answer traces back to the record that was published.</p>
         <div className={styles.ctas}>
           <a href="#start" className={styles.btnA}>Get started</a>
-          <a href="#/explorer" className={styles.btnB}>Explore Apps</a>
+          <a href={EXPLORER_URL} className={styles.btnB}>Explore Apps</a>
         </div>
       </section> */}
 

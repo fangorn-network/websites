@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react';
 import './index.css';
 import Nav from './Nav';
-import Landing, { LiveApps } from './Landing';
+import Landing from './Landing';
+import { EXPLORER_URL } from './account';
 import { Footer } from './Footer';
 import Home from './Home';
 import About from './About';
 import Build from './Build';
+import RepoPage from './RepoPage';
 import { useAuth, ACCOUNT_ENABLED } from './authContext';
 
 // ponytail: hash routes, a handful of pages. No router dep, no host fallback config.
@@ -26,7 +28,7 @@ function useHash() {
   return hash;
 }
 
-function Account({ route }) {
+function Account({ path }) {
   const { ready, authenticated, user, login } = useAuth();
 
   // Avoid flashing the login prompt before Privy resolves an existing session.
@@ -39,18 +41,20 @@ function Account({ route }) {
     );
   }
   // Key Home by wallet so switching accounts in-session fully remounts it — the
-  // publisher/namespace state is per-wallet and must not carry over.
-  return <Home key={user?.wallet?.address} appKey={route} />;
+  // publisher state is per-wallet and must not carry over.
+  return <Home key={user?.wallet?.address} path={path} />;
 }
 
 export default function App() {
   const hash = useHash();
+  // The explorer is its own site now; old #/explorer links go there.
+  if (hash === '#/explorer') location.replace(EXPLORER_URL);
   const page =
-    // #/account is the dashboard, #/account/app/<name or id> one app's page.
-    hash === '#/account' || hash.startsWith('#/account/') ? <Account route={hash.match(/^#\/account\/app\/(.+)$/)?.[1]} /> :
+    hash === '#/account' || hash.startsWith('#/account/') ? <Account path={hash.split('/').slice(2)} /> :
     hash === '#/about' ? <About /> :
     hash === '#/build' ? <Build /> :
-    hash === '#/explorer' ? <main><LiveApps /></main> :
+    // #/data/<publisher>/<repo>: one repo's public page, the link a publisher shares.
+    hash.startsWith('#/data/') ? <RepoPage publisher={hash.split('/')[2]} repo={decodeURIComponent(hash.split('/').slice(3).join('/'))} /> :
     <Landing />;
 
   return (

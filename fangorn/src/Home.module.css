@@ -903,3 +903,189 @@ details > summary.h2 { cursor: pointer; }
   .skeleton, .statePending, .modal[open] { animation: none; }
   .cardNew:hover .cardPlus, .rowLink:hover .rowGo { transform: none; }
 }
+
+/* A paid column, picked. */
+.chip[aria-pressed="true"],
+.chip[aria-pressed="true"]:hover:not(:disabled) {
+  color: var(--bg);
+  background: var(--hi);
+  border-color: var(--hi);
+}
+
+/* ── Account tabs ──────────────────────────────────────────────────────────
+   Buying and Publishing: an underline on the current one, links so the tab is in the URL. */
+
+.tabs {
+  display: flex;
+  gap: 4px;
+  margin: 8px 0 20px;
+  border-bottom: 1px solid var(--line);
+}
+
+.tab {
+  padding: 10px 16px;
+  margin-bottom: -1px;
+  font-family: var(--display);
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--sub);
+  text-decoration: none;
+  border-bottom: 2px solid transparent;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.tab:hover { color: var(--ink); }
+.tab:focus-visible { outline: 2px solid var(--hi); outline-offset: 2px; border-radius: 6px; }
+.tabOn { color: var(--ink); border-bottom-color: var(--hi); }
+
+/* ── Data tables ───────────────────────────────────────────────────────────
+   A file browser: one row a repo, record or purchase, sortable headers, a row opens it.
+   On a phone the secondary columns drop and the rest scroll inside the card if they must. */
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+  margin-bottom: 12px;
+}
+
+.toolbar .h2 { margin: 0; }
+
+.filter { width: min(240px, 100%); padding-block: 8px; }
+
+.crumbs {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-family: var(--display);
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.crumbs a { color: var(--sub); text-decoration: none; }
+.crumbs a:hover { color: var(--hi); }
+.crumbs > span[aria-hidden] { color: var(--dim); font-weight: 400; }
+
+.repoTitle {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 10px;
+}
+
+.repoTitle .rowMeta { margin-right: 0; }
+
+.tableWrap {
+  background: var(--s1);
+  border-radius: 20px;
+  box-shadow: var(--shadow);
+  overflow-x: auto;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.table th {
+  padding: 12px 16px;
+  text-align: left;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--sub);
+  border-bottom: 1px solid var(--line);
+  white-space: nowrap;
+}
+
+.table td {
+  padding: 14px 16px;
+  border-top: 1px solid var(--line);
+  vertical-align: middle;
+}
+
+.table tbody tr:first-child td { border-top: none; }
+.table tbody tr { cursor: pointer; transition: background 0.15s; }
+.table tbody tr:hover { background: var(--s2); }
+.table tbody tr:focus-visible { outline: 2px solid var(--hi); outline-offset: -2px; }
+
+.num { text-align: right !important; font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+.sortBtn {
+  all: unset;
+  cursor: pointer;
+  text-transform: inherit;
+  letter-spacing: inherit;
+}
+
+.sortBtn:hover { color: var(--ink); }
+.sortBtn:focus-visible { outline: 2px solid var(--hi); outline-offset: 2px; border-radius: 4px; }
+
+.cellName {
+  font-weight: 600;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+.cellSub { color: var(--sub); font-size: 13px; }
+
+.cellBadges { display: inline-flex; flex-wrap: wrap; gap: 6px; }
+
+.tableEmpty {
+  padding: 24px 20px;
+  color: var(--sub);
+  font-size: 14px;
+}
+
+.tableWrap .tableEmpty { border-top: 1px solid var(--line); }
+.tableWrap .rowLink + .rowLink { border-top: 1px solid var(--line); }
+
+@media (max-width: 640px) {
+  .hideSm { display: none; }
+  .table th, .table td { padding-inline: 12px; }
+}
+
+/* ── Drawer ────────────────────────────────────────────────────────────────
+   The modal, docked to the right edge at full height: a row's details beside its table. */
+
+.drawer {
+  inset: 0 0 0 auto;
+  margin: 0;
+  width: min(480px, 100vw);
+  height: 100dvh;
+  max-height: none;
+  border-radius: 24px 0 0 24px;
+}
+
+.drawer[open] { animation: drawerIn 0.25s cubic-bezier(0.2, 0.9, 0.3, 1); }
+@keyframes drawerIn { from { transform: translateX(32px); opacity: 0; } }
+
+.drawer .modalBody { max-height: calc(100dvh - 53px); }
+
+.drawerHead {
+  margin: 22px 0 4px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--sub);
+}
+
+.facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 12px;
+  margin: 0;
+}
+
+.facts dd { margin: 2px 0 0; font-weight: 600; color: var(--ink); overflow-wrap: anywhere; }
+
+@media (prefers-reduced-motion: reduce) {
+  .drawer[open] { animation: none; }
+}
+.drawerFoot { margin-top: 22px; }

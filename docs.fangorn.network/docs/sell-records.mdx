@@ -12,8 +12,7 @@ for a buyer, and the contract pays the publisher directly.
 flowchart LR
   R["record<br/>title: public<br/>body: sealed"] --> A[Any app shows it]
   A -- buyer pays $0.01 --> S[SettlementRegistry]
-  S -- 95% --> P[Publisher]
-  S -- 5% --> T[Referrer]
+  S -- 100% --> P[Publisher]
   S -. may read .-> K[Key server] -- key --> B[Buyer opens body]
 ```
 
@@ -31,20 +30,23 @@ fangorn push
 |---|---|---|
 | `--paid <fields>` | | Comma-separated payload fields to seal and sell |
 | `--price <usdc>` | | The price of each record, in USDC |
-| `--share <percent>` | `5` | The referrer's share of each sale: Fangorn's treasury, through its relay |
+| `--share <percent>` | `0` | A referrer's share of each sale. Fangorn takes none |
 | `--deadline-days <days>` | `365` | How long the signed terms stay buyable |
+| `--key-server <url>` | `https://keys-test.fangorn.network` | The key server a new deposit is sealed to |
 
 The first paid commit also writes the repo's `@deposit` record: the repo's key, sealed to the
-network's key server. The key server never stores anything; it unseals the deposit only for a
+key server (Fangorn's, unless you pass `--key-server`). The key server never stores anything; it unseals the deposit only for a
 reader the contract says has paid.
 
 :::warning
 A deposit names its key server for good. If you won't trust Fangorn's, run your own (it is one
 Worker, `fangorn-access-worker` in [webworker](https://github.com/fangorn-network/webworker))
-and point the CLI at it with `FANGORN_KEY_SERVER=<url>` before the first paid commit.
+and pass `--key-server <url>` on the first paid commit. Later commits reuse the repo's deposit,
+whatever the flag says.
 :::
 
-From code, `sealRecords` in `@fangorn-network/sdk` does the same thing.
+From code, `sealRecords` in `@fangorn-network/sdk` does the same thing. It has no default
+key server: pass `keyServer` yourself.
 
 ## Get it shown
 
@@ -54,7 +56,7 @@ Your records are sold wherever an app shows them. An app quotes sealed records w
 ```json
 {
   "paid": true,
-  "facilitator": "https://<barliman URL>"
+  "facilitator": "https://barliman.fangorn.network"
 }
 ```
 
