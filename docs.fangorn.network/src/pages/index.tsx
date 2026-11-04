@@ -24,7 +24,7 @@ const DOORS = [
     title: 'Price the fields you publish',
     body: 'Seal a field, set a price in USDC. Any app can show the record; only a buyer can open it, and you get paid directly.',
     to: '/sell-records',
-    cmd: 'fangorn commit records.json --paid body --price 0.01',
+    cmd: 'fangorn add . && fangorn commit --paid body --price 0.01',
   },
 ];
 

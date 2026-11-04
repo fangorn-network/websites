@@ -31,12 +31,14 @@ function save(name, data) {
 // Anything else falls back to the record as JSON.
 export async function download(name, r, opened) {
   const fields = opened ? { ...r.fields, ...opened } : r.fields;
-  if (!isUrl(fields.file)) return save(name, exportOf(r, opened));
+  // The CLI (`fangorn add`) stages a text file as { path, text }: save it as that file.
+  const cliText = typeof fields.text === 'string' && typeof fields.path === 'string';
+  if (!cliText && !isUrl(fields.file)) return save(name, exportOf(r, opened));
   // fetch → blob so the filename sticks; `download` is ignored on cross-origin links.
-  const blob = await fetch(fields.file).then((res) => res.blob());
+  const blob = cliText ? new Blob([fields.text], { type: 'text/plain' }) : await fetch(fields.file).then((res) => res.blob());
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = fields.title ?? name;
+  a.download = cliText ? fields.path.split('/').pop() : (fields.title ?? name);
   a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }

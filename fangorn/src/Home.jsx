@@ -707,7 +707,8 @@ function CopyKey({ exportKey }) {
 const MCP_INSTALL = `/plugin marketplace add fangorn-network/westmarch
 /plugin install fangorn-index@fangorn`;
 const CLI_PUBLISH = `fangorn repo init my-data
-fangorn commit records.json --paid body --price 0.01
+fangorn add .
+fangorn commit --paid body --price 0.01
 fangorn push`;
 
 
