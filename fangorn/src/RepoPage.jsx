@@ -29,7 +29,7 @@ function save(name, data) {
 }
 // A file record downloads as the file itself (paid ones open as data: URLs, free ones are IPFS links).
 // Anything else falls back to the record as JSON.
-async function download(name, r, opened) {
+export async function download(name, r, opened) {
   const fields = opened ? { ...r.fields, ...opened } : r.fields;
   if (!isUrl(fields.file)) return save(name, exportOf(r, opened));
   // fetch → blob so the filename sticks; `download` is ignored on cross-origin links.
