@@ -518,7 +518,7 @@ export default function Landing() {
         </p>
         <div className={styles.ctas}>
           <a href="#start" className={styles.btnA}>Get started</a>
-          <a href={EXPLORER_URL} className={styles.btnB}>Explore Apps</a>
+          <a href={EXPLORER_URL} className={styles.btnB}>Explore Data</a>
         </div>
         <Cartridge apps={apps} />
       </section>
@@ -535,7 +535,7 @@ export default function Landing() {
         <p className={styles.sectionSub}>Every answer traces back to the record that was published.</p>
         <div className={styles.ctas}>
           <a href="#start" className={styles.btnA}>Get started</a>
-          <a href={EXPLORER_URL} className={styles.btnB}>Explore Apps</a>
+          <a href={EXPLORER_URL} className={styles.btnB}>Explore Data</a>
         </div>
       </section> */}
 

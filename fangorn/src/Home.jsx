@@ -6,7 +6,7 @@ import { useBalances } from './fangorn';
 import { truncate, explorer, txExplorer } from './format';
 import { usePublisher, readFiles, repoLink, readRepoPage, readBuyers, netPrice, blockTime, EXPLORER_URL } from './account';
 import { buy, readLibrary, hasIdentity } from './library';
-import { Fields } from './RepoPage';
+import { Fields, download } from './RepoPage';
 
 // Enough ETH for a few app writes' gas. Below this the wallet is "Low" and a
 // testnet faucet is the thing to do next.
@@ -355,6 +355,9 @@ function PurchaseDrawer({ item, opened, onOpen, onClose }) {
         {o?.fields && <>
           <div className={styles.drawerHead}>Fields</div>
           <Fields fields={o.fields} />
+          <div className={styles.btnRow}>
+            <button className={styles.ghostBtn} type="button" onClick={() => download(`${item.repo}-${item.id}`, { id: item.id, title: item.title, fields: { title: item.title, ...o.fields } })}>Download</button>
+          </div>
         </>}
       </>}
     </Modal>
@@ -704,7 +707,8 @@ function CopyKey({ exportKey }) {
 const MCP_INSTALL = `/plugin marketplace add fangorn-network/westmarch
 /plugin install fangorn-index@fangorn`;
 const CLI_PUBLISH = `fangorn repo init my-data
-fangorn commit records.json --paid body --price 0.01
+fangorn add .
+fangorn commit --paid body --price 0.01
 fangorn push`;
 
 

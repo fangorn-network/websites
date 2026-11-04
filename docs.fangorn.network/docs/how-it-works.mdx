@@ -46,7 +46,8 @@ is stored on chain in the `DataRegistry`.
 
 ```bash
 fangorn repo init notes          # allocate the repo on chain
-fangorn commit notes.json        # a local commit: {"records":[{"id","type","payload"}]}
+fangorn add .                    # stage files as records: a csv/json row each, or a text file each
+fangorn commit                   # a local commit of what's staged
 fangorn push                     # make it the on-chain head
 ```
 
