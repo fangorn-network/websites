@@ -3,8 +3,8 @@ import { formatEther, formatUnits, parseEther } from 'viem';
 import styles from './Home.module.css';
 import { useAuth } from './authContext';
 import { useBalances } from './fangorn';
-import { truncate, explorer, txExplorer } from './format';
-import { usePublisher, readFiles, repoLink, readRepoPage, readBuyers, netPrice, blockTime, EXPLORER_URL } from './account';
+import { truncate, explorer, txExplorer, formatBytes } from './format';
+import { usePublisher, readFiles, recordId, repoLink, readRepoPage, readBuyers, netPrice, blockTime, EXPLORER_URL } from './account';
 import { buy, readLibrary, hasIdentity } from './library';
 import { Fields, download } from './RepoPage';
 
@@ -36,7 +36,8 @@ function friendlyError(err) {
   if (/max fee per gas less than block base fee/i.test(text)) {
     return 'Network fees moved while confirming. Try again.';
   }
-  return msg;
+  // viem's generic "An unknown RPC error occurred." hides the wallet's own reason in .details.
+  return err?.details && !msg.includes(err.details) ? `${msg} (${err.details})` : msg;
 }
 
 // Pull a friendly identity out of Privy's user object, whichever method they
@@ -535,6 +536,7 @@ function RepoView({ repo, address, onAdd }) {
   const columns = [
     { key: 'title', label: 'Record', sort: (r) => r.title.toLowerCase(), render: (r) => <span className={styles.cellName}>{r.title}</span> },
     { key: 'type', label: 'Type', hideSm: true, sort: (r) => r.type, render: (r) => <span className={styles.cellSub}>{r.type}</span> },
+    { key: 'size', label: 'Size', num: true, hideSm: true, sort: (r) => r.fields.size ?? -1, render: (r) => (typeof r.fields.size === 'number' ? formatBytes(r.fields.size) : '—') },
     { key: 'price', label: 'Price', num: true, sort: (r) => r.price ?? -1n, render: (r) => (r.price != null ? usdc(r.price) : 'Free') },
     { key: 'buyers', label: 'Buyers', num: true, sort: (r) => r.buyers ?? -1, render: (r) => buyersCell(r, (x) => x.buyers.toLocaleString()) },
     { key: 'earned', label: 'Earned', num: true, sort: earnedOf, render: (r) => buyersCell(r, (x) => usdc(earnedOf(x))) },
@@ -740,7 +742,23 @@ function PublishModal({ open, onClose, target, repos, balances, onPublish }) {
   const exists = repos?.some((r) => r.repo === repo);
   const validPrice = !paid.length || Number(price) > 0;
   const rows = file?.records?.length ?? 0;
-  const ready = rows > 0 && rows <= MAX_ROWS && validName && validPrice && !step;
+  // Renaming a file renames its record id, so two names can collide.
+  const ids = file?.records?.map((r) => r.id) ?? [];
+  const clash = new Set(ids).size !== ids.length;
+  const unnamed = file?.records?.some((r) => r.type === 'file' && !r.payload.title.trim());
+  const ready = rows > 0 && rows <= MAX_ROWS && validName && validPrice && !clash && !unnamed && !step;
+
+  // A file record's name (and so its id) and description, edited before publishing.
+  function editFile(i, patch) {
+    setFile((f) => ({
+      ...f,
+      records: f.records.map((r, j) => (j !== i ? r : {
+        ...r,
+        ...(patch.title != null && { id: recordId(patch.title.trim()) }),
+        payload: { ...r.payload, ...patch },
+      })),
+    }));
+  }
 
   function reset() {
     setFile(null); setPaid([]); setPrice('0.01'); setError(null); setDone(null);
@@ -765,8 +783,15 @@ function PublishModal({ open, onClose, target, repos, balances, onPublish }) {
   async function go() {
     setError(null);
     try {
-      setDone(await onPublish({ repo, records: file.records, paid, price }, setStep));
+      // An empty description is left off the record rather than published blank.
+      const records = file.records.map((r) => {
+        if (r.type !== 'file') return r;
+        const { description, ...payload } = r.payload;
+        return { ...r, payload: { ...payload, title: payload.title.trim(), ...(description?.trim() && { description: description.trim() }) } };
+      });
+      setDone(await onPublish({ repo, records, paid, price }, setStep));
     } catch (err) {
+      console.error('Publish failed:', err);
       setError(friendlyError(err));
     } finally {
       setStep(null);
@@ -821,6 +846,17 @@ function PublishModal({ open, onClose, target, repos, balances, onPublish }) {
               : rows > MAX_ROWS ? <span className={styles.formError}>{rows.toLocaleString()} records. The browser publishes up to {MAX_ROWS.toLocaleString()}; use the CLI below for more.</span>
                 : `${rows.toLocaleString()} ${rows === 1 ? 'record' : 'records'}: ${file.columns.join(', ')}`}
         </div>
+        {file?.records?.map((r, i) => r.type === 'file' && (
+          <div key={i} className={styles.fileEdit}>
+            <div className={styles.inlineValue}>
+              <input className={styles.input} value={r.payload.title} onChange={(e) => editFile(i, { title: e.target.value })} aria-label={`Name of file ${i + 1}`} disabled={!!step} />
+              <span className={styles.fieldNote}>{formatBytes(r.payload.size)}</span>
+            </div>
+            <textarea className={styles.input} rows={2} value={r.payload.description ?? ''} onChange={(e) => editFile(i, { description: e.target.value })} placeholder="Description (public: what search finds)" aria-label={`Description of ${r.payload.title}`} disabled={!!step} />
+          </div>
+        ))}
+        {clash && <div className={styles.formError}>Two files share a name (spaces and accents count as dashes). Rename one.</div>}
+        {unnamed && <div className={styles.formError}>Every file needs a name.</div>}
       </Field>
 
 
