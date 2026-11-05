@@ -81,10 +81,12 @@ function Field({ label, children }) {
   );
 }
 
-// A modal built on the native <dialog>. showModal() supplies the focus trap, Esc to
-// close, inertness of the page behind, and top-layer stacking — all the parts of a
-// modal that are easy to get subtly wrong by hand.
-// ponytail: no library. `close` fires for Esc too, so state syncs back through onClose.
+// A modal built on the native <dialog>, opened with show(), not showModal().
+// showModal() puts the dialog in the top layer and makes the rest of the page inert —
+// which includes Privy's own modal (portalled into <body>), so a wallet confirm
+// raised from inside a dialog (embedded wallets, i.e. mobile) rendered beneath it,
+// unclickable. A plain z-indexed dialog + scrim lets Privy stack on top.
+// ponytail: no focus trap; tab can leave the dialog. Esc and scrim-click close it.
 // `side`: a drawer on the right edge instead, for a row's details beside its table.
 function Modal({ open, onClose, title, children, side }) {
   const ref = useRef(null);
@@ -92,26 +94,27 @@ function Modal({ open, onClose, title, children, side }) {
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
-    if (open && !el.open) el.showModal();
+    if (open && !el.open) el.show();
     if (!open && el.open) el.close();
   }, [open]);
 
   return (
-    <dialog
-      ref={ref}
-      className={side ? `${styles.modal} ${styles.drawer}` : styles.modal}
-      onClose={onClose}
-      // A click landing on the dialog element itself is a backdrop click — the
-      // content sits in children, so anything inside targets those instead.
-      onClick={(event) => event.target === ref.current && onClose()}
-      aria-label={title}
-    >
-      <div className={styles.modalHead}>
-        <span className={styles.colTitle}>{title}</span>
-        <button className={styles.ghostBtnSm} onClick={onClose} type="button">Close</button>
-      </div>
-      <div className={styles.modalBody}>{children}</div>
-    </dialog>
+    <>
+      {open && <div className={styles.scrim} onClick={onClose} />}
+      <dialog
+        ref={ref}
+        className={side ? `${styles.modal} ${styles.drawer}` : styles.modal}
+        onKeyDown={(event) => event.key === 'Escape' && onClose()}
+        aria-label={title}
+        aria-modal="true"
+      >
+        <div className={styles.modalHead}>
+          <span className={styles.colTitle}>{title}</span>
+          <button className={styles.ghostBtnSm} onClick={onClose} type="button">Close</button>
+        </div>
+        <div className={styles.modalBody}>{children}</div>
+      </dialog>
+    </>
   );
 }
 
