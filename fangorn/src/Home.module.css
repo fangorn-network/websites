@@ -336,9 +336,17 @@ a.fieldValueMono:hover { color: var(--hi); }
   position: fixed;
   inset: 0;
   z-index: 200;
-  background: rgba(23, 37, 30, 0.4);
-  backdrop-filter: blur(4px);
+  /* ponytail: no backdrop-filter. A blurred fixed layer coming and going while the page
+     resized left stale tiles painted down the page on mobile (the repeated-table smear). */
+  background: rgba(23, 37, 30, 0.5);
 }
+
+.fileEdit {
+  display: grid;
+  gap: 6px;
+  margin-top: 10px;
+}
+.fileEdit textarea { resize: vertical; font: inherit; }
 
 .modalHead {
   display: flex;

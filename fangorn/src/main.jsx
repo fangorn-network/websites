@@ -12,6 +12,18 @@ import App from './App.jsx';
 import { PrivyAuthBridge, DisabledAuthProvider } from './auth.jsx';
 import { CHAIN } from './fangorn.js';
 
+// A tab opened before a deploy asks for chunk hashes the deploy removed, and the SPA
+// fallback answers with index.html: the lazy import (x402, the SDK) fails. Reload once
+// onto the new build; the sessionStorage stamp stops a loop if the chunk is truly gone.
+window.addEventListener('vite:preloadError', (event) => {
+  try {
+    if (Date.now() - Number(sessionStorage.getItem('chunk-reload') || 0) < 10_000) return;
+    sessionStorage.setItem('chunk-reload', String(Date.now()));
+  } catch { /* storage blocked: still reload once */ }
+  event.preventDefault();
+  location.reload();
+});
+
 const privyAppId = import.meta.env.VITE_PRIVY_APP_ID;
 
 if (!privyAppId) {
