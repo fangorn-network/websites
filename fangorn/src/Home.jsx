@@ -4,7 +4,7 @@ import styles from './Home.module.css';
 import { useAuth } from './authContext';
 import { useBalances } from './fangorn';
 import { truncate, explorer, txExplorer, formatBytes } from './format';
-import { usePublisher, readFiles, recordId, repoLink, readRepoPage, readBuyers, netPrice, blockTime, EXPLORER_URL } from './account';
+import { usePublisher, readFiles, recordId, repoLink, readRepoPage, readBuyers, netPrice, blockTime, EXPLORE_URL } from './account';
 import { buy, readLibrary, hasIdentity } from './library';
 import { Fields, download } from './RepoPage';
 
@@ -435,7 +435,7 @@ function BuyingTab({ wallet, balances, onFund, funding, refreshBalances }) {
             rows={list}
             rowKey={keyOf}
             onOpen={setSelected}
-            empty={items.length ? 'Nothing matches.' : <>Nothing bought yet. Find data on the <a className={styles.resLink} href={EXPLORER_URL}>explorer</a>: paid records have a Buy button on their repo's page.</>}
+            empty={items.length ? 'Nothing matches.' : <>Nothing bought yet. Find data in <a className={styles.resLink} href={EXPLORE_URL}>Explore</a>: paid records have a Buy button on their page.</>}
           />
         )}
         <PurchaseDrawer item={selected} opened={opened} onOpen={open} onClose={() => setSelected(null)} />
@@ -444,7 +444,7 @@ function BuyingTab({ wallet, balances, onFund, funding, refreshBalances }) {
       <section className={styles.section}>
         <h2 className={styles.h2}>Buy with an agent</h2>
         <p className={styles.colText}>
-          Agents search and buy on Fangorn with the Fangorn plugin, added to Claude Code with:
+          Agents find data on Fangorn with the Fangorn plugin, added to Claude Code with:
         </p>
         <Cmd text={MCP_INSTALL} />
       </section>
@@ -456,25 +456,24 @@ function BuyingTab({ wallet, balances, onFund, funding, refreshBalances }) {
 
 const dataHref = (repo) => `#/account/data${repo ? `/${encodeURIComponent(repo)}` : ''}`;
 
-// A repo's state on the explorer, and whether it's an app.
+// Whether Fangorn lists a repo yet, and whether it's an app.
 function RepoBadges({ repo }) {
   return (
     <>
       {repo.app && <span className={styles.badge} title={repo.app.card}>App{repo.app.name ? `: ${repo.app.name}` : ''}</span>}
-      <span className={repo.listing ? styles.badge : styles.badgeWarn} title={repo.listing ? undefined : 'The explorer indexes new data every few minutes.'}>
+      <span className={repo.listing ? styles.badge : styles.badgeWarn} title={repo.listing ? undefined : 'New data is listed within a minute or two.'}>
         {repo.listing ? 'Listed' : 'Not listed yet'}
       </span>
     </>
   );
 }
 
-// Every repo: what the explorer lists of it. Sales are per record, inside a repo.
+// Every repo, and whether it's listed. Sales are per record, inside a repo.
 function RepoTable({ repos, earnings }) {
   const updated = (r) => (earnings?.head ? blockTime(earnings.head, r.block) : null);
   const columns = [
     { key: 'repo', label: 'Repo', sort: (r) => r.repo, render: (r) => <span className={styles.cellName}>{r.repo}</span> },
     { key: 'status', label: 'Status', hideSm: true, render: (r) => <span className={styles.cellBadges}><RepoBadges repo={r} /></span> },
-    { key: 'records', label: 'Records', num: true, sort: (r) => r.listing?.count ?? -1, render: (r) => (r.listing ? r.listing.count.toLocaleString() : '—') },
     { key: 'updated', label: 'Updated', num: true, sort: (r) => r.block, render: (r) => shortDate(updated(r)) },
   ];
   return <DataTable label="Your repos" columns={columns} rows={repos} rowKey={(r) => r.repo} onOpen={(r) => { location.hash = dataHref(r.repo); }} />;
@@ -609,7 +608,7 @@ function PublishingTab({ wallet, path, balances, onFund, funding, refreshBalance
           <button className={`${styles.card} ${styles.cardNew}`} type="button" onClick={() => setPublishing({ repo: null })}>
             <span className={styles.cardPlus} aria-hidden="true">+</span>
             <span className={styles.cardTitle}>Publish data</span>
-            <span className={styles.cardBody}>Any files. Choose what's paid and the price.</span>
+            <span className={styles.cardBody}>Any files. People and agents find them within minutes.</span>
           </button>
         )}
         {open == null && repos?.length > 0 && <RepoTable repos={repos} earnings={earnings} />}
@@ -630,8 +629,8 @@ function PublishingTab({ wallet, path, balances, onFund, funding, refreshBalance
         <section className={styles.section}>
           <h2 className={styles.h2}>How people find it</h2>
           <p className={styles.colText}>
-            The <a className={styles.resLink} href={EXPLORER_URL} target="_blank" rel="noreferrer">Fangorn explorer <span className={styles.resArrow}>↗</span></a> lists
-            every publisher. Agents search it through the Fangorn plugin, which anyone adds to Claude Code with:
+            Everything you publish shows up in <a className={styles.resLink} href={EXPLORE_URL}>Explore</a>, and
+            agents find it through the Fangorn plugin, which anyone adds to Claude Code with:
           </p>
           <Cmd text={MCP_INSTALL} />
           <p className={styles.colText}>
@@ -713,17 +712,17 @@ const MCP_INSTALL = `/plugin marketplace add fangorn-network/westmarch
 /plugin install fangorn-index@fangorn`;
 const CLI_PUBLISH = `fangorn repo init my-data
 fangorn add .
-fangorn commit --paid body --price 0.01
+fangorn commit
 fangorn push`;
 
 
-// A repo name is what the explorer and agents see; keep it to what a URL doesn't quote.
+// A repo name is what people and agents see; keep it to what a URL doesn't quote.
 const REPO_NAME = /^[a-z0-9][a-z0-9._-]{1,62}$/;
 // ponytail: every paid record is one wallet signature and every sealed value one upload.
 // Bigger files go through the CLI.
 const MAX_ROWS = 1000;
 
-// One repo: whether the explorer lists it yet, and its page to share.
+// One repo: whether it's listed yet, and its page to share.
 // Upload a file, choose what's paid and for how much, publish. That's the whole product.
 // Mounted per opening, so it starts on `target`, else the newest repo, else a new one.
 function PublishModal({ open, onClose, target, repos, balances, onPublish }) {
@@ -731,6 +730,7 @@ function PublishModal({ open, onClose, target, repos, balances, onPublish }) {
   // The repo the files go into; '' is a new one, named below.
   const [choice, setChoice] = useState(target ?? repos?.[0]?.repo ?? '');
   const [name, setName] = useState(repos?.length ? '' : 'data');
+  const [description, setDescription] = useState('');
   const [paid, setPaid] = useState([]);
   const [price, setPrice] = useState('0.01');
   const [step, setStep] = useState(null);
@@ -789,7 +789,7 @@ function PublishModal({ open, onClose, target, repos, balances, onPublish }) {
         const { description, ...payload } = r.payload;
         return { ...r, payload: { ...payload, title: payload.title.trim(), ...(description?.trim() && { description: description.trim() }) } };
       });
-      setDone(await onPublish({ repo, records, paid, price }, setStep));
+      setDone(await onPublish({ repo, records, paid, price, description }, setStep));
     } catch (err) {
       console.error('Publish failed:', err);
       setError(friendlyError(err));
@@ -804,7 +804,7 @@ function PublishModal({ open, onClose, target, repos, balances, onPublish }) {
         <p className={styles.colText}>
           <b>{repo}</b> is on chain: {rows} {rows === 1 ? 'record' : 'records'}
           {paid.length ? `, ${paid.join(', ')} sold at ${price} USDC a record` : ', free to read'}.
-          The explorer lists it within a few minutes, and from then on any agent with the Fangorn
+          It's listed within a minute or two, and from then on any agent with the Fangorn
           plugin can find it{paid.length ? ' and buy it. Sales are paid straight to this wallet' : ''}.
         </p>
         <div className={styles.cardLinks}>
@@ -831,10 +831,20 @@ function PublishModal({ open, onClose, target, repos, balances, onPublish }) {
         )}
         <div className={styles.pending}>
           {choice ? 'Adds to this repo. A record with an id it already has is replaced.'
-            : !repo ? 'Name it: what agents and the explorer call it.'
+            : !repo ? 'Name it: what people and agents will see.'
               : !validName ? '2–63 characters: lowercase letters, digits, dot, dash or underscore.'
                 : exists ? 'You already have a repo of this name: these add to it.'
                   : 'A new repo, made when you publish.'}
+        </div>
+      </Field>
+
+      <Field label="Description">
+        <textarea className={styles.input} rows={3} value={description} onChange={(event) => setDescription(event.target.value)}
+          placeholder="What this data is, in the words someone would search for it" aria-label="Description of the repo" disabled={!!step} />
+        <div className={styles.pending}>
+          {description.trim() ? 'Public. Search on Fangorn matches it, along with the repo’s name.'
+            : choice ? 'Leave empty to keep the current description.'
+              : 'Without one, people can only find this repo by its name.'}
         </div>
       </Field>
 
@@ -969,8 +979,8 @@ export default function Home({ path = [] }) {
           <h1 className={styles.h1}>Welcome, {name}.</h1>
           <p className={styles.sub}>
             {tab === 'library' ? 'Data you buy is paid from this wallet, with no gas, and kept in your library.'
-              : tab === 'data' ? (repos?.length ? 'Your data is published. Each sale is paid to your wallet.'
-                : 'Publish a file and set a price. Agents discover it on the explorer, and sales are paid to your wallet.')
+              : tab === 'data' ? (repos?.length ? 'Your data is published. People and agents can find it on Fangorn.'
+                : 'Publish files. People and agents find them on Fangorn.')
                 : 'Reading your account from the chain…'}
           </p>
         </section>

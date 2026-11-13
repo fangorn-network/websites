@@ -8,7 +8,11 @@ import { parseAbiItem } from 'viem';
 import { repoId } from '@fangorn-network/sdk/lib/contracts/data-registry/index.js';
 import { recordKey, subjectOf, WHOLE_REPO } from '@fangorn-network/sdk/lib/contracts/settlement-registry/index.js';
 import { NETWORK, publicClient, walletClientFor } from './fangorn.js';
-import { EXPLORER_URL, blockTime, reader, readRepos, scan, toListing } from './account.js';
+import { blockTime, reader, readRepos, scan, toListing } from './account.js';
+
+// ponytail: the old explorer still quotes paid records (x402); the one thing left on it. Keep it running until
+// quotes move here (a /api/paid route), or buying stops.
+const EXPLORER_URL = import.meta.env?.VITE_EXPLORER_URL || 'https://explorer.fangorn.network';
 
 const IDENTITY_MESSAGE = 'fangorn:identity:v1';
 const SETTLED = parseAbiItem('event Settled(bytes32 indexed subject, uint256 indexed nullifier, address reader)');

@@ -29,3 +29,5 @@ dist-ssr
 tmp/
 
 /AGENTS.md
+
+.wrangler/

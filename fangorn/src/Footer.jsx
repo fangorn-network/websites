@@ -2,7 +2,7 @@ import { useState } from 'react';
 import styles from './Footer.module.css';
 
 const CONTACT = 'fangorn@fangorn.network';
-const TOPICS = ['Publishing an app', 'Using apps with my agent', 'Partnering with Fangorn', 'Something else'];
+const TOPICS = ['Publishing data', 'Finding data with my agent', 'Something else'];
 
 // ponytail: mailto, no backend. The form drafts the email in the visitor's mail app;
 // the address is shown too, for anyone whose mail lives in a browser tab.
@@ -26,7 +26,7 @@ export function Contact() {
   return (
     <section className={styles.cta} id="contact">
       <h2 className={styles.ctaH2}>Get in touch</h2>
-      <p className={styles.ctaP}>Questions, ideas, or an app you want to build? Talk to the team.</p>
+      <p className={styles.ctaP}>Questions or ideas? Talk to the team.</p>
       <form className={styles.form} onSubmit={send}>
         <label className={styles.label}>
           What's it about?

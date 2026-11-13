@@ -6,7 +6,7 @@ import type * as Preset from '@docusaurus/preset-classic';
 
 const config: Config = {
   title: 'Fangorn Docs',
-  tagline: 'Publish data once. People search it, agents call it, buyers pay for it.',
+  tagline: 'Publish data. Get found.',
   favicon: 'img/favicon.svg',
 
   future: {
@@ -25,7 +25,6 @@ const config: Config = {
 
   markdown: {mermaid: true},
   themes: ['@docusaurus/theme-mermaid'],
-  clientModules: ['./src/clientModules/d3-transition.ts'],
 
   stylesheets: [
     'https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500..800&family=Figtree:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap',
@@ -71,11 +70,9 @@ const config: Config = {
       title: 'Fangorn',
       logo: {alt: 'Fangorn', src: 'img/favicon.svg'},
       items: [
-        {type: 'doc', docId: 'use-apps', label: 'Use', position: 'left'},
-        {type: 'doc', docId: 'build-an-app', label: 'Build', position: 'left'},
-        {type: 'doc', docId: 'sell-records', label: 'Sell', position: 'left'},
-        {type: 'doc', docId: 'how-it-works', label: 'How it works', position: 'left'},
-        {type: 'doc', docId: 'deploy', label: 'Operate', position: 'left'},
+        {type: 'doc', docId: 'publish', label: 'Publish', position: 'left'},
+        {type: 'doc', docId: 'find', label: 'Find', position: 'left'},
+        {type: 'doc', docId: 'build', label: 'Build', position: 'left'},
         {href: 'https://fangorn.network', label: 'fangorn.network', position: 'right'},
         {href: 'https://github.com/fangorn-network', label: 'GitHub', position: 'right'},
       ],
@@ -86,18 +83,11 @@ const config: Config = {
         {
           title: 'Docs',
           items: [
-            {label: 'Overview', to: '/intro'},
-            {label: 'Use apps', to: '/use-apps'},
-            {label: 'Build an app', to: '/build-an-app'},
-            {label: 'Sell records', to: '/sell-records'},
-          ],
-        },
-        {
-          title: 'Network',
-          items: [
-            {label: 'How it works', to: '/how-it-works'},
-            {label: 'Deploy Fangorn', to: '/deploy'},
-            {label: 'App explorer', href: 'https://fangorn.network/#/explorer'},
+            {label: 'Overview', to: '/'},
+            {label: 'Publish', to: '/publish'},
+            {label: 'Find', to: '/find'},
+            {label: 'Build', to: '/build'},
+            {label: 'Explore', href: 'https://fangorn.network/#/explore'},
           ],
         },
         {

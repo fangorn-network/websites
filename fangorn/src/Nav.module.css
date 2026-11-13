@@ -36,6 +36,13 @@
 
 .logo:hover::before { transform: rotate(-20deg) scale(1.1); }
 
+.links {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin: 0 auto 0 24px;
+}
+
 .right {
   display: flex;
   align-items: center;
@@ -100,9 +107,21 @@
   transition: color 0.15s, background 0.15s;
 }
 
-.theme:hover { color: var(--ink); background: var(--s3); }
+.theme:hover, .menu:hover { color: var(--ink); background: var(--s3); }
 
-.theme svg {
+.menu {
+  display: none;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  margin-left: 4px;
+  border: none;
+  border-radius: 50%;
+  background: none;
+  color: var(--sub);
+}
+
+.theme svg, .menu svg {
   width: 19px;
   height: 19px;
   fill: none;
@@ -114,5 +133,27 @@
 
 @media (max-width: 860px) {
   .nav { padding: 0 16px; }
-  .link { display: none; }
+  .menu { display: grid; }
+  .links { display: none; }
+  .links.open {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    position: absolute;
+    top: 64px;
+    left: 0;
+    right: 0;
+    margin: 0;
+    padding: 8px 16px 16px;
+    background: var(--bg);
+    border-bottom: 1px solid var(--line);
+  }
+  .links.open .link { padding: 12px 14px; font-size: 16px; }
+}
+
+.menuOnly { display: none; border: none; background: none; text-align: left; font: inherit; }
+
+@media (max-width: 480px) {
+  .ghostBtn { display: none; } /* in the menu instead */
+  .links.open .menuOnly { display: block; }
 }

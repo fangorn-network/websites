@@ -1,0 +1,61 @@
+---
+sidebar_position: 2
+title: Publish
+---
+
+# Publish
+
+A **repo** is a named set of records, owned by one wallet: `publisher/repo`. Each record is
+`{ id, type, payload }`. Each time you publish, the change is a signed commit, and the repo's latest commit is
+recorded on chain.
+
+You need a little Base Sepolia ETH for each publish, from a
+[faucet](https://portal.cdp.coinbase.com/products/faucet).
+
+## From the website
+
+1. [Log in](https://fangorn.network) with your email. Your account comes with a wallet.
+2. Fund the wallet with test ETH. Your account page shows its address.
+3. Choose **Publish data**, name the repo, describe it, and add files.
+
+Each repo gets a public page you can share: `https://fangorn.network/#/data/<publisher>/<repo>`.
+
+## From a terminal
+
+```bash
+npm i -g @fangorn-network/sdk
+fangorn init                 # set up the wallet this CLI signs with
+fangorn repo init my-data    # create the repo on chain
+fangorn add ./my-files       # stage files: a record per CSV/JSON row, or one per text file
+fangorn commit               # a local commit of what's staged
+fangorn push                 # publish it: the commit becomes the repo's latest version on chain
+```
+
+`fangorn read my-data` lists what's published. `fangorn wallet` shows the address to fund.
+
+## Being found
+
+The global index matches a repo's **name**, and its description when it has one. It doesn't search inside the
+records. So:
+
+- **Name the repo for what it holds.** `oakland-council-minutes` is found; `data1` isn't.
+- **Give it a description.** On the website, fill in **Description** when you publish. From a terminal, host a
+  small JSON file (an agent card) anywhere public, then point the repo at it:
+  `fangorn card <url-of-the-card> --repo my-data --skip-register`. The index reads it within a minute or two.
+
+```json
+{
+  "name": "Oakland council minutes",
+  "description": "Every Oakland City Council meeting's minutes since 2019, one record per meeting.",
+  "capabilities": { "extensions": [{
+    "uri": "https://fangorn.network/a2a/repo/v1",
+    "params": { "chainId": 84532, "dataRegistry": "0x0F3eb0E62CF610dbaC6B3aD4Bf4cE38Ab50EBCC5", "publisher": "<your address>", "repo": "my-data" }
+  }] }
+}
+```
+
+The `params` must name your address and the repo exactly, or the index ignores the card: that's what stops
+anyone describing someone else's repo.
+
+Once someone finds the repo, they can read every record in it. To make the records themselves searchable,
+run an index over them (see [Build](/build)).
