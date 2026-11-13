@@ -741,12 +741,11 @@
   .splitHub { grid-row: auto; }
 }
 
-/* Door commands get the full width: the copy button sits above the first line
-   instead of reserving a column, so `fangorn-builder@fangorn` never splits. */
-.door .cmd pre { font-size: 13px; padding-right: 0; padding-top: 26px; word-break: normal; overflow-wrap: anywhere; }
-.door .copy { top: 10px; }
+/* Door commands get the full width: the copy button floats and the text wraps
+   around it instead of reserving a column, so `fangorn-builder@fangorn` never splits. */
+.door .cmd pre { font-size: 12.5px; padding-right: 0; word-break: normal; overflow-wrap: anywhere; }
+.door .copy { position: static; float: right; margin: 0 0 4px 12px; }
 .door .cmd { padding: 16px 18px; }
-.door .cmd pre { font-size: 12.5px; }
 
 /* Phones: console above its screen, both full width, no cable between them. */
 @media (max-width: 600px) {
