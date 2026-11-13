@@ -21,5 +21,9 @@
     "PRIVY_APP_ID": "cmnxrwbjl00aa0dlart5xkemq"
   },
   "routes": [{ "pattern": "fangorn.network", "custom_domain": true }],
-  "previews": {}
+  // Previews inherit no bindings. ponytail: GRANTS/REGISTRY left out so previews can't write prod data; add staging KV/D1 here when previews need /api.
+  "previews": {
+    "ai": { "binding": "AI" },
+    "vars": { "PRIVY_APP_ID": "cmnxrwbjl00aa0dlart5xkemq" }
+  }
 }
