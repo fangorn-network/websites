@@ -54,8 +54,9 @@ function Copy({ text }) {
 function Cmd({ text }) {
   return (
     <div className={styles.cmd}>
-      <pre>{text}</pre>
+      {/* Before the <pre> so the floated button (in doors) has the text wrap around it. */}
       <Copy text={text} />
+      <pre>{text}</pre>
     </div>
   );
 }
