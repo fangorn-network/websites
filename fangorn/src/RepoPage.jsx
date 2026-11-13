@@ -183,7 +183,7 @@ export default function RepoPage({ publisher, repo }) {
               page. Everything you buy stays in the library on your <a className={styles.resLink} href="#/account/library">account</a> page.
             </p>
             <p className={styles.colText}>
-              Agents discover and buy data with the Fangorn plugin, added to Claude Code with:
+              Agents find data on Fangorn with the Fangorn plugin, added to Claude Code with:
             </p>
             <Cmd text={MCP_INSTALL} />
             <p className={styles.colText}>Then give it a record's buy prompt (below), or ask it to search this repo.</p>

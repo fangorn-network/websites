@@ -591,13 +591,15 @@
 .steps {
   list-style: none;
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 32px;
   margin-top: 40px;
   border-top: 1px solid var(--line);
 }
 
 .step { padding-top: 24px; position: relative; }
+/* The note under the steps needs air, or it reads as overflow from step 3. */
+.steps + .sectionSub { margin-top: 48px; margin-bottom: 0; }
 /* A short accent on the rule marks where each step starts. */
 .step::before {
   content: '';
@@ -733,19 +735,17 @@
   .section { padding: 40px 16px; }
   .band, .bandNight { padding: 16px 0; }
   .bento, .caseGrid, .doors, .split, .principles, .versusRow { grid-template-columns: 1fr; }
-  .steps { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .principles { gap: 32px; }
   .versusRow { gap: 8px; }
   .splitDoor::before { display: none; }
   .splitHub { grid-row: auto; }
 }
 
-/* Door commands get the full width: the copy button sits above the first line
-   instead of reserving a column, so `fangorn-builder@fangorn` never splits. */
-.door .cmd pre { font-size: 13px; padding-right: 0; padding-top: 26px; word-break: normal; overflow-wrap: anywhere; }
-.door .copy { top: 10px; }
+/* Door commands get the full width: the copy button floats and the text wraps
+   around it instead of reserving a column, so `fangorn-builder@fangorn` never splits. */
+.door .cmd pre { font-size: 12.5px; padding-right: 0; word-break: normal; overflow-wrap: anywhere; }
+.door .copy { position: static; float: right; margin: 0 0 4px 12px; }
 .door .cmd { padding: 16px 18px; }
-.door .cmd pre { font-size: 12.5px; }
 
 /* Phones: console above its screen, both full width, no cable between them. */
 @media (max-width: 600px) {

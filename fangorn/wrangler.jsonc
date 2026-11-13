@@ -1,10 +1,30 @@
 {
   "name": "fangorn-website",
   "compatibility_date": "2026-10-01",
+  "compatibility_flags": ["nodejs_compat"],
+  // The site is dist/; the Worker answers /api and /mcp (worker/index.js: the registry, and grants and signing for apps).
+  "main": "worker/index.js",
   "assets": {
     "directory": "./dist",
-    "not_found_handling": "single-page-application"
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*", "/mcp"]
+  },
+  // Created on first deploy. Holds grants (hashed tokens), nothing else.
+  "kv_namespaces": [{ "binding": "GRANTS" }],
+  // The registry (worker/registry.js): every repo and its agent card, and the stitch they're read from. Created on first deploy.
+  "d1_databases": [{ "binding": "REGISTRY", "database_name": "fangorn-registry" }],
+  "ai": { "binding": "AI" },
+  "triggers": { "crons": ["* * * * *"] },
+  "vars": {
+    // Same app as VITE_PRIVY_APP_ID. Secrets: PRIVY_APP_SECRET, PRIVY_PRIVATE_KEY (wrangler secret put).
+    "PRIVY_APP_ID": "cmnxrwbjl00aa0dlart5xkemq"
   },
   "routes": [{ "pattern": "fangorn.network", "custom_domain": true }],
-  "previews": {}
+  // Previews inherit no bindings. ponytail: GRANTS/REGISTRY left out so previews can't write prod data; add staging KV/D1 here when previews need /api.
+  "preview_urls": true,
+  "previews": {
+    "ai": { "binding": "AI" },
+    "vars": { "PRIVY_APP_ID": "cmnxrwbjl00aa0dlart5xkemq" }
+  }
 }

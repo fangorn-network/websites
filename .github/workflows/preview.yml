@@ -1,0 +1,102 @@
+# Per-PR Workers Previews for the site and docs, named pr-<number>. Deleted when the PR closes.
+name: Preview
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, closed]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: preview-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+env:
+  CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+  CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+  PREVIEW_NAME: pr-${{ github.event.pull_request.number }}
+
+jobs:
+  site:
+    # Secrets aren't available to fork PRs.
+    if: github.event.action != 'closed' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    outputs:
+      url: ${{ steps.preview.outputs.url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter fangorn build
+        env:
+          VITE_PRIVY_APP_ID: ${{ vars.VITE_PRIVY_APP_ID }}
+          VITE_ENABLE_ACCOUNT: ${{ vars.VITE_ENABLE_ACCOUNT }}
+          VITE_RPC_URL: ${{ vars.VITE_RPC_URL }}
+          VITE_LOG_WINDOW: ${{ vars.VITE_LOG_WINDOW }}
+          VITE_USDC_ADDRESS: ${{ vars.VITE_USDC_ADDRESS }}
+      # Same as preview_urls in wrangler.jsonc, which only applies on `wrangler deploy` (main). workers.dev itself stays off.
+      - run: |
+          curl -fsS -X POST "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/fangorn-website/subdomain" \
+            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" -H "Content-Type: application/json" \
+            -d '{"enabled": false, "previews_enabled": true}'
+      - id: preview
+        working-directory: fangorn
+        run: |
+          npx -y wrangler@latest preview --name "$PREVIEW_NAME" --json | tee preview.json
+          url=$(sed -n '/^{/,$p' preview.json | jq -er '.preview.urls[0]')
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+
+  docs:
+    if: github.event.action != 'closed' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    outputs:
+      url: ${{ steps.preview.outputs.url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter docs-fangorn-network build
+      # Same as preview_urls in wrangler.jsonc, which only applies on `wrangler deploy` (main). workers.dev itself stays off.
+      - run: |
+          curl -fsS -X POST "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/docs-fangorn-network/subdomain" \
+            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" -H "Content-Type: application/json" \
+            -d '{"enabled": false, "previews_enabled": true}'
+      - id: preview
+        working-directory: docs.fangorn.network
+        run: |
+          npx -y wrangler@latest preview --name "$PREVIEW_NAME" --json | tee preview.json
+          url=$(sed -n '/^{/,$p' preview.json | jq -er '.preview.urls[0]')
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+
+  comment:
+    needs: [site, docs]
+    if: ${{ !cancelled() && (needs.site.result == 'success' || needs.docs.result == 'success') }}
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          gh pr comment "${{ github.event.pull_request.number }}" -R "${{ github.repository }}" --edit-last --create-if-none --body "**Previews**
+          - site: ${{ needs.site.outputs.url || 'failed' }}
+          - docs: ${{ needs.docs.outputs.url || 'failed' }}"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  cleanup:
+    if: github.event.action == 'closed' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        dir: [fangorn, docs.fangorn.network]
+    steps:
+      - uses: actions/checkout@v4
+      - working-directory: ${{ matrix.dir }}
+        run: npx -y wrangler@latest preview delete --name "$PREVIEW_NAME" --skip-confirmation

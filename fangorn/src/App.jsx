@@ -2,11 +2,10 @@ import { useEffect, useState } from 'react';
 import './index.css';
 import Nav from './Nav';
 import Landing from './Landing';
-import { EXPLORER_URL } from './account';
 import { Footer } from './Footer';
 import Home from './Home';
-import About from './About';
-import Build from './Build';
+import Connect from './Connect';
+import Explore from './Explore';
 import RepoPage from './RepoPage';
 import { useAuth, ACCOUNT_ENABLED } from './authContext';
 
@@ -47,12 +46,11 @@ function Account({ path }) {
 
 export default function App() {
   const hash = useHash();
-  // The explorer is its own site now; old #/explorer links go there.
-  if (hash === '#/explorer') location.replace(EXPLORER_URL);
   const page =
     hash === '#/account' || hash.startsWith('#/account/') ? <Account path={hash.split('/').slice(2)} /> :
-    hash === '#/about' ? <About /> :
-    hash === '#/build' ? <Build /> :
+    hash === '#/explore' || hash === '#/explorer' ? <Explore /> :
+    // #/connect?app=…&repos=…: any app asking to publish for you (worker/index.js signs for it).
+    hash.startsWith('#/connect') ? <Connect /> :
     // #/data/<publisher>/<repo>: one repo's public page, the link a publisher shares.
     hash.startsWith('#/data/') ? <RepoPage publisher={hash.split('/')[2]} repo={decodeURIComponent(hash.split('/').slice(3).join('/'))} /> :
     <Landing />;

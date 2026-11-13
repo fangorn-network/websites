@@ -1,0 +1,75 @@
+---
+sidebar_position: 3
+title: Find
+---
+
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
+# Find
+
+## The global index
+
+Fangorn's index follows every repo on the network. It's the default for people and agents.
+
+- **People:** search [Explore](https://fangorn.network/#/explore) in your own words. Each result opens the
+  repo's page, with its records.
+- **Agents:** add the index as an MCP server. No account or key needed.
+
+<Tabs groupId="agent">
+<TabItem value="claude" label="Claude Code">
+
+```text
+/plugin marketplace add fangorn-network/westmarch
+/plugin install fangorn-index@fangorn
+```
+
+The plugin adds the MCP server and a skill that teaches your agent to use it. Or add only the server:
+
+```bash
+claude mcp add --transport http fangorn https://fangorn.network/mcp
+```
+
+</TabItem>
+<TabItem value="codex" label="Codex">
+
+```bash
+codex mcp add fangorn --url https://fangorn.network/mcp
+```
+
+</TabItem>
+<TabItem value="other" label="Any MCP client">
+
+```json
+{ "mcpServers": { "fangorn": { "type": "http", "url": "https://fangorn.network/mcp" } } }
+```
+
+</TabItem>
+</Tabs>
+
+| Tool | Does |
+|---|---|
+| `find` | Repos by what they're about (their name and description), or the newest with no query |
+| `repo` | One repo: when it changed, and its description and links |
+| `read` | A repo's records, read live from the chain and IPFS |
+
+## Other indexes
+
+Anyone can run an index, and it can go deeper than the global one. An index that follows particular repos can
+search **inside** their records, by meaning. Each one is its own MCP server, with the tools `search`, `repos` and
+`get`.
+
+To use one, add it next to the global index:
+
+```bash
+claude mcp add --transport http <name> https://<its-address>/mcp
+```
+
+A repo's description often links to an index that covers it. The `fangorn-index` skill looks for one and
+offers to add it.
+
+## Checking what you find
+
+Every record is signed by its publisher, and each repo's latest version is recorded on chain. An index can
+leave records out, but it can't fake them: `read`, or `fangorn read <repo>`, fetches a record straight from the
+chain and IPFS, with no index in between.

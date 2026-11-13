@@ -5,6 +5,7 @@ import {
   useFundWallet,
   useWallets,
   useExportWallet,
+  useSigners,
   getEmbeddedConnectedWallet,
 } from '@privy-io/react-auth';
 import { AuthContext } from './authContext';
@@ -22,18 +23,20 @@ const TAB_KEY = 'privy-tab-session';
  * component calls usePrivy() directly, so nothing throws when Privy is absent.
  */
 export function PrivyAuthBridge({ children }) {
-  const { ready, authenticated, user, logout } = usePrivy();
+  const { ready, authenticated, user, logout, getAccessToken } = usePrivy();
   // A login made in this tab lands on the account page. A session Privy restores
   // on load isn't a login (wasAlreadyAuthenticated), so a refresh stays put.
   const { login } = useLogin({
     onComplete: ({ wasAlreadyAuthenticated }) => {
       // Except on a repo's page: someone logging in to buy stays with what they're buying.
-      if (!wasAlreadyAuthenticated && !location.hash.startsWith('#/data/')) location.hash = '#/account';
+      // So does someone connecting an app.
+      if (!wasAlreadyAuthenticated && !location.hash.startsWith('#/data/') && !location.hash.startsWith('#/connect')) location.hash = '#/account';
     },
   });
   const { fundWallet } = useFundWallet();
   const { wallets } = useWallets();
   const { exportWallet } = useExportWallet();
+  const { addSigners, removeSigners } = useSigners();
 
   // Decide synchronously at the first ready render whether the session Privy
   // restored belongs to this tab. Doing it in render (not an effect) means a
@@ -93,6 +96,17 @@ export function PrivyAuthBridge({ children }) {
     [exportWallet, embedded],
   );
 
+  // Signers on the embedded wallet: keys a server (the slop store) may sign with, within their policies. Like
+  // export, only an embedded wallet has them. removeAll takes off every signer, not one.
+  const signers = useMemo(
+    () => (embedded ? {
+      address: embedded.address,
+      add: (list) => addSigners({ address: embedded.address, signers: list }),
+      removeAll: () => removeSigners({ address: embedded.address }),
+    } : null),
+    [addSigners, removeSigners, embedded],
+  );
+
   return (
     <AuthContext.Provider
       value={{
@@ -105,6 +119,8 @@ export function PrivyAuthBridge({ children }) {
         logout,
         fundWallet: fund,
         exportKey,
+        signers,
+        getAccessToken,
       }}
     >
       {children}
@@ -128,6 +144,8 @@ export function DisabledAuthProvider({ children }) {
       return Promise.resolve();
     },
     exportKey: null,
+    signers: null,
+    getAccessToken: async () => null,
   };
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

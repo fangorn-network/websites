@@ -1,0 +1,27 @@
+---
+sidebar_position: 4
+title: Build
+---
+
+# Build
+
+An app on Fangorn reads a kind of repo across every publisher who publishes one. New publishers show up on
+their own, with nothing to approve. The app doesn't own the data: another app can show the same repos.
+
+The quickest start is the builder plugin for Claude Code:
+
+```text
+/plugin marketplace add fangorn-network/westmarch
+/plugin install fangorn-builder@fangorn
+```
+
+Then ask: *"Build a Fangorn app from &lt;your data&gt;."*
+
+## The pieces
+
+- **[@fangorn-network/sdk](https://www.npmjs.com/package/@fangorn-network/sdk)** publishes and reads records.
+- **[westmarch](https://github.com/fangorn-network/westmarch)** is the index. It runs on your machine, or as a
+  Cloudflare Worker that follows the repos you name and serves them over search and MCP. Deploy the Worker as
+  it is, configured by one JSON variable, or add your own MCP tools to it.
+- **[The internet slop warehouse](https://github.com/fangorn-network/internet-slop-warehouse)** is a working
+  example: browser games built from parts anyone publishes, with an index that searches inside every part.

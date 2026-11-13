@@ -1,114 +1,38 @@
 import { useState } from 'react';
 import { Contact } from './Footer';
 import styles from './Landing.module.css';
-import { formatUnits } from 'viem';
 import { useAuth } from './authContext';
-import { useListings, EXPLORER_URL } from './account';
+import { EXPLORE_URL } from './account';
 
-// ponytail: the explorer's repos in the shape the tiles below were built for (apps, from
-// the AppRegistry the SDK has since dropped). Rewrite the tiles around repos when the
-// landing copy moves off apps.
-function useAllApps() {
-  const listings = useListings();
-  return listings && [...listings.values()].map((d) => ({
-    appId: d.domain,
-    name: d.repo,
-    description: d.description ?? `${d.count.toLocaleString()} records from ${d.publisher.slice(0, 10)}…`,
-    tags: d.types,
-    site: EXPLORER_URL,
-    price: null,
-  }));
-}
+// One message: publish, get found. Every claim here must be checkable by a skeptic in a minute.
 
-// The page is a funnel with two doors, Use and Publish (see #start). Each door
-// has one command and one next step; everything else is one click down. Keep it
-// that way: a third choice at the top costs both doors.
+const MCP = 'claude mcp add --transport http fangorn https://fangorn.network/mcp';
+const PLUGIN = `/plugin marketplace add fangorn-network/westmarch
+/plugin install fangorn-index@fangorn`;
+const CLI = `npm i -g @fangorn-network/sdk
+fangorn init
+fangorn repo init my-data
+fangorn add ./my-files
+fangorn commit
+fangorn push`;
 
-// Same plugins either way; mirrors GETTING_STARTED_PATHS in Home.jsx.
-const AGENTS = [
+const HOW = [
   {
-    tab: 'Claude Code',
-    name: 'Claude',
-    where: 'inside Claude Code',
-    install: (p) => `/plugin marketplace add fangorn-network/westmarch\n/plugin install ${p}@fangorn`,
-    mcp: 'claude mcp add',
-    mcpHttp: 'claude mcp add --transport http <app> https://<app-site>/mcp',
+    who: '1',
+    title: 'You publish',
+    body: 'Your files become records in a repo. The records go to IPFS, and the repo’s latest version is signed by your wallet and recorded on chain. Only you can change it.',
   },
   {
-    tab: 'Codex',
-    name: 'Codex',
-    where: 'in your terminal',
-    install: (p) => `codex plugin marketplace add fangorn-network/westmarch\ncodex plugin add ${p}@fangorn`,
-    mcp: 'codex mcp add',
-    mcpHttp: 'codex mcp add <app> --url https://<app-site>/mcp',
+    who: '2',
+    title: 'It’s indexed',
+    body: 'Fangorn’s index follows every repo on the network. A new or changed repo shows up within a minute or two. Nobody approves it.',
+  },
+  {
+    who: '3',
+    title: 'It’s found',
+    body: 'People search Explore in their own words. Agents search the same index over MCP. Every result says who published it.',
   },
 ];
-const BUILD_PROMPT = 'Build a Fangorn app from <your data>.';
-
-// The other ways in, for agents that aren't Claude Code or want less.
-const OTHER_INSTALLS = (agent) => [
-  {
-    tab: 'MCP only',
-    cmd: `${agent.mcp} fangorn -- \\
-  npx -y -p @fangorn-network/westmarch -p @huggingface/transformers fangorn-mcp`,
-    note: 'Paste into your terminal. Transformers (~500 MB) ranks apps by meaning; leave it out to match words.',
-  },
-  {
-    tab: 'Any MCP client',
-    cmd: `{
-  "mcpServers": {
-    "fangorn": {
-      "command": "npx",
-      "args": ["-y", "-p", "@fangorn-network/westmarch", "fangorn-mcp"]
-    }
-  }
-}`,
-    note: 'Add to your client\'s MCP config. Needs Node 20 or later.',
-  },
-  {
-    tab: 'One app',
-    cmd: agent.mcpHttp,
-    note: 'Every app serves its own MCP endpoint. Add just that one.',
-  },
-];
-
-// Only paid apps need this; the server reads it from the shell your agent starts in.
-const PAID_ENV = `export FANGORN_MCP_WALLET_KEY=0x…   # a wallet holding USDC
-export FANGORN_MCP_MAX_PRICE=0.10   # most it pays per call, in USDC`;
-
-// The tools fangorn-mcp's open-app adds for most apps (see westmarch docs/mcp.md).
-const TOOLS = ['search', 'get', 'similar', 'browse'];
-
-// What each side gets out of Fangorn. Outcomes, not steps: no order implied.
-const FEATURES = [
-  {
-    who: 'Publishers',
-    title: 'Publish Once, Open Anywhere',
-    body: 'Fangorn apps natively support interfaces for both humans and agents; a website searchable by meaning and a set of tools callable by an agent.',
-  },
-  {
-    who: 'People',
-    title: 'Search and Discovery without Surveillance',
-    body: 'Search for data and discover apps without advertisements or surveillance. Fangorn makes it possible to be your own curator, owning your taste and preferences instead of giving it away for free.',
-  },
-  {
-    who: 'Everyone',
-    title: 'Programmable Payments',
-    body: 'Keep data free, charge per record, or sell a pass; agents pay with x402, and the USDC goes straight to the app owners and data publishers.',
-  },
-  {
-    who: 'Builders',
-    title: 'Agent-Ready from Day One',
-    body: 'Runs on your own Cloudflare. Fangorn adds registration, payments, and an interface every connected agent already speaks.',
-  },
-];
-
-const usdc = (n) => `$${formatUnits(n, 6)}`;
-const costOf = (app) => (app.pass ? `${usdc(app.pass.price)}${app.pass.days ? ` / ${app.pass.days} days` : ''}`
-  : app.price ? `${usdc(app.price)} / record` : 'Free');
-const nameOf = (app) => app.name ?? app.appId.slice(0, 10);
-// What `open-app` takes: the registered name, lowercased and dashed.
-const slugOf = (app) => nameOf(app).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 
 function Copy({ text }) {
   const [copied, setCopied] = useState(false);
@@ -130,415 +54,87 @@ function Copy({ text }) {
 function Cmd({ text }) {
   return (
     <div className={styles.cmd}>
-      <pre>{text}</pre>
+      {/* Before the <pre> so the floated button (in doors) has the text wrap around it. */}
       <Copy text={text} />
+      <pre>{text}</pre>
     </div>
   );
 }
 
-// Logged in → straight to the hub; logged out → Privy, and App sends them on to
-// the hub once authenticated (see `#/account` handling there).
-function AccountButton({ children, className = styles.btnB }) {
+// Logged in → the account page; logged out → Privy, and App sends them on to it once authenticated.
+export function AccountButton({ children, className = styles.btnB }) {
   const { ready, authenticated, login } = useAuth();
   if (authenticated) return <a href="#/account" className={className}>{children}</a>;
-  return (
-    <button
-      type="button"
-      className={className}
-      disabled={!ready}
-      onClick={login}
-    >
-      {children}
-    </button>
-  );
+  return <button type="button" className={className} disabled={!ready} onClick={login}>{children}</button>;
 }
-
-function Tabs({ items, value, onChange }) {
-  return (
-    <div className={styles.tabs} role="tablist">
-      {items.map((t, i) => (
-        <button
-          key={t}
-          type="button"
-          role="tab"
-          aria-selected={value === i}
-          className={value === i ? styles.tabOn : styles.tab}
-          onClick={() => onChange(i)}
-        >
-          {t}
-        </button>
-      ))}
-    </div>
-  );
-}
-
-// ── hero: the console ───────────────────────────────────────────────────────
-// ponytail: SVG + CSS keyframes, no animation lib. Every animation shares one
-// 4.5s loop; keying the rig on `n` restarts them together, so a click swaps the
-// cartridge and the label advances on each loop (animationiteration = ejected).
-// The cartridges are the live registry; the screen shows what open-app really
-// adds, not an invented query.
-const PLACEHOLDER = { appId: 'your-data', name: 'Your data', tags: ['yours'] };
-
-// Featured: a random few of the registry, picked fresh each day (UTC) so every app gets its turn.
-// The seed is today's date, so everyone sees the same picks all day; ordering by a seeded hash
-// of the id keeps render pure.
-// ponytail: no filtering yet. When some apps shouldn't be featured, filter `apps` before the sort.
-const FEATURED = 6;
-const SEED = Math.imul(Number(new Date().toISOString().slice(0, 10).replaceAll('-', '')), 2654435761) >>> 0;
-const luck = (id) => {
-  let h = SEED;
-  for (const ch of String(id)) h = Math.imul(h ^ ch.charCodeAt(0), 2654435761);
-  return Math.imul(h ^ (h >>> 15), 2246822507) >>> 0;
-};
-const featured = (apps) => [...apps].sort((a, b) => luck(a.appId) - luck(b.appId)).slice(0, FEATURED);
-
-function Cartridge({ apps }) {
-  const [n, setN] = useState(0);
-  const list = apps?.length ? featured(apps) : [PLACEHOLDER];
-  const c = list[n % list.length];
-  const next = list[(n + 1) % list.length];
-  const slug = slugOf(c);
-  return (
-    <figure className={styles.cart}>
-      <div className={styles.rig} key={n}>
-        <button
-          type="button"
-          className={styles.cartBtn}
-          onClick={() => setN((x) => x + 1)}
-          aria-label={`${nameOf(c)} cartridge. Swap to ${nameOf(next)}`}
-        >
-          <svg viewBox="0 -24 320 274" aria-hidden="true">
-            {/* Back half of the top face and the slot hole sit behind the cartridge. */}
-            <path d="M58 150 h204 l6 16 h-216z" className={styles.top} />
-            <rect x="84" y="158" width="152" height="10" rx="2" className={styles.slot} />
-            <g className={styles.cartBody} onAnimationIteration={() => setN((x) => x + 1)}>
-              {/* NES-style: square grey-ish shell, recessed label well, ribbed grip below. */}
-              <path d="M88 30 q0-8 8-8 h128 q8 0 8 8 v130 h-144z" className={styles.shell} />
-              <path d="M104 160 h112 v16 h-112z" className={styles.cartTab} />
-              {Array.from({ length: 17 }, (_, i) => (
-                <line key={i} x1={109 + i * 6.3} y1="163" x2={109 + i * 6.3} y2="174" className={styles.pin} />
-              ))}
-              <rect x="97" y="30" width="126" height="90" rx="3" className={styles.well} />
-              {/* HTML label so long names wrap and clamp instead of running off the shell. */}
-              <foreignObject x="101" y="34" width="118" height="82">
-                <div className={styles.sticker}>
-                  <div className={styles.labelTag}>{(c.tags[0] ?? 'app').toUpperCase()}</div>
-                  <div className={styles.labelName} title={nameOf(c)}>{nameOf(c)}</div>
-                  <div className={styles.labelSub}>fangorn · erc-8004</div>
-                </div>
-              </foreignObject>
-              {[130, 137, 144, 151].map((y) => (
-                <line key={y} x1="104" y1={y} x2="216" y2={y} className={styles.grip} />
-              ))}
-            </g>
-            {/* Front half of the top face, then the front face, drawn over the cartridge. */}
-            <path d="M52 166 h216 l8 18 h-232z" className={styles.topFront} />
-            <line x1="84" y1="167" x2="236" y2="167" className={styles.slotLip} />
-            <rect x="60" y="172" width="16" height="6" rx="3" className={styles.knob} />
-            <circle cx="252" cy="175" r="4" className={styles.knob} />
-            <rect x="44" y="184" width="232" height="54" rx="6" className={styles.console} />
-            {[60, 84].map((x, i) => (
-              <g key={x}>
-                <rect x={x} y="202" width="18" height="14" rx="4" className={styles.port} />
-                <line x1={x + 5} y1="209" x2={x + 13} y2="209" className={styles.portPins} />
-                <text x={x + 9} y="228" textAnchor="middle" className={styles.consoleSmall}>{i + 1}</text>
-              </g>
-            ))}
-            <text x="160" y="214" textAnchor="middle" className={styles.consoleText}>FANGORN</text>
-            {[196, 202, 208, 214].map((x) => (
-              <line key={x} x1={x} y1="200" x2={x} y2="220" className={styles.vent} />
-            ))}
-            <circle cx="252" cy="208" r="4" className={styles.led} />
-            <text x="252" y="228" textAnchor="middle" className={styles.consoleSmall}>PWR</text>
-            <rect x="58" y="238" width="24" height="5" rx="2" className={styles.foot} />
-            <rect x="238" y="238" width="24" height="5" rx="2" className={styles.foot} />
-          </svg>
-        </button>
-        <div className={styles.screen} aria-hidden="true">
-          <div className={styles.antenna} />
-          <div className={styles.glass}>
-          <div className={styles.idle}>insert cartridge<span className={styles.cursor}>_</span></div>
-          <div className={styles.result}>
-            {c === PLACEHOLDER ? (
-              <>
-                <div className={styles.prompt}>&gt; publish</div>
-                <div className={styles.hit}>Your app goes here</div>
-              </>
-            ) : (
-              <>
-                <div className={styles.prompt}>&gt; open-app {slug}</div>
-                <div className={styles.hit}>{TOOLS.slice(0, 2).map((t) => <div key={t}>{slug}__{t}</div>)}</div>
-                <div className={styles.via}>+ {TOOLS.length - 2} more · {costOf(c).toLowerCase()}</div>
-              </>
-            )}
-          </div>
-          </div>
-          <div className={styles.knobs}><i /><i /><b /></div>
-        </div>
-      </div>
-      <figcaption className={styles.cartCaption}>
-        Featured apps are randomly selected every day. Click the cartridge to swap it.
-      </figcaption>
-    </figure>
-  );
-}
-
-// ── the two doors ───────────────────────────────────────────────────────────
 
 function Start() {
-  const [i, setI] = useState(0);
-  const [a, setA] = useState(0);
-  const agent = AGENTS[a];
-  const q = OTHER_INSTALLS(agent)[i];
   return (
     <section className={styles.section} id="start">
-      <Tabs items={AGENTS.map((x) => x.tab)} value={a} onChange={setA} />
       <div className={styles.doors}>
         <div className={styles.door}>
-          <h2 className={styles.doorTitle}>Use Apps</h2>
-          <p className={styles.doorBody}>Give your agent every app on Fangorn. Run these {agent.where}:</p>
-          <div className={styles.terminal}><Cmd text={agent.install('fangorn-index')} /></div>
-          <p className={styles.doorNext}>
-            Then ask: <q>Find a Fangorn app for…</q> Free apps need no account or wallet.
-          </p>
+          <h2 className={styles.doorTitle}>Publish</h2>
+          <p className={styles.doorBody}>Log in with your email and upload files. Your account comes with a wallet.</p>
+          <AccountButton className={styles.btnA}>Publish data</AccountButton>
+          <p className={styles.doorNext}>Or from a terminal:</p>
+          <div className={styles.terminal}><Cmd text={CLI} /></div>
         </div>
         <div className={styles.door}>
-          <h2 className={styles.doorTitle}>Build Apps</h2>
-          <p className={styles.doorBody}>Build apps that both people and agents can use:</p>
-          <div className={styles.terminal}><Cmd text={agent.install('fangorn-builder')} /></div>
-          <p className={styles.doorNext}>
-            Create an account to claim your app’s name, then ask {agent.name}: <q>{BUILD_PROMPT}</q>
+          <h2 className={styles.doorTitle}>Find</h2>
+          <p className={styles.doorBody}>
+            Search <a href={EXPLORE_URL} className={styles.link}>Explore</a>, or give your agent the index. In Claude Code:
           </p>
-          <AccountButton className={styles.btnA}>Create an account</AccountButton>
+          <div className={styles.terminal}><Cmd text={PLUGIN} /></div>
+          <p className={styles.doorNext}>Any other MCP client: <code>https://fangorn.network/mcp</code>. For example:</p>
+          <div className={styles.terminal}><Cmd text={MCP} /></div>
         </div>
       </div>
-
-      <div className={styles.more}>
-        <p className={styles.doorNext}>
-          Own data but not a developer? <a href="#contact" className={styles.link}>Talk to us →</a>
-        </p>
-        <details className={styles.disclose}>
-          <summary>Paying for private apps</summary>
-          <p>
-            Export a wallet key before starting {agent.name}. The server pays x402 prices at or under
-            your cap; with no key it hands the price back to your agent. Use a separate wallet with
-            a small balance.
-          </p>
-          <div className={styles.terminal}><Cmd text={PAID_ENV} /></div>
-        </details>
-        <details className={styles.disclose}>
-          <summary>Other ways to connect</summary>
-          <div className={styles.terminal}>
-            <Tabs items={OTHER_INSTALLS(agent).map((x) => x.tab)} value={i} onChange={setI} />
-            <Cmd text={q.cmd} />
-          </div>
-          <p>{q.note}</p>
-        </details>
-      </div>
+      <p className={styles.doorNext}>
+        Fangorn runs on Base Sepolia, a testnet: publishing costs a little test ETH, from a{' '}
+        <a href="https://portal.cdp.coinbase.com/products/faucet" className={styles.link}>faucet</a>. Everything you
+        publish is public and permanent.
+      </p>
     </section>
   );
 }
 
-
-// What Fangorn stands for (see About). Sits right under the doors, so it's the
-// first thing past the install commands.
-const PILLARS = [
-  {
-    title: 'Data belongs to no app',
-    body: 'Publishers keep their own data. An app chooses what to present, so anyone can build a new app on data that’s already published.',
-  },
-  {
-    title: 'Answers you can check',
-    body: 'Every app is registered on chain as an ERC-8004 agent and its records are committed there, so anyone can check a result is what was published.',
-  },
-  {
-    title: 'Your taste is yours',
-    body: 'Your preferences, likes, dislikes, and intent never leave your machine. Queries are executed locally, letting you own your own taste and drive your own curation. No platform decides what you see.',
-  },
-];
-
-// The question every developer asks first. Claims here must stay true to what
-// westmarch ships today.
-const VERSUS = [
-  {
-    title: 'Write your own MCP server',
-    body: 'A server per source means one integration per source. With Fangorn your agent installs one MCP, finds apps in the on-chain registry and opens them by name. Publishers write no integration code.',
-  },
-  {
-    title: 'Use an API directory',
-    body: 'A directory lists endpoints that someone else keeps running. A Fangorn app holds the data itself: committed on chain, served from the publisher’s own storage, and priced with x402.',
-  },
-  {
-    title: 'Populate your own vector DB',
-    body: 'Doing it yourself means crawling, cleaning and embedding every source, then keeping it up to date. Each app ships its own embeddings and its publisher keeps them current. You query the result.',
-  },
-];
-
-// Kinds of app, not live demos: the real ones are in "Live on Fangorn" and "Coming Soon".
-const USE_CASES = [
-  {
-    title: 'Memory your agent owns',
-    body: 'An agent publishes its notes and findings as data of its own. It can read them back in another session, on another device or under another model, and share them with other agents. The memory is held by your key, not by the platform that runs the agent.',
-  },
-  {
-    title: 'Public records people can actually use',
-    body: 'Minutes, filings and reports that the law requires to be published, turned into a site residents can search by meaning and tools their agents can call.',
-  },
-  {
-    title: 'Catalogs from anyone',
-    body: 'Films, music, books and courses from independent publishers, each setting its own price. Apps bring them together, and your agent searches them all by your taste, not a platform’s.',
-  },
-];
-
-// Side-by-side columns on one rule, rather than a card grid.
-function Steps({ title, sub, items }) {
+function How() {
   return (
     <section className={styles.section}>
-      <h2 className={styles.h2}>{title}</h2>
-      {sub && <p className={styles.sectionSub}>{sub}</p>}
+      <h2 className={styles.h2}>How it works</h2>
       <ol className={styles.steps}>
-        {items.map((f) => (
+        {HOW.map((f) => (
           <li key={f.title} className={styles.step}>
-            {f.who && <span className={styles.stepWho}>{f.who}</span>}
+            <span className={styles.stepWho}>{f.who}</span>
             <h3 className={styles.cardTitle}>{f.title}</h3>
             <p className={styles.cardBody}>{f.body}</p>
           </li>
         ))}
       </ol>
-    </section>
-  );
-}
-
-// Asymmetric: one statement on the left, the principles as a ruled list on the right.
-function Principles() {
-  return (
-    <section className={`${styles.section} ${styles.principles}`}>
-      <div>
-        <h2 className={styles.h2}>Your data, your rules</h2>
-        <p className={styles.statement}>
-          When you let a platform store your data, you trust it to decide what’s current, who can
-          read it, what gets seen, and it can change the rules whenever it likes. Fangorn
-          splits those jobs apart, so no one holds all of them.
-        </p>
-        <a href="#/about" className={styles.moreLink}>Why we built it →</a>
-      </div>
-      <ul className={styles.rules}>
-        {PILLARS.map((f) => (
-          <li key={f.title}>
-            <h3 className={styles.cardTitle}>{f.title}</h3>
-            <p className={styles.cardBody}>{f.body}</p>
-          </li>
-        ))}
-      </ul>
-    </section>
-  );
-}
-
-// Label left, answer right, one rule per row.
-function Versus() {
-  return (
-    <section className={styles.section}>
-      <h2 className={styles.h2}>Why not just…</h2>
-      <dl className={styles.versus}>
-        {VERSUS.map((f) => (
-          <div key={f.title} className={styles.versusRow}>
-            <dt className={styles.versusLabel}>{f.title}</dt>
-            <dd className={styles.cardBody}>{f.body}</dd>
-          </div>
-        ))}
-      </dl>
-    </section>
-  );
-}
-
-function Cards({ title, sub, items }) {
-  return (
-    <section className={styles.section}>
-      <h2 className={styles.h2}>{title}</h2>
-      {sub && <p className={styles.sectionSub}>{sub}</p>}
-      {/* No orphan cards: 3 across when the count divides by 3, else 2 across. */}
-      <div className={styles.bento} style={{ '--cols': items.length % 3 ? 2 : 3 }}>
-        {items.map((f) => (
-          <div key={f.title} className={styles.card}>
-            <h3 className={styles.cardTitle}>{f.title}</h3>
-            <p className={styles.cardBody}>{f.body}</p>
-          </div>
-        ))}
-      </div>
-    </section>
-  );
-}
-
-// Early adopters. Hand-written: these aren't (all) in the Base registry yet.
-const ADOPTERS = [
-  {
-    name: 'City of Piedmont, AL',
-    kind: 'Government',
-    body: 'Council minutes kept in a permanent, verifiable public record, searchable by street, purchase or resolution.',
-    url: 'https://www.piedmontcity.org/government/minutes',
-  },
-  {
-    name: 'Watchroom',
-    kind: 'Public safety',
-    body: 'Fire department records (calls, NERIS filing, truck checks, training) on Fangorn, rolling out to 20+ departments.',
-    url: 'https://www.getwatchroom.com/',
-  },
-];
-
-function UsedBy() {
-  return (
-    <section className={styles.section} id="used-by">
-      <h2 className={styles.h2}>Coming soon</h2>
-      <p className={styles.sectionSub}>Early teams putting real records on Fangorn.</p>
-      <div className={styles.caseGrid}>
-        {ADOPTERS.map((a) => (
-          <div key={a.name} className={styles.case}>
-            <div className={styles.caseTop}><span className={styles.pill}>{a.kind}</span></div>
-            <div className={styles.caseName}>{a.name}</div>
-            <p className={styles.caseBody}>{a.body}</p>
-            <div className={styles.caseLinks}><a href={a.url} className={styles.btnSm}>Visit ↗</a></div>
-          </div>
-        ))}
-      </div>
+      <p className={styles.sectionSub}>
+        The code is open: <a href="https://github.com/fangorn-network" className={styles.link}>github.com/fangorn-network</a>.
+        Details in <a href="https://docs.fangorn.network" className={styles.link}>the docs</a>.
+      </p>
     </section>
   );
 }
 
 export default function Landing() {
-  const apps = useAllApps();
   return (
     <main>
       <section className={styles.hero}>
-        <h1 className={styles.h1}>Proof over permission.</h1>
+        <h1 className={styles.h1}>Publish data. Get found.</h1>
         <p className={styles.sub}>
-          <b>Platforms</b> decide what you see and <b>sell</b> what <b>you</b> search for.<br/>On Fangorn, you publish data once and
-          anyone can build apps on it, for people and agents alike. 
-          <br/>Your searches and your taste stays yours.
+          Put your files on Fangorn, and people and AI agents can find them within minutes. No server to run,
+          nothing to integrate.
         </p>
         <div className={styles.ctas}>
           <a href="#start" className={styles.btnA}>Get started</a>
-          <a href={EXPLORER_URL} className={styles.btnB}>Explore Data</a>
+          <a href={EXPLORE_URL} className={styles.btnB}>Explore</a>
         </div>
-        <Cartridge apps={apps} />
       </section>
-
       <Start />
-      <Steps title="Publish. Get found. Get paid." items={FEATURES} />
-      <div className={styles.bandNight}><Principles /></div>
-      <div className={styles.band}><Versus /></div>
-      <Cards title="What you can build" items={USE_CASES} />
-      <UsedBy />
-
-      {/* <section className={`${styles.section} ${styles.coda}`}>
-        <h2 className={styles.h2}>Every view, rooted on-chain.</h2>
-        <p className={styles.sectionSub}>Every answer traces back to the record that was published.</p>
-        <div className={styles.ctas}>
-          <a href="#start" className={styles.btnA}>Get started</a>
-          <a href={EXPLORER_URL} className={styles.btnB}>Explore Data</a>
-        </div>
-      </section> */}
-
+      <How />
       <Contact />
     </main>
   );

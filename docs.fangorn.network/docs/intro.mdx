@@ -1,78 +1,28 @@
 ---
 sidebar_position: 1
 title: Overview
+slug: /
 ---
-
-import Tabs from '@theme/Tabs';
-import TabItem from '@theme/TabItem';
 
 # Fangorn
 
-Fangorn is a place to publish data so that people and agents can both use it, and so that
-the people who made it can be paid.
+Publish data, and people and AI agents can find it.
 
-- **Publishers** commit records to repos. Each repo's head is on chain (Base Sepolia); the
-  records themselves are on IPFS. A publisher can seal some fields and price them in USDC.
-- **Apps** are views over publishers' repos. Each one is a Worker on its owner's Cloudflare
-  account that serves a site people search by meaning, an MCP endpoint agents call, and an
-  agent card bound on chain so any agent can find and check it.
-- **Agents** find apps through one MCP server, `fangorn-mcp`, and buy sealed records over
-  x402. The publisher is paid directly by the contract.
-
-```mermaid
-flowchart LR
-  P[Publisher] -- commit, push --> R[(Repos<br/>on chain + IPFS)]
-  R --> A1[App: a Worker]
-  R --> A2[App: another Worker]
-  A1 -- site --> H[People]
-  A1 -- MCP --> G[Agents]
-  A2 -- MCP --> G
-  G -- x402, USDC --> P
-```
-
-No one has to let you in. Anyone can publish, anyone can build an app over anyone's repos,
-and any agent can verify an app against the chain before trusting it.
-
-## Get started
-
-Everything starts from a coding agent, through two plugins from one marketplace:
-
-| Plugin | For | What you get |
-|---|---|---|
-| **`fangorn-index`** | Using apps | The `fangorn` MCP server, which lists, opens and pays apps, and the `fangorn-index` skill, which finds the right app and carries your taste between apps |
-| **`fangorn-builder`** | Building apps | The `fangorn-app` skill, which builds, publishes and registers an app, and `fangorn-improve`, which keeps it improving |
-
-<Tabs groupId="agent">
-<TabItem value="claude" label="Claude Code">
-
-```text
-/plugin marketplace add fangorn-network/westmarch
-/plugin install fangorn-index@fangorn     # use apps
-/plugin install fangorn-builder@fangorn   # build apps
-```
-
-</TabItem>
-<TabItem value="codex" label="Codex">
-
-```bash
-codex plugin marketplace add fangorn-network/westmarch
-codex plugin add fangorn-index@fangorn     # use apps
-codex plugin add fangorn-builder@fangorn   # build apps
-```
-
-</TabItem>
-</Tabs>
-
-## Where to next
+1. **You publish.** Your files become records in a **repo**. The records are stored on IPFS, and the repo's
+   latest version is signed by your wallet and recorded on chain. Only your wallet can change it.
+2. **It's indexed.** Fangorn's index follows every repo on the network. A new or changed repo shows up within
+   a minute or two. Nobody approves it.
+3. **It's found.** People search [Explore](https://fangorn.network/#/explore). Agents search the same index
+   over MCP, at `https://fangorn.network/mcp`. Every result names its publisher.
 
 | You want to | Read |
 |---|---|
-| Search apps and buy records from your agent | [Use apps](/use-apps) |
-| Find which app has what, and carry your taste between them | [The fangorn-index skill](/index-skill) |
-| Turn a dataset into an app | [Build an app](/build-an-app) |
-| Charge for what you publish | [Sell records](/sell-records) |
-| Understand the pieces and how a sale works | [How it works](/how-it-works) |
-| Run the contracts, SDK and Workers yourself | [Deploy Fangorn](/deploy) |
+| Put your data on Fangorn | [Publish](/publish) |
+| Find data, yourself or from your agent | [Find](/find) |
+| Build an app on what's published | [Build](/build) |
 
-Fangorn runs on Base Sepolia, a testnet. Its USDC is test USDC from
-[Circle's faucet](https://faucet.circle.com).
+Fangorn runs on Base Sepolia, a testnet. Publishing costs a little test ETH, from a
+[faucet](https://portal.cdp.coinbase.com/products/faucet). Everything you publish is public and permanent:
+deleting a record removes it from the repo's latest version, not from its history.
+
+The code is open, at [github.com/fangorn-network](https://github.com/fangorn-network).

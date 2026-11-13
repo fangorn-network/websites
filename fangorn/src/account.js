@@ -1,4 +1,4 @@
-// The account hub's data: a publisher's repos, whether the explorer lists them, what
+// The account hub's data: a publisher's repos, whether Fangorn lists them, what
 // they've earned, and publishing a file as a repo from the browser.
 //
 // A publisher is a wallet, the same one in the browser and in the CLI (the user
@@ -11,8 +11,8 @@ import { recordKey, subjectOf } from '@fangorn-network/sdk/lib/contracts/settlem
 import { NETWORK, publicClient, walletClientFor } from './fangorn.js';
 import { useAuth } from './authContext.js';
 
-/** The explorer every publisher is listed on, and what fangorn-mcp searches. */
-export const EXPLORER_URL = import.meta.env?.VITE_EXPLORER_URL || 'https://explorer.fangorn.network';
+/** Where people find everything published: this site's registry page (worker/registry.js behind it). */
+export const EXPLORE_URL = '#/explore';
 
 /** Days a record's signed terms stay buyable (the CLI's default). */
 const TERMS_DAYS = 365;
@@ -95,19 +95,21 @@ export const netPrice = (r) => (r.price == null ? 0n : r.price - (r.price * BigI
 
 
 /**
- * The explorer's catalog, as a map `<publisher lowercased>/<repo>` → { domain, count,
- * description, publisher, repo, types }. Empty when the explorer doesn't answer.
+ * Fangorn's registry (this site's /api/repos), as a map `<publisher lowercased>/<repo>` →
+ * { name, description, publisher, repo, card, updated }. `q` ranks by meaning; `publisher` narrows.
+ * Empty when it doesn't answer.
  */
-export async function readListings() {
-  const catalog = await fetch(`${EXPLORER_URL}/view/cdn/catalog`, { signal: AbortSignal.timeout(10_000) })
+export async function readListings({ q, publisher, k = 100 } = {}) {
+  const params = new URLSearchParams({ k: String(k), ...(q ? { q } : {}), ...(publisher ? { publisher } : {}) });
+  const out = await fetch(`/api/repos?${params}`, { signal: AbortSignal.timeout(10_000) })
     .then((r) => (r.ok ? r.json() : null)).catch(() => null);
-  return new Map((catalog?.domains ?? []).filter((d) => d.publisher && d.repo).map((d) => [
-    `${d.publisher.toLowerCase()}/${d.repo}`,
-    { domain: d.name, count: Number(d.count) || 0, description: d.description || null, publisher: d.publisher, repo: d.repo, types: d.entity_types ?? [] },
+  return new Map((out?.repos ?? []).map((r) => [
+    `${r.publisher}/${r.repo}`,
+    { name: r.name, description: r.description, publisher: r.publisher, repo: r.repo, card: r.card_url, updated: r.updated },
   ]));
 }
 
-// One read per page load, shared by the landing page and #/explorer.
+// One read per page load, for the landing page.
 let listings = null;
 export function useListings() {
   const [value, setValue] = useState(null);
@@ -162,7 +164,7 @@ export async function readRepoPage(publisher, repo) {
 
 /**
  * Which of `publisher`'s repos are apps: repo → { card, name, site } for each repo whose
- * `@card` record binds an agent card (what westmarch-ship sets). A card that doesn't load
+ * `@card` record binds an agent card (`setCard` / `registerAgent` in the SDK). A card that doesn't load
  * still marks the repo an app, with no name or site.
  */
 export async function readApps(publisher, repos) {
@@ -273,12 +275,32 @@ export async function toDataUrl(blob) {
 
 // ── Publishing ──────────────────────────────────────────────────────────────
 
+// The SDK's FANGORN_REPO_EXTENSION, copied so the hub needn't load the SDK root for it.
+// fangorn.test.mjs checks the global index (worker/registry.js) accepts what cardFor makes.
+const REPO_EXTENSION = 'https://fangorn.network/a2a/repo/v1';
+
+/**
+ * A repo's card: what the global index searches besides the repo's name. Its extension
+ * must name this publisher, repo and registry, or the index ignores the card.
+ */
+export function cardFor({ publisher, repo, description }) {
+  return {
+    name: repo,
+    description,
+    capabilities: { extensions: [{ uri: REPO_EXTENSION, params: {
+      chainId: NETWORK.caip2, dataRegistry: NETWORK.dataRegistryContractAddress, publisher, repo,
+    } }] },
+  };
+}
+
 /**
  * Publish `records` into `repo` (made if new) as `walletClient`'s account, sealing the
  * `paid` columns at `price` USDC a record. `onStep` hears each stage. Each sealed value
  * is its own upload and each paid record its own signed terms: the wallet signs for each.
+ * With a `description`, the repo's card goes in the same commit: its JSON to storage, and
+ * the `@card` record pointing at it. No extra transaction.
  */
-export async function publishRecords(walletClient, { repo, records, paid = [], price }, onStep = () => {}) {
+export async function publishRecords(walletClient, { repo, records, paid = [], price, description }, onStep = () => {}) {
   // The SDK root pulls the graph engine and ZK WASM: load it on the first publish only.
   const [{ Fangorn }, { sealRecords }] = await Promise.all([
     import('@fangorn-network/sdk/lib/fangorn.js'),
@@ -300,6 +322,13 @@ export async function publishRecords(walletClient, { repo, records, paid = [], p
     }
     out.push({ ...r, payload });
   }
+  let cardRecord = null;
+  if (description?.trim()) {
+    onStep('Uploading the description…');
+    const card = cardFor({ publisher: fangorn.getAddress(), repo, description: description.trim() });
+    const cid = await fangorn.getStorage().putFile(new TextEncoder().encode(JSON.stringify(card)), `${repo}.card.json`);
+    cardRecord = { id: '@card', type: 'card', payload: { url: `${NETWORK.ipfsGateway}/ipfs/${cid}` } };
+  }
   // After the uploads: a file the storage refuses mustn't leave an empty repo on chain.
   onStep('Creating the repo on chain…');
   await fangorn.initRepo(repo);
@@ -313,15 +342,16 @@ export async function publishRecords(walletClient, { repo, records, paid = [], p
       keyServer: KEY_SERVER,
     });
   }
+  if (cardRecord) out.push(cardRecord); // after sealing: the card is never sold
   onStep('Committing the records on chain…');
   const { txHash } = await fangorn.uploadBatch(repo, out);
   return { txHash };
 }
 
 /**
- * The publisher's repos, earnings and the explorer's view of them, plus `publish`.
- * `repos` is null while loading: [{ repo, listing }], listing null until the explorer
- * has indexed it. `earnings` is { total, sales }, null loading, { error } failed.
+ * The publisher's repos, earnings and Fangorn's listing of them, plus `publish`.
+ * `repos` is null while loading: [{ repo, listing }], listing null until Fangorn
+ * lists it (a minute or two). `earnings` is { total, sales }, null loading, { error } failed.
  */
 export function usePublisher(address) {
   const { wallet } = useAuth();
@@ -334,7 +364,7 @@ export function usePublisher(address) {
   useEffect(() => {
     if (!address) return;
     let cancelled = false;
-    Promise.all([readRepos(address), readListings()])
+    Promise.all([readRepos(address), readListings({ publisher: address })])
       .then(([rs, l]) => {
         if (cancelled) return;
         setRepos(rs.map((r) => ({ ...r, listing: l.get(`${address.toLowerCase()}/${r.repo}`) ?? null, app: null })));
