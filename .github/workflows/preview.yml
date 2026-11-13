@@ -40,6 +40,11 @@ jobs:
           VITE_RPC_URL: ${{ vars.VITE_RPC_URL }}
           VITE_LOG_WINDOW: ${{ vars.VITE_LOG_WINDOW }}
           VITE_USDC_ADDRESS: ${{ vars.VITE_USDC_ADDRESS }}
+      # Same as preview_urls in wrangler.jsonc, which only applies on `wrangler deploy` (main). workers.dev itself stays off.
+      - run: |
+          curl -fsS -X POST "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/fangorn-website/subdomain" \
+            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" -H "Content-Type: application/json" \
+            -d '{"enabled": false, "previews_enabled": true}'
       - id: preview
         working-directory: fangorn
         run: |
@@ -61,6 +66,11 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter docs-fangorn-network build
+      # Same as preview_urls in wrangler.jsonc, which only applies on `wrangler deploy` (main). workers.dev itself stays off.
+      - run: |
+          curl -fsS -X POST "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/docs-fangorn-network/subdomain" \
+            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" -H "Content-Type: application/json" \
+            -d '{"enabled": false, "previews_enabled": true}'
       - id: preview
         working-directory: docs.fangorn.network
         run: |
