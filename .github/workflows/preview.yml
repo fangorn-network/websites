@@ -44,7 +44,7 @@ jobs:
         working-directory: fangorn
         run: |
           npx -y wrangler@latest preview --name "$PREVIEW_NAME" --json | tee preview.json
-          url=$(jq -er '.preview.urls[0]' preview.json)
+          url=$(sed -n '/^{/,$p' preview.json | jq -er '.preview.urls[0]')
           echo "url=$url" >> "$GITHUB_OUTPUT"
 
   docs:
@@ -65,7 +65,7 @@ jobs:
         working-directory: docs.fangorn.network
         run: |
           npx -y wrangler@latest preview --name "$PREVIEW_NAME" --json | tee preview.json
-          url=$(jq -er '.preview.urls[0]' preview.json)
+          url=$(sed -n '/^{/,$p' preview.json | jq -er '.preview.urls[0]')
           echo "url=$url" >> "$GITHUB_OUTPUT"
 
   comment:
