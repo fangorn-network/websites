@@ -29,10 +29,9 @@ jobs:
           VITE_RPC_URL: ${{ vars.VITE_RPC_URL }}
           VITE_LOG_WINDOW: ${{ vars.VITE_LOG_WINDOW }}
           VITE_USDC_ADDRESS: ${{ vars.VITE_USDC_ADDRESS }}
-      - uses: cloudflare/wrangler-action@v3
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          wranglerVersion: "4"
-          workingDirectory: fangorn
-          command: deploy
+      # Not wrangler-action: its `npm i wrangler` rewrites pnpm's node_modules and drops workspace deps.
+      - working-directory: fangorn
+        run: npx -y wrangler@4 deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
