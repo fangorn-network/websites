@@ -43,8 +43,9 @@ jobs:
       - id: preview
         working-directory: fangorn
         run: |
-          npx -y wrangler@4 preview --name "$PREVIEW_NAME" --json > preview.json
-          echo "url=$(jq -er '.preview.urls[0]' preview.json)" >> "$GITHUB_OUTPUT"
+          npx -y wrangler@latest preview --name "$PREVIEW_NAME" --json | tee preview.json
+          url=$(jq -er '.preview.urls[0]' preview.json)
+          echo "url=$url" >> "$GITHUB_OUTPUT"
 
   docs:
     if: github.event.action != 'closed' && github.event.pull_request.head.repo.full_name == github.repository
@@ -63,8 +64,9 @@ jobs:
       - id: preview
         working-directory: docs.fangorn.network
         run: |
-          npx -y wrangler@4 preview --name "$PREVIEW_NAME" --json > preview.json
-          echo "url=$(jq -er '.preview.urls[0]' preview.json)" >> "$GITHUB_OUTPUT"
+          npx -y wrangler@latest preview --name "$PREVIEW_NAME" --json | tee preview.json
+          url=$(jq -er '.preview.urls[0]' preview.json)
+          echo "url=$url" >> "$GITHUB_OUTPUT"
 
   comment:
     needs: [site, docs]
@@ -87,4 +89,4 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - working-directory: ${{ matrix.dir }}
-        run: npx -y wrangler@4 preview delete --name "$PREVIEW_NAME" --skip-confirmation
+        run: npx -y wrangler@latest preview delete --name "$PREVIEW_NAME" --skip-confirmation
