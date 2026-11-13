@@ -1,0 +1,30 @@
+# docs.fangorn.network: static Docusaurus build served as Worker assets.
+name: Deploy docs
+
+on:
+  push:
+    branches: [main]
+    paths: [docs.fangorn.network/**, pnpm-lock.yaml, .github/workflows/deploy-docs.yml]
+  workflow_dispatch:
+
+concurrency: deploy-docs
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter docs-fangorn-network build
+      - uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          wranglerVersion: "4"
+          workingDirectory: docs.fangorn.network
+          command: deploy
