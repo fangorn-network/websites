@@ -29,6 +29,8 @@ jobs:
           VITE_RPC_URL: ${{ vars.VITE_RPC_URL }}
           VITE_LOG_WINDOW: ${{ vars.VITE_LOG_WINDOW }}
           VITE_USDC_ADDRESS: ${{ vars.VITE_USDC_ADDRESS }}
+          VITE_FANGORN_SIGNER_ID: ${{ vars.VITE_FANGORN_SIGNER_ID }}
+          VITE_FANGORN_SIGNER_POLICY_ID: ${{ vars.VITE_FANGORN_SIGNER_POLICY_ID }}
       # Not wrangler-action: its `npm i wrangler` rewrites pnpm's node_modules and drops workspace deps.
       - working-directory: fangorn
         run: npx -y wrangler@4 deploy

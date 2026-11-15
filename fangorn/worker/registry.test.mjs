@@ -58,5 +58,11 @@ await put(alice, 'shop', [{ id: 'lamp', type: 'item', payload: { name: 'lamp' } 
 assert.equal(await index.update('t4'), 1);
 assert.equal(await index.embedMissing(embed), 1, 'a changed card is embedded again');
 
+// A burst bigger than one run: capped, the rest carried to the next runs, then quiet.
+for (const r of ['a', 'b', 'c']) await put(bob, `burst-${r}`, [{ id: 'x', type: 'note', payload: {} }]);
+assert.equal(await index.update('t5', 2), 2, 'capped');
+assert.equal(await index.update('t6', 2), 1, 'backlog picked up with no new log');
+assert.equal(await index.update('t7', 2), 0, 'backlog cleared');
+
 assert.equal(textOf('field-notes', null), 'field notes');
 console.log('ok: registry');

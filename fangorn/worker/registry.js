@@ -61,17 +61,18 @@ export function registry({ db, fangorn }) {
     stitch: async () => { await ensure(); return getMeta('stitch'); },
 
     /**
-     * Restitch from the saved stitch; re-read the card of every repo whose head moved; save it all with the new
+     * Restitch from the saved stitch; re-read the card of up to `max` repos whose head moved; save them with the new
      * stitch in one batch (so a failed run is retried whole). → how many repos changed.
      */
-    // ponytail: every moved repo's card in one run; fine for the network today (30 repos: ~200 subrequests on a
-    // cold start). Cap per run and keep the old stitch for the rest once one run can't read them all.
-    async update(now = new Date().toISOString()) {
+    // At most `max` moved repos per run (~5 subrequests each), so a burst of new repos can't blow the Worker's
+    // subrequest limit and fail every run. The rest stay `backlog` and the next runs pick them up.
+    async update(now = new Date().toISOString(), max = 50) {
       await ensure();
       const prev = await getMeta('stitch'), next = await fangorn.restitch(['*'], prev ?? undefined);
-      if (next === prev) return 0;
+      if (next === prev && !(await getMeta('backlog'))) return 0;
       const known = new Map((await all('SELECT publisher, repo, head FROM repos')).map((r) => [`${r.publisher}/${r.repo}`, r.head]));
-      const moved = (await fangorn.stitchHeads(next)).filter((h) => known.get(`${h.publisher.toLowerCase()}/${h.repo}`) !== h.head);
+      const pending = (await fangorn.stitchHeads(next)).filter((h) => known.get(`${h.publisher.toLowerCase()}/${h.repo}`) !== h.head);
+      const moved = pending.slice(0, max);
       const cards = await Promise.all(moved.map((h) => cardOf(fangorn, h.publisher, h.repo)));
       const ops = moved.map(({ publisher, repo, head }, i) => {
         const p = publisher.toLowerCase(), c = cards[i];
@@ -80,7 +81,7 @@ export function registry({ db, fangorn }) {
           card = excluded.card, vec = CASE WHEN repos.text = excluded.text THEN repos.vec ELSE NULL END, text = excluded.text`)
           .bind(p, repo, head, now, c?.url ?? null, c ? JSON.stringify(c.card) : null, textOf(repo, c?.card));
       });
-      await db.batch([...ops, setMeta('stitch', next)]);
+      await db.batch([...ops, setMeta('stitch', next), setMeta('backlog', pending.length > max ? '1' : '')]);
       return ops.length;
     },
 
