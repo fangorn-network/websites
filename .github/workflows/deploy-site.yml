@@ -1,4 +1,4 @@
-# fangorn.network: the site (dist/) and its Worker (worker/: /api, /mcp, the registry indexer cron) ship as one Worker.
+# fangorn.network: the site (dist/) and its Worker (worker/: /api, and /mcp passed through to the registry app) ship as one Worker.
 name: Deploy site
 
 on:

@@ -84,24 +84,19 @@ const over = meterState(1500, 1000);
 assert.equal(over.pct, 100, 'overshoot clamps to a full bar');
 assert.equal(over.remaining, 0, 'headroom never goes negative');
 
-// A repo's description: the card publishRecords makes is one the global index keeps, and searches.
+// A repo's description: the card publishRecords makes speaks for its repo, as the registry checks it (westmarch
+// src/repos.js cardOf: the FANGORN_REPO_EXTENSION params name this publisher, repo, chain and data registry).
 {
   const { cardFor } = await import('./account.js');
-  const { cardOf, textOf } = await import('../worker/registry.js');
-  const alice = '0x00000000000000000000000000000000000a11ce', url = 'https://gw/ipfs/bafycard';
+  const { FANGORN_REPO_EXTENSION } = await import('@fangorn-network/sdk');
+  const alice = '0x00000000000000000000000000000000000a11ce';
   const card = cardFor({ publisher: alice, repo: 'kelp-surveys', description: 'Kelp forest surveys off Monterey, 2019–2024' });
-  // The index's view of the chain: the repo's @card record points at `url`, which serves `served`.
-  let served = card;
-  const fangorn = { getConfig: () => NETWORK, engine: { readRecord: async (p, repo, id) => (id === '@card' ? { payload: { url } } : null) } };
-  const real = globalThis.fetch;
-  globalThis.fetch = async (u) => new Response(u === url ? JSON.stringify(served) : 'nope', { status: u === url ? 200 : 404 });
-  try {
-    assert.deepEqual(await cardOf(fangorn, alice, 'kelp-surveys'), { url, card }, 'the index keeps the card');
-    assert.equal(await cardOf(fangorn, alice, 'other-repo'), null, 'a card names one repo');
-    served = cardFor({ publisher: '0x000000000000000000000000000000000000b0b0', repo: 'kelp-surveys', description: 'x' });
-    assert.equal(await cardOf(fangorn, alice, 'kelp-surveys'), null, "a card naming someone else's address is ignored");
-  } finally { globalThis.fetch = real; }
-  assert.match(textOf('kelp-surveys', card), /Kelp forest surveys off Monterey/, 'search matches the description');
+  const p = card.capabilities.extensions.find((e) => e.uri === FANGORN_REPO_EXTENSION).params;
+  assert.equal(p.publisher.toLowerCase(), alice);
+  assert.equal(p.repo, 'kelp-surveys');
+  assert.equal(p.chainId, NETWORK.caip2);
+  assert.equal(p.dataRegistry.toLowerCase(), NETWORK.dataRegistryContractAddress.toLowerCase());
+  assert.match(card.description, /Kelp forest surveys off Monterey/, 'search matches the description');
 }
 
 console.log('fangorn self-check OK');
