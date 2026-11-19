@@ -2,7 +2,7 @@
 // for agents at /mcp; and /api, where apps get people's updates signed.
 //
 // The registry is a Fangorn app like any other: a westmarch repos index over every repo (follow ["*"]), deployed from
-// the ops repo's apps.json at registry.fangorn.network. These two paths pass through to it, so their URLs stay put.
+// the ops repo's apps.json at registry-sepolia.fangorn.network. These two paths pass through to it, so their URLs stay put.
 //
 //   GET    /api/repos?q=&publisher=&k=   → { stitch, repos }: repos by meaning, or newest first without q  (its /repos)
 //   POST   /mcp                          the registry as MCP tools: find, repo, read                        (its /mcp)
@@ -23,7 +23,7 @@ import { PrivyClient } from '@privy-io/node';
 import { BaseSepoliaConfig } from '@fangorn-network/sdk';
 import { grants, appOf, reposOf, updateFor } from './grants.js';
 
-const REGISTRY = 'https://registry.fangorn.network';
+const REGISTRY = 'https://registry-sepolia.fangorn.network';
 
 const CORS = { 'access-control-allow-origin': '*', 'access-control-allow-headers': 'content-type, authorization, mcp-protocol-version', 'access-control-allow-methods': 'GET, POST, DELETE' };
 const json = (v, status = 200) => new Response(JSON.stringify(v), { status, headers: { 'content-type': 'application/json', ...CORS } });

@@ -2,7 +2,7 @@
   "name": "fangorn-website",
   "compatibility_date": "2026-10-01",
   "compatibility_flags": ["nodejs_compat"],
-  // The site is dist/; the Worker answers /api and /mcp (worker/index.js: grants and signing for apps, and the registry passed through from registry.fangorn.network).
+  // The site is dist/; the Worker answers /api and /mcp (worker/index.js: grants and signing for apps, and the registry passed through from registry-sepolia.fangorn.network).
   "main": "worker/index.js",
   "assets": {
     "directory": "./dist",
