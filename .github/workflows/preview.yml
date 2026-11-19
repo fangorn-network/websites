@@ -40,6 +40,8 @@ jobs:
           VITE_RPC_URL: ${{ vars.VITE_RPC_URL }}
           VITE_LOG_WINDOW: ${{ vars.VITE_LOG_WINDOW }}
           VITE_USDC_ADDRESS: ${{ vars.VITE_USDC_ADDRESS }}
+          VITE_FANGORN_SIGNER_ID: ${{ vars.VITE_FANGORN_SIGNER_ID }}
+          VITE_FANGORN_SIGNER_POLICY_ID: ${{ vars.VITE_FANGORN_SIGNER_POLICY_ID }}
       # Same as preview_urls in wrangler.jsonc, which only applies on `wrangler deploy` (main). workers.dev itself stays off.
       - run: |
           curl -fsS -X POST "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/fangorn-website/subdomain" \
