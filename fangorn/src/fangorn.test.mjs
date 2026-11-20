@@ -12,12 +12,11 @@ assert.match(NETWORK.dataRegistryContractAddress, /^0x[0-9a-fA-F]{40}$/);
 assert.match(NETWORK.settlementRegistryContractAddress, /^0x[0-9a-fA-F]{40}$/);
 
 // Base mainnet: the DataRegistry proxy, nothing to sell with. Testnet stays the default.
-const { NETWORKS, DEFAULT_NET, sells, netLabel } = await import('./fangorn.js');
+const { NETWORKS, DEFAULT_NET, sells } = await import('./fangorn.js');
 assert.equal(DEFAULT_NET, 'baseSepolia');
 assert.equal(NETWORKS.base.chain.id, 8453);
 assert.equal(NETWORKS.base.dataRegistryContractAddress, '0x543D559Cf7583FE7003d4A19E26BF3A4DB75fbC8', 'the proxy, not its implementation');
 assert.deepEqual([sells('baseSepolia'), sells('base')], [true, false]);
-assert.deepEqual([netLabel('baseSepolia'), netLabel('base')], ['Testnet', 'Mainnet']);
 
 // Repo links name their network; links from before networks are testnet ones.
 const { repoHref, parseRepoHash } = await import('./account.js');

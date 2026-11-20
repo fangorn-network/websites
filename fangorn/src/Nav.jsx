@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import styles from './Nav.module.css';
 import { useAuth } from './authContext';
+import { NETWORKS, setNet, useNet } from './fangorn';
+import { parseRepoHash, repoHref } from './account';
 
 // Light/dark switch. The choice is saved; until one is made, index.html follows the system.
 function ThemeToggle() {
@@ -19,6 +21,25 @@ function ThemeToggle() {
           : <path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z" />}
       </svg>
     </button>
+  );
+}
+
+// Which network the whole site shows (fangorn.js useNet). A repo's page follows to the same repo
+// on the other network; one of your repos, opened, goes back to the list (it's on one network).
+function NetworkSwitch() {
+  const net = useNet();
+  function pick(next) {
+    const hash = location.hash;
+    setNet(next);
+    if (hash.startsWith('#/data/')) {
+      const { publisher, repo } = parseRepoHash(hash);
+      location.hash = repoHref(publisher, repo, next);
+    } else if (/^#\/account\/data\/./.test(hash)) location.hash = '#/account/data';
+  }
+  return (
+    <select className={styles.net} value={net} onChange={(e) => pick(e.target.value)} aria-label="Network">
+      {Object.entries(NETWORKS).map(([k, n]) => <option key={k} value={k}>{n.chain.testnet ? 'Testnet' : 'Mainnet'}</option>)}
+    </select>
   );
 }
 
@@ -41,6 +62,7 @@ export default function Nav() {
         {authenticated && <button type="button" className={`${styles.link} ${styles.menuOnly}`} onClick={logout}>Log out</button>}
       </div>
       <div className={styles.right}>
+        <NetworkSwitch />
         <ThemeToggle />
         {authenticated ? (
           <>

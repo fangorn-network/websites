@@ -3,7 +3,7 @@ import { formatUnits, isAddress } from 'viem';
 import styles from './Home.module.css';
 import { CopyButton, Cmd } from './Home';
 import { readRepoPage, repoLink } from './account';
-import { readBalances, sells, netLabel, NETWORKS } from './fangorn';
+import { readBalances, sells, NETWORKS } from './fangorn';
 import { buy } from './library';
 import { useAuth } from './authContext';
 import { truncate, explorer, formatBytes } from './format';
@@ -151,7 +151,7 @@ export default function RepoPage({ net, publisher, repo }) {
       <main className={styles.main}>
         <section className={styles.welcome}>
           <span className={styles.eyebrow}>Data on Fangorn</span>
-          <h1 className={styles.h1}>{repo}<span className={styles.badge} title={NETWORKS[net].chain.name}>{netLabel(net)}</span></h1>
+          <h1 className={styles.h1}>{repo}</h1>
           <p className={styles.sub}>
             Published by <a className={styles.resLink} href={explorer(publisher, net)} target="_blank" rel="noreferrer">{truncate(publisher, 8, 6)}</a>
             {page?.tip && <>

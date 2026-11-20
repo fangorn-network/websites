@@ -9,7 +9,7 @@ import { getLogsInWindows } from '@fangorn-network/sdk/lib/contracts/logs.js';
 import { repoId, UPDATED_V0 } from '@fangorn-network/sdk/lib/contracts/data-registry/index.js';
 import { DATA_REGISTRY_ABI } from '@fangorn-network/sdk/lib/contracts/data-registry/abi.js';
 import { recordKey, subjectOf } from '@fangorn-network/sdk/lib/contracts/settlement-registry/index.js';
-import { NETWORK, NETWORKS, DEFAULT_NET, isNet, clientOf, publicClient, walletClientFor } from './fangorn.js';
+import { NETWORK, NETWORKS, DEFAULT_NET, isNet, sells, clientOf, publicClient, walletClientFor } from './fangorn.js';
 import { useAuth } from './authContext.js';
 
 /** Where people find everything published: this site's registry page (worker/registry.js behind it). */
@@ -441,12 +441,13 @@ export async function publishRecords(walletClient, { repo, records, paid = [], p
 }
 
 /**
- * The publisher's repos on every network, earnings and Fangorn's listing of them, plus `publish`.
+ * The publisher's repos on `net`, earnings and Fangorn's listing of them, plus `publish`.
  * `repos` is null while loading: [{ repo, net, updated, listing }], listing null until Fangorn
  * lists it (a minute or two), undefined on a network Fangorn doesn't index yet (mainnet).
- * `earnings` is { total, sales }, null loading, { error } failed. Publishing is testnet only.
+ * `earnings` is { total, sales }, null loading, { error } failed, and stays null on a network
+ * that sells nothing. Publishing is testnet only.
  */
-export function usePublisher(address) {
+export function usePublisher(address, net = DEFAULT_NET) {
   const { wallet } = useAuth();
   const [repos, setRepos] = useState(null);
   const [earnings, setEarnings] = useState(null);
@@ -457,34 +458,33 @@ export function usePublisher(address) {
   useEffect(() => {
     if (!address) return;
     let cancelled = false;
-    const key = (r) => `${r.net}/${r.repo}`;
     // Apps come after the list: each is a read from IPFS. Each repo is looked up once.
     const looked = new Set();
-    const patch = (net, repo, p) => !cancelled && setRepos((cur) => cur?.map((r) => (r.net === net && r.repo === repo ? { ...r, ...p } : r)));
-    const lookupApps = (rs) => Promise.all(Object.keys(NETWORKS).map((net) => {
-      const todo = rs.filter((r) => r.net === net && !looked.has(key(r))).map((r) => r.repo);
-      for (const repo of todo) looked.add(`${net}/${repo}`);
+    const patch = (repo, p) => !cancelled && setRepos((cur) => cur?.map((r) => (r.repo === repo ? { ...r, ...p } : r)));
+    const lookupApps = (rs) => {
+      const todo = rs.map((r) => r.repo).filter((repo) => !looked.has(repo));
+      for (const repo of todo) looked.add(repo);
       return todo.length && readApps(address, todo, net).then((apps) => {
-        for (const [repo, app] of apps) patch(net, repo, { app });
-      });
-    })).catch((err) => console.warn('App lookup failed:', err));
+        for (const [repo, app] of apps) patch(repo, { app });
+      }, (err) => console.warn('App lookup failed:', err));
+    };
 
-    readRepos(address)
+    readRepos(address, [net])
       .then((rs) => {
         if (cancelled) return;
         setRepos((cur) => {
-          const prev = new Map((cur ?? []).map((r) => [key(r), r]));
-          return rs.map((r) => ({ ...r, app: prev.get(key(r))?.app ?? null }));
+          const prev = new Map((cur ?? []).map((r) => [r.repo, r]));
+          return rs.map((r) => ({ ...r, app: prev.get(r.repo)?.app ?? null }));
         });
         setError(null);
         lookupApps(rs);
       })
       .catch((err) => { if (!cancelled) { setError(err.shortMessage ?? err.message); setRepos((cur) => cur ?? []); } });
-    readEarnings(address)
+    if (sells(net)) readEarnings(address)
       .then((e) => !cancelled && setEarnings(e))
       .catch((err) => { console.warn('Earnings lookup failed:', err); if (!cancelled) setEarnings({ error: true }); });
     return () => { cancelled = true; };
-  }, [address, tick]);
+  }, [address, net, tick]);
 
   const publish = useCallback(async (job, onStep) => {
     if (!wallet || !address) throw new Error('Connect a wallet first.');

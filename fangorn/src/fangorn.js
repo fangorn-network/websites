@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, useSyncExternalStore } from 'react';
 import { createPublicClient, createWalletClient, custom, http, getAddress, erc20Abi } from 'viem';
 import { BaseSepoliaConfig, BaseConfig } from '@fangorn-network/sdk/lib/config.js';
 import { useAuth } from './authContext.js';
@@ -28,8 +28,22 @@ export const DEFAULT_NET = 'baseSepolia';
 export const isNet = (net) => Object.hasOwn(NETWORKS, net);
 /** Whether `net` sells records: only a network with a SettlementRegistry can. */
 export const sells = (net) => Boolean(NETWORKS[net].settlementRegistryContractAddress);
-/** What a repo's badge says about its network. */
-export const netLabel = (net) => (NETWORKS[net].chain.testnet ? 'Testnet' : 'Mainnet');
+
+// The network the site shows: one at a time, like Stripe's test mode. The nav's switch picks it
+// and each browser keeps the choice; a link that names a network (a repo's page) switches to it.
+// Every list, balance and publish is that network's alone; testnet shows a banner on every page.
+const NET_KEY = 'fangorn-network';
+let current = DEFAULT_NET;
+try { const saved = localStorage.getItem(NET_KEY); if (isNet(saved)) current = saved; } catch { /* no storage: the default */ }
+const listeners = new Set();
+export function setNet(net) {
+  if (!isNet(net) || net === current) return;
+  current = net;
+  try { localStorage.setItem(NET_KEY, net); } catch { /* not kept */ }
+  for (const l of listeners) l();
+}
+/** The network the site shows. */
+export const useNet = () => useSyncExternalStore((l) => { listeners.add(l); return () => listeners.delete(l); }, () => current);
 
 // The testnet, for everything that isn't per repo.
 export const NETWORK = NETWORKS[DEFAULT_NET];
@@ -70,26 +84,21 @@ export async function walletClientFor(wallet, address) {
   });
 }
 
-/** The wallet's native ETH (wei) and USDC (6-decimal base units) balances, raw. */
-export async function readBalances(address) {
-  const account = getAddress(address);
+/** The wallet's native ETH (wei) on `net`, and its USDC (6-decimal base units) where the site spends it (testnet), raw. */
+export async function readBalances(address, net = DEFAULT_NET) {
+  const account = getAddress(address), client = clientOf(net);
   const [eth, usdc] = await Promise.all([
-    publicClient.getBalance({ address: account }),
-    publicClient.readContract({
-      address: USDC_ADDRESS,
-      abi: erc20Abi,
-      functionName: 'balanceOf',
-      args: [account],
-    }),
+    client.getBalance({ address: account }),
+    net === DEFAULT_NET ? client.readContract({ address: USDC_ADDRESS, abi: erc20Abi, functionName: 'balanceOf', args: [account] }) : undefined,
   ]);
   return { eth, usdc };
 }
 
 /**
- * The signed-in wallet's ETH + USDC balances. `balances` is null while loading.
+ * The signed-in wallet's balances on `net`. `balances` is null while loading.
  * `refresh()` re-reads them — creating an app moves the balance.
  */
-export function useBalances() {
+export function useBalances(net = DEFAULT_NET) {
   const { user } = useAuth();
   const address = user?.wallet?.address;
 
@@ -101,12 +110,12 @@ export function useBalances() {
   useEffect(() => {
     if (!address) return;
     let cancelled = false;
-    readBalances(address)
+    readBalances(address, net)
       .then((b) => !cancelled && setBalances(b))
       .catch((err) => !cancelled && console.warn('Balance lookup failed:', err))
       .finally(() => !cancelled && setLoading(false));
     return () => { cancelled = true; };
-  }, [address, tick]);
+  }, [address, net, tick]);
 
   return { balances, loading, refresh };
 }
