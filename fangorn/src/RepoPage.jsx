@@ -3,7 +3,7 @@ import { formatUnits, isAddress } from 'viem';
 import styles from './Home.module.css';
 import { CopyButton, Cmd } from './Home';
 import { readRepoPage, repoLink } from './account';
-import { readBalances } from './fangorn';
+import { readBalances, sells, netLabel, NETWORKS } from './fangorn';
 import { buy } from './library';
 import { useAuth } from './authContext';
 import { truncate, explorer, formatBytes } from './format';
@@ -128,20 +128,21 @@ function Listing({ publisher, repo, r }) {
   );
 }
 
-export default function RepoPage({ publisher, repo }) {
+export default function RepoPage({ net, publisher, repo }) {
   const [page, setPage] = useState(undefined); // undefined loading, { tip, records }, { error }
   const valid = isAddress(publisher);
 
   useEffect(() => {
     if (!valid) return;
     let cancelled = false;
-    readRepoPage(publisher, repo)
+    readRepoPage(publisher, repo, net)
       .then((p) => !cancelled && setPage(p))
       .catch((err) => !cancelled && setPage({ error: err.shortMessage ?? err.message }));
     return () => { cancelled = true; };
-  }, [publisher, repo, valid]);
+  }, [net, publisher, repo, valid]);
 
-  const records = page?.records ?? [];
+  // A network with no SettlementRegistry sells nothing: its records show as free, with no buy button.
+  const records = (page?.records ?? []).map((r) => (sells(net) ? r : { ...r, price: null }));
   const prices = records.map((r) => r.price).filter((p) => p != null);
   const low = prices.length ? prices.reduce((a, b) => (b < a ? b : a)) : null;
 
@@ -150,9 +151,9 @@ export default function RepoPage({ publisher, repo }) {
       <main className={styles.main}>
         <section className={styles.welcome}>
           <span className={styles.eyebrow}>Data on Fangorn</span>
-          <h1 className={styles.h1}>{repo}</h1>
+          <h1 className={styles.h1}>{repo}<span className={styles.badge} title={NETWORKS[net].chain.name}>{netLabel(net)}</span></h1>
           <p className={styles.sub}>
-            Published by <a className={styles.resLink} href={explorer(publisher)} target="_blank" rel="noreferrer">{truncate(publisher, 8, 6)}</a>
+            Published by <a className={styles.resLink} href={explorer(publisher, net)} target="_blank" rel="noreferrer">{truncate(publisher, 8, 6)}</a>
             {page?.tip && <>
               {' · '}{records.length.toLocaleString()} {records.length === 1 ? 'record' : 'records'}
               {prices.length > 0 && <>{' · '}{prices.length === records.length ? '' : `${prices.length} `}for sale{low != null && ` from ${usdc(low)}`}</>}
@@ -160,9 +161,9 @@ export default function RepoPage({ publisher, repo }) {
           </p>
           {page?.tip && (
             <div className={styles.btnRow}>
-              <CopyButton text={repoLink(publisher, repo)} label="Copy link" className={styles.ghostBtn} />
+              <CopyButton text={repoLink(publisher, repo, net)} label="Copy link" className={styles.ghostBtn} />
               {records.length > 0 && (
-                <button className={styles.ghostBtn} type="button" onClick={() => save(repo, { publisher, repo, records: records.map((r) => exportOf(r)) })}>
+                <button className={styles.ghostBtn} type="button" onClick={() => save(repo, { network: NETWORKS[net].chain.name, publisher, repo, records: records.map((r) => exportOf(r)) })}>
                   Download all (JSON)
                 </button>
               )}

@@ -4,11 +4,12 @@
 // A publisher is a wallet, the same one in the browser and in the CLI (the user
 // exports the Privy key into `fangorn init`).
 import { useCallback, useEffect, useState } from 'react';
-import { createWalletClient, http, parseAbi, parseAbiItem, parseUnits } from 'viem';
+import { createWalletClient, formatLog, http, numberToHex, pad, parseAbi, parseAbiItem, parseEventLogs, parseUnits, toEventSelector } from 'viem';
 import { getLogsInWindows } from '@fangorn-network/sdk/lib/contracts/logs.js';
-import { repoId } from '@fangorn-network/sdk/lib/contracts/data-registry/index.js';
+import { repoId, UPDATED_V0 } from '@fangorn-network/sdk/lib/contracts/data-registry/index.js';
+import { DATA_REGISTRY_ABI } from '@fangorn-network/sdk/lib/contracts/data-registry/abi.js';
 import { recordKey, subjectOf } from '@fangorn-network/sdk/lib/contracts/settlement-registry/index.js';
-import { NETWORK, publicClient, walletClientFor } from './fangorn.js';
+import { NETWORK, NETWORKS, DEFAULT_NET, isNet, clientOf, publicClient, walletClientFor } from './fangorn.js';
 import { useAuth } from './authContext.js';
 
 /** Where people find everything published: this site's registry page (worker/registry.js behind it). */
@@ -19,17 +20,96 @@ const TERMS_DAYS = 365;
 /** Fangorn's key server: a buyer's key comes from here once their purchase settles. */
 const KEY_SERVER = 'https://keys-test.fangorn.network';
 
-const UPDATED = parseAbiItem('event Updated(address indexed publisher, bytes32 indexed repo_id, string repo, uint64 pos, bytes32 parent, bytes32 head)');
+// Both versions of the DataRegistry's Updated event: it was upgraded in place, so entries from
+// before the upgrade carry the old one (no index or timestamp).
+const UPDATED = [UPDATED_V0, DATA_REGISTRY_ABI.find((i) => i.type === 'event' && i.name === 'Updated')];
+const UPDATED_TOPICS = UPDATED.map((e) => toEventSelector(e));
 const REGISTERED = parseAbiItem('event Registered(bytes32 indexed subject, address indexed publisher, address indexed referrer, uint256 commitment, uint256 price, uint256 referrer_cut)');
 
-export const scan = (address, event, args) => getLogsInWindows(publicClient, NETWORK.fromBlock, undefined, (fromBlock, toBlock) =>
-  publicClient.getLogs({ address, event, args, fromBlock, toBlock }), NETWORK.logWindow);
+// Log scans resume where the last one stopped. Each browser keeps the logs a scan found and the
+// block it reached, so a reload asks the chain only for the blocks since: a scan from a deploy block
+// is ~150 eth_getLogs on testnet, and the public RPC rate-limits a page that runs a few on every load.
+// ponytail: per browser, in localStorage (a scan that won't fit just runs again); an indexer is the upgrade.
+const REREAD = 300n; // the last minute of blocks is read again, in case the chain reorganised it
+const trim = (l) => ({ blockNumber: l.blockNumber, args: l.args }); // all any caller reads
+const tag = (_, v) => (typeof v === 'bigint' ? { $n: v.toString() } : v);
+const untag = (_, v) => (v && typeof v === 'object' && typeof v.$n === 'string' && Object.keys(v).length === 1 ? BigInt(v.$n) : v);
 
-/** The publisher's repos, newest update first: [{ repo, block }]. */
-export async function readRepos(publisher) {
-  const logs = await scan(NETWORK.dataRegistryContractAddress, UPDATED, { publisher });
-  const latest = new Map(logs.map((l) => [l.args.repo, l.blockNumber]));
-  return [...latest].map(([repo, block]) => ({ repo, block })).sort((a, b) => (a.block < b.block ? 1 : -1));
+/** Every log `fetchWindow` finds on `net` since its deploy block, resuming the last scan under `key`. */
+async function resumable(key, net, fetchWindow) {
+  const store = `fangorn-logs:v1:${net}:${key}`;
+  let saved = null;
+  try { saved = JSON.parse(localStorage.getItem(store) ?? 'null', untag); } catch { /* none kept, or no storage */ }
+  const { fromBlock, logWindow } = NETWORKS[net];
+  const head = await clientOf(net).getBlockNumber();
+  const from = saved && saved.to - REREAD > fromBlock ? saved.to - REREAD : fromBlock;
+  const fresh = (await getLogsInWindows(clientOf(net), from, head, fetchWindow, logWindow)).map(trim);
+  const logs = [...(saved?.logs ?? []).filter((l) => l.blockNumber < from), ...fresh];
+  try { localStorage.setItem(store, JSON.stringify({ to: head, logs }, tag)); } catch { /* full or blocked */ }
+  return logs;
+}
+
+/** `event` logs from `address` on `net`, narrowed by `args`: [{ blockNumber, args }]. */
+export const scan = (address, event, args, net = DEFAULT_NET) =>
+  resumable(`${address}:${event.name}:${JSON.stringify(args ?? {}, tag)}`, net, (fromBlock, toBlock) =>
+    clientOf(net).getLogs({ address, event, args, fromBlock, toBlock }));
+
+/**
+ * One window of `publisher`'s Updated logs on `net`, both versions, decoded. One eth_getLogs matching
+ * either version's topic: a query per version would double the calls, and the public RPC rate-limits
+ * a burst (the SDK's ChainRegistry.log also reads a block per old entry, all at once).
+ */
+const updatesIn = (publisher, net) => async (fromBlock, toBlock) => decodeUpdates(await clientOf(net).request({ method: 'eth_getLogs', params: [{
+  address: NETWORKS[net].dataRegistryContractAddress,
+  topics: [UPDATED_TOPICS, pad(publisher.toLowerCase())],
+  fromBlock: numberToHex(fromBlock),
+  toBlock: numberToHex(toBlock),
+}] }));
+/** Raw eth_getLogs Updated logs of either version → viem logs with `args`. Pure, so the self-check drives it. */
+export const decodeUpdates = (raw) => parseEventLogs({ abi: UPDATED, logs: raw.map(formatLog) });
+
+/** Fangorn's registry (this site's /api/repos → registry-sepolia), as it answers, or null when it doesn't. */
+const registry = (params) => fetch(`/api/repos?${new URLSearchParams(params)}`, { signal: AbortSignal.timeout(10_000) })
+  .then((r) => (r.ok ? r.json() : null)).catch(() => null);
+const listingOf = (r) => ({ name: r.name, description: r.description, publisher: r.publisher, repo: r.repo, head: r.head, card: r.card_url, updated: r.updated });
+
+/**
+ * The publisher's repos on `nets`, newest update first: [{ repo, net, head, updated, listing }],
+ * `updated` unix seconds. On testnet the registry lists them (`listing`), and the chain's last
+ * window adds what it hasn't listed yet: it runs a minute behind. Elsewhere, or when the registry
+ * doesn't answer, a (resumable) scan of the chain; `listing` is undefined where nothing lists.
+ * Testnet failing is the caller's error; another network failing leaves its repos out, with a warning.
+ */
+export async function readRepos(publisher, nets = Object.keys(NETWORKS)) {
+  const found = await Promise.all(nets.map(async (net) => {
+    try {
+      const listed = net === DEFAULT_NET && await registry({ publisher, k: '1000' });
+      const head = await clientOf(net).getBlock();
+      const at = (l) => (l.args.timestamp != null ? Number(l.args.timestamp) : blockTime(head, l.blockNumber));
+      const rows = new Map();
+      let logs;
+      if (listed) {
+        for (const r of listed.repos.filter((r) => r.publisher.toLowerCase() === publisher.toLowerCase())) {
+          rows.set(r.repo, { repo: r.repo, net, head: r.head, updated: Date.parse(r.updated) / 1000, listing: listingOf(r) });
+        }
+        const { fromBlock, logWindow } = NETWORKS[net];
+        const from = head.number - logWindow + 1n > fromBlock ? head.number - logWindow + 1n : fromBlock;
+        logs = await updatesIn(publisher, net)(from, head.number);
+      } else {
+        logs = await resumable(`${publisher.toLowerCase()}:Updated`, net, updatesIn(publisher, net));
+      }
+      for (const l of logs) {
+        const was = rows.get(l.args.repo);
+        rows.set(l.args.repo, { repo: l.args.repo, net, head: l.args.head, updated: at(l), listing: listed ? was?.listing ?? null : undefined });
+      }
+      return [...rows.values()];
+    } catch (err) {
+      if (net === DEFAULT_NET) throw err;
+      console.warn(`Reading repos on ${net} failed:`, err);
+      return [];
+    }
+  }));
+  return found.flat().sort((a, b) => b.updated - a.updated);
 }
 
 /**
@@ -41,23 +121,26 @@ export function sumSales(logs) {
   return { total: logs.reduce((s, l) => s + l.args.price - l.args.referrer_cut, 0n), sales: logs.filter((l) => l.args.price > 0n).length };
 }
 
-/** Base makes a block every 2 seconds, so a block's time is the head's less 2s a block. */
-const BLOCK_SECONDS = 2;
+/** Base (both chains) makes a block every 0.2s, so a block's time is the head's less 0.2s a block. */
+// ponytail: an estimate, right for every block since the registries were deployed; read block timestamps if the rate changes again.
+const BLOCK_SECONDS = 0.2;
 const WEEK = 7 * 86400;
 /** A block's unix time, from the chain head: { number, timestamp } as viem's getBlock gives them. */
-export const blockTime = (head, block) => Number(head.timestamp) - Number(head.number - block) * BLOCK_SECONDS;
+export const blockTime = (head, block) => Math.round(Number(head.timestamp) - Number(head.number - block) * BLOCK_SECONDS);
 
 /**
- * A publisher's sale logs → { total, sales, weekly, head }: weekly is net earnings over the last
+ * A publisher's sale logs → { total, sales, weekly }: weekly is net earnings over the last
  * `weeks` weeks, oldest first. Pure, so the self-check drives it.
  */
 export function salesStats(logs, head, weeks = 12) {
-  const weekly = Array(weeks).fill(0n);
+  // Plain numbers (USDC base units, well inside 2^53), not bigints: React's dev build JSON-stringifies
+  // an array of primitives it finds in props to log renders, throws on a bigint, and wedges itself.
+  const weekly = Array(weeks).fill(0);
   for (const l of logs) {
     const ago = Math.floor((Number(head.timestamp) - blockTime(head, l.blockNumber)) / WEEK);
-    if (ago < weeks) weekly[weeks - 1 - ago] += l.args.price - l.args.referrer_cut;
+    if (ago < weeks) weekly[weeks - 1 - ago] += Number(l.args.price - l.args.referrer_cut);
   }
-  return { ...sumSales(logs), weekly, head };
+  return { ...sumSales(logs), weekly };
 }
 
 export async function readEarnings(publisher) {
@@ -100,13 +183,8 @@ export const netPrice = (r) => (r.price == null ? 0n : r.price - (r.price * BigI
  * Empty when it doesn't answer.
  */
 export async function readListings({ q, publisher, k = 100 } = {}) {
-  const params = new URLSearchParams({ k: String(k), ...(q ? { q } : {}), ...(publisher ? { publisher } : {}) });
-  const out = await fetch(`/api/repos?${params}`, { signal: AbortSignal.timeout(10_000) })
-    .then((r) => (r.ok ? r.json() : null)).catch(() => null);
-  return new Map((out?.repos ?? []).map((r) => [
-    `${r.publisher}/${r.repo}`,
-    { name: r.name, description: r.description, publisher: r.publisher, repo: r.repo, card: r.card_url, updated: r.updated },
-  ]));
+  const out = await registry({ k: String(k), ...(q ? { q } : {}), ...(publisher ? { publisher } : {}) });
+  return new Map((out?.repos ?? []).map((r) => [`${r.publisher}/${r.repo}`, listingOf(r)]));
 }
 
 // One read per page load, for the landing page.
@@ -122,19 +200,33 @@ export function useListings() {
   return value;
 }
 
-/** A Fangorn client that only reads. Loaded on use: the SDK root pulls the engine and ZK WASM. */
-export async function reader(publisher) {
+/** A Fangorn client on `net` that only reads. Loaded on use: the SDK root pulls the engine and ZK WASM. */
+export async function reader(publisher, net = DEFAULT_NET) {
   const { Fangorn } = await import('@fangorn-network/sdk/lib/fangorn.js');
+  const config = NETWORKS[net];
   // The wallet client is never asked to sign.
-  const walletClient = createWalletClient({ account: publisher, chain: NETWORK.chain, transport: http(NETWORK.rpcUrl) });
-  // The engine wants storage even to read; reads go through the gateway and never upload.
-  return Fangorn.create({ walletClient, config: NETWORK, storage: { signedUrl: {} } });
+  const walletClient = createWalletClient({ account: publisher, chain: config.chain, transport: http(config.rpcUrl) });
+  // The engine wants storage even to read; reads go through the gateway and never upload
+  // (on a network with no upload worker, an upload would be refused).
+  return Fangorn.create({ walletClient, config, storage: { signedUrl: {} } });
 }
 
 // ── A repo's page ───────────────────────────────────────────────────────────
 
+/** One repo's public page, as a hash route: #/data/<net>/<publisher>/<repo>. */
+export const repoHref = (publisher, repo, net = DEFAULT_NET) => `#/data/${net}/${publisher}/${encodeURIComponent(repo)}`;
 /** The page a publisher shares for one repo, on this site. */
-export const repoLink = (publisher, repo) => `${location.origin}${location.pathname}#/data/${publisher}/${encodeURIComponent(repo)}`;
+export const repoLink = (publisher, repo, net) => `${location.origin}${location.pathname}${repoHref(publisher, repo, net)}`;
+
+/**
+ * A #/data/… hash → { net, publisher, repo }. Links made before repos had a network
+ * (#/data/<publisher>/<repo>) are testnet ones.
+ */
+export function parseRepoHash(hash) {
+  const parts = hash.replace(/^#\/data\//, '').split('/');
+  const net = isNet(parts[0]) ? parts.shift() : DEFAULT_NET;
+  return { net, publisher: parts[0] ?? '', repo: decodeURIComponent(parts.slice(1).join('/')) };
+}
 
 /**
  * A stored record as its page shows it: { id, title, fields, sealed, price }. `fields` are
@@ -155,20 +247,20 @@ export function toListing({ id, type, payload }) {
 }
 
 /** A repo's records as listings, less its own (`@card`, `@deposit/…`). Null tip: no such repo. */
-export async function readRepoPage(publisher, repo) {
-  const { tip, contents } = await (await reader(publisher)).readRepo(publisher, repo);
+export async function readRepoPage(publisher, repo, net = DEFAULT_NET) {
+  const { tip, contents } = await (await reader(publisher, net)).readRepo(publisher, repo);
   return { tip, records: contents.records.filter((r) => !r.id.startsWith('@')).map(toListing) };
 }
 
 // ── Apps ────────────────────────────────────────────────────────────────────
 
 /**
- * Which of `publisher`'s repos are apps: repo → { card, name, site } for each repo whose
+ * Which of `publisher`'s repos on `net` are apps: repo → { card, name, site } for each repo whose
  * `@card` record binds an agent card (`setCard` / `registerAgent` in the SDK). A card that doesn't load
  * still marks the repo an app, with no name or site.
  */
-export async function readApps(publisher, repos) {
-  const fangorn = await reader(publisher);
+export async function readApps(publisher, repos, net = DEFAULT_NET) {
+  const fangorn = await reader(publisher, net);
   const found = await Promise.all(repos.map(async (repo) => {
     const card = await fangorn.cardOf(publisher, repo).catch(() => undefined);
     if (!card || !/^https?:\/\//.test(card)) return null;
@@ -349,9 +441,10 @@ export async function publishRecords(walletClient, { repo, records, paid = [], p
 }
 
 /**
- * The publisher's repos, earnings and Fangorn's listing of them, plus `publish`.
- * `repos` is null while loading: [{ repo, listing }], listing null until Fangorn
- * lists it (a minute or two). `earnings` is { total, sales }, null loading, { error } failed.
+ * The publisher's repos on every network, earnings and Fangorn's listing of them, plus `publish`.
+ * `repos` is null while loading: [{ repo, net, updated, listing }], listing null until Fangorn
+ * lists it (a minute or two), undefined on a network Fangorn doesn't index yet (mainnet).
+ * `earnings` is { total, sales }, null loading, { error } failed. Publishing is testnet only.
  */
 export function usePublisher(address) {
   const { wallet } = useAuth();
@@ -364,18 +457,29 @@ export function usePublisher(address) {
   useEffect(() => {
     if (!address) return;
     let cancelled = false;
-    Promise.all([readRepos(address), readListings({ publisher: address })])
-      .then(([rs, l]) => {
+    const key = (r) => `${r.net}/${r.repo}`;
+    // Apps come after the list: each is a read from IPFS. Each repo is looked up once.
+    const looked = new Set();
+    const patch = (net, repo, p) => !cancelled && setRepos((cur) => cur?.map((r) => (r.net === net && r.repo === repo ? { ...r, ...p } : r)));
+    const lookupApps = (rs) => Promise.all(Object.keys(NETWORKS).map((net) => {
+      const todo = rs.filter((r) => r.net === net && !looked.has(key(r))).map((r) => r.repo);
+      for (const repo of todo) looked.add(`${net}/${repo}`);
+      return todo.length && readApps(address, todo, net).then((apps) => {
+        for (const [repo, app] of apps) patch(net, repo, { app });
+      });
+    })).catch((err) => console.warn('App lookup failed:', err));
+
+    readRepos(address)
+      .then((rs) => {
         if (cancelled) return;
-        setRepos(rs.map((r) => ({ ...r, listing: l.get(`${address.toLowerCase()}/${r.repo}`) ?? null, app: null })));
+        setRepos((cur) => {
+          const prev = new Map((cur ?? []).map((r) => [key(r), r]));
+          return rs.map((r) => ({ ...r, app: prev.get(key(r))?.app ?? null }));
+        });
         setError(null);
-        // Apps come after: each is a read from IPFS, and the list shouldn't wait on them.
-        const patch = (repo, p) => !cancelled && setRepos((cur) => cur.map((r) => (r.repo === repo ? { ...r, ...p } : r)));
-        return readApps(address, rs.map((r) => r.repo)).then((apps) => {
-          for (const [repo, app] of apps) patch(repo, { app });
-        }, (err) => console.warn('App lookup failed:', err));
+        lookupApps(rs);
       })
-      .catch((err) => { if (!cancelled) { setError(err.shortMessage ?? err.message); setRepos([]); } });
+      .catch((err) => { if (!cancelled) { setError(err.shortMessage ?? err.message); setRepos((cur) => cur ?? []); } });
     readEarnings(address)
       .then((e) => !cancelled && setEarnings(e))
       .catch((err) => { console.warn('Earnings lookup failed:', err); if (!cancelled) setEarnings({ error: true }); });

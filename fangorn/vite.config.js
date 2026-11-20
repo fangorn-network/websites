@@ -19,9 +19,21 @@ const SDK_ENV_SHIM = {
   'process.env.FANGORN_LOG_WINDOW': 'undefined',
 }
 
+// `vite` and `vite preview` run without the Worker, so /api/repos (the registry) would 404 and
+// the account hub would fall back to its slow chain scan. Send it where worker/index.js does.
+const API_PROXY = {
+  '/api/repos': {
+    target: 'https://registry-sepolia.fangorn.network',
+    changeOrigin: true,
+    rewrite: (path) => path.replace(/^\/api\/repos/, '/repos'),
+  },
+}
+
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react()],
+  server: { proxy: API_PROXY },
+  preview: { proxy: API_PROXY },
   // The Fangorn SDK is a file:-linked sibling with its own node_modules. Dedupe
   // the packages we also depend on so the app and the SDK share ONE copy —
   // otherwise the viem clients we pass in and the CIDs the engine builds cross

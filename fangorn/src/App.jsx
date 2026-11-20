@@ -7,6 +7,7 @@ import Home from './Home';
 import Connect from './Connect';
 import Explore from './Explore';
 import RepoPage from './RepoPage';
+import { parseRepoHash } from './account';
 import { useAuth, ACCOUNT_ENABLED } from './authContext';
 
 // ponytail: hash routes, a handful of pages. No router dep, no host fallback config.
@@ -51,8 +52,8 @@ export default function App() {
     hash === '#/explore' || hash === '#/explorer' ? <Explore /> :
     // #/connect?app=…&repos=…: any app asking to publish for you (worker/index.js signs for it).
     hash.startsWith('#/connect') ? <Connect /> :
-    // #/data/<publisher>/<repo>: one repo's public page, the link a publisher shares.
-    hash.startsWith('#/data/') ? <RepoPage publisher={hash.split('/')[2]} repo={decodeURIComponent(hash.split('/').slice(3).join('/'))} /> :
+    // #/data/<net>/<publisher>/<repo>: one repo's public page, the link a publisher shares.
+    hash.startsWith('#/data/') ? <RepoPage key={hash} {...parseRepoHash(hash)} /> :
     <Landing />;
 
   return (

@@ -10,7 +10,7 @@
     "test": "node src/fangorn.test.mjs && node worker/grants.test.mjs"
   },
   "dependencies": {
-    "@fangorn-network/sdk": "^0.1.5",
+    "@fangorn-network/sdk": "^0.2.1",
     "@fangorn-network/westmarch": "^0.1.1",
     "@privy-io/node": "^0.39.0",
     "@privy-io/react-auth": "^3.33.1",

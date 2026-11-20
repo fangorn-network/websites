@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import styles from './Landing.module.css';
 import home from './Home.module.css';
-import { readListings } from './account';
+import { readListings, repoHref } from './account';
 
 // Everything published on Fangorn: newest first, or ranked by what it's about. Each opens on its own page.
 export default function Explore() {
@@ -31,7 +31,7 @@ export default function Explore() {
             <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'grid', gap: 12 }}>
               {rows.map((r) => (
                 <li key={`${r.publisher}/${r.repo}`} className={styles.card}>
-                  <a href={`#/data/${r.publisher}/${encodeURIComponent(r.repo)}`} className={styles.cardTitle} style={{ display: 'block' }}>{r.name ?? r.repo}</a>
+                  <a href={repoHref(r.publisher, r.repo)} className={styles.cardTitle} style={{ display: 'block' }}>{r.name ?? r.repo}</a>
                   {r.description && <p className={styles.cardBody}>{r.description}</p>}
                   <p className={styles.cardBody} style={{ opacity: 0.7, fontSize: 13, overflowWrap: 'anywhere' }}>{r.repo} · {r.publisher.slice(0, 6)}…{r.publisher.slice(-4)}</p>
                 </li>
