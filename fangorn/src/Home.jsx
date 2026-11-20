@@ -1027,6 +1027,8 @@ export default function Home({ path = [], net = DEFAULT_NET }) {
           {TABS.map(([k, label]) => (
             <a key={k} href={`#/account/${k}`} className={tab === k ? `${styles.tab} ${styles.tabOn}` : styles.tab} aria-current={tab === k ? 'page' : undefined}>
               {label}
+              {/* Buying needs a SettlementRegistry, which mainnet doesn't have yet. */}
+              {k === 'library' && !sells(net) && <span className={styles.badge} style={{ marginLeft: 8 }}>Coming soon</span>}
             </a>
           ))}
         </nav>
@@ -1038,7 +1040,13 @@ export default function Home({ path = [], net = DEFAULT_NET }) {
               <BalanceColumn net={net} {...money} />
             </div>
             <section className={styles.section}>
-              <p className={styles.colText}>Nothing is sold on mainnet yet: records there are free to read, and there's no library to keep.</p>
+              <div className={styles.tableEmpty}>
+                <h2 className={styles.h2}>Buying on mainnet <span className={styles.badge}>Coming soon</span></h2>
+                <p className={styles.colText}>
+                  Paid records, buying and your library are coming to mainnet. Until then, everything on
+                  mainnet is free to read. Switch to Testnet to try buying today.
+                </p>
+              </div>
             </section>
           </>
         ))}
