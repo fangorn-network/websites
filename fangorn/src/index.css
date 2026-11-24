@@ -81,6 +81,20 @@ body {
 }
 
 a { text-decoration: none; }
+
+/* Testnet mode (fangorn.js useNet): on every page, held under the sticky 64px nav. */
+.netBanner {
+  position: sticky;
+  top: 64px;
+  z-index: 99;
+  padding: 22px 16px;
+  text-align: center;
+  font-size: 19px;
+  font-weight: 600;
+  color: var(--hi2); /* the brand's deep green: 6.0:1 on --s3 light, 5.4:1 dark */
+  background: var(--s3);
+  border-bottom: 1px solid var(--line);
+}
 button { cursor: pointer; font-family: var(--sans); }
 
 .appSplash {

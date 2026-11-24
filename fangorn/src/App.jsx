@@ -7,7 +7,9 @@ import Home from './Home';
 import Connect from './Connect';
 import Explore from './Explore';
 import RepoPage from './RepoPage';
+import { parseRepoHash } from './account';
 import { useAuth, ACCOUNT_ENABLED } from './authContext';
+import { NETWORKS, setNet, useNet } from './fangorn';
 
 // ponytail: hash routes, a handful of pages. No router dep, no host fallback config.
 function useHash() {
@@ -29,6 +31,7 @@ function useHash() {
 
 function Account({ path }) {
   const { ready, authenticated, user, login } = useAuth();
+  const net = useNet();
 
   // Avoid flashing the login prompt before Privy resolves an existing session.
   if (!ready) return <div className="appSplash" aria-busy="true">Loading…</div>;
@@ -39,25 +42,34 @@ function Account({ path }) {
       </div>
     );
   }
-  // Key Home by wallet so switching accounts in-session fully remounts it — the
-  // publisher state is per-wallet and must not carry over.
-  return <Home key={user?.wallet?.address} path={path} />;
+  // Key Home by wallet and network so switching either fully remounts it — the publisher
+  // state is per-wallet and per-network and must not carry over (nor show one network's list
+  // while the other's loads).
+  return <Home key={`${user?.wallet?.address}:${net}`} path={path} net={net} />;
 }
 
 export default function App() {
   const hash = useHash();
+  const net = useNet();
+  // A link that names a network switches the site to it, so a shared link shows what it points
+  // at: a repo's page (old links without one are testnet's), or one of your repos in the account.
+  useEffect(() => {
+    const named = hash.startsWith('#/data/') ? parseRepoHash(hash).net : hash.match(/^#\/account\/data\/([^/]+)\/./)?.[1];
+    if (named) setNet(named); // ignores anything that isn't a network
+  }, [hash]);
   const page =
     hash === '#/account' || hash.startsWith('#/account/') ? <Account path={hash.split('/').slice(2)} /> :
     hash === '#/explore' || hash === '#/explorer' ? <Explore /> :
     // #/connect?app=…&repos=…: any app asking to publish for you (worker/index.js signs for it).
     hash.startsWith('#/connect') ? <Connect /> :
-    // #/data/<publisher>/<repo>: one repo's public page, the link a publisher shares.
-    hash.startsWith('#/data/') ? <RepoPage publisher={hash.split('/')[2]} repo={decodeURIComponent(hash.split('/').slice(3).join('/'))} /> :
+    // #/data/<net>/<publisher>/<repo>: one repo's public page, the link a publisher shares.
+    hash.startsWith('#/data/') ? <RepoPage key={hash} {...parseRepoHash(hash)} /> :
     <Landing />;
 
   return (
     <>
       <Nav />
+      {NETWORKS[net].chain.testnet && <div className="netBanner" role="note">Testnet: test tokens, no real value.</div>}
       {page}
       <Footer />
     </>

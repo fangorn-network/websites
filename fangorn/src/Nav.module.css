@@ -109,6 +109,17 @@
 
 .theme:hover, .menu:hover { color: var(--ink); background: var(--s3); }
 
+.net {
+  height: 32px;
+  padding: 0 8px;
+  border: 1px solid var(--line2);
+  border-radius: 8px;
+  background: var(--s1);
+  color: var(--text);
+  font: 500 13px var(--sans);
+  cursor: pointer;
+}
+
 .menu {
   display: none;
   place-items: center;

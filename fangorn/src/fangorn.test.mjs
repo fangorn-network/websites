@@ -1,6 +1,6 @@
 // Run: node src/fangorn.test.mjs
 // Guards the invariants the account hub depends on:
-//  1. the site runs against the Base Sepolia deployment;
+//  1. the site runs against the Base Sepolia deployment, and reads Base mainnet's (DataRegistry only);
 //  2. a publisher's file parses into the records it publishes;
 //  3. earnings are the sales net of the referrer's cut;
 //  4. the storage meter maths.
@@ -10,6 +10,38 @@ const { NETWORK, CHAIN } = await import('./fangorn.js');
 assert.equal(CHAIN.id, 84532, 'Base Sepolia');
 assert.match(NETWORK.dataRegistryContractAddress, /^0x[0-9a-fA-F]{40}$/);
 assert.match(NETWORK.settlementRegistryContractAddress, /^0x[0-9a-fA-F]{40}$/);
+
+// Base mainnet: the DataRegistry proxy, nothing to sell with. Testnet stays the default.
+const { NETWORKS, DEFAULT_NET, sells } = await import('./fangorn.js');
+assert.equal(DEFAULT_NET, 'baseSepolia');
+assert.equal(NETWORKS.base.chain.id, 8453);
+assert.equal(NETWORKS.base.dataRegistryContractAddress, '0x543D559Cf7583FE7003d4A19E26BF3A4DB75fbC8', 'the proxy, not its implementation');
+assert.deepEqual([sells('baseSepolia'), sells('base')], [true, false]);
+
+// Repo links name their network; links from before networks are testnet ones.
+const { repoHref, parseRepoHash } = await import('./account.js');
+const pub = '0x00000000000000000000000000000000000a11ce';
+assert.equal(repoHref(pub, 'kelp surveys'), `#/data/baseSepolia/${pub}/kelp%20surveys`, 'testnet by default');
+assert.deepEqual(parseRepoHash(repoHref(pub, 'kelp surveys', 'base')), { net: 'base', publisher: pub, repo: 'kelp surveys' });
+assert.deepEqual(parseRepoHash(`#/data/${pub}/a/b`), { net: 'baseSepolia', publisher: pub, repo: 'a/b' }, 'an old link');
+
+// A publisher's Updated logs decode in both versions (the registry was upgraded in place); only the new one has a timestamp.
+{
+  const { decodeUpdates } = await import('./account.js');
+  const { encodeEventTopics, encodeAbiParameters, toHex } = await import('viem');
+  const { UPDATED_V0 } = await import('@fangorn-network/sdk/lib/contracts/data-registry/index.js');
+  const { DATA_REGISTRY_ABI } = await import('@fangorn-network/sdk/lib/contracts/data-registry/abi.js');
+  const v1 = DATA_REGISTRY_ABI.find((i) => i.type === 'event' && i.name === 'Updated');
+  const h = `0x${'ab'.repeat(32)}`;
+  const raw = (event, data, n) => ({
+    address: NETWORK.dataRegistryContractAddress, blockNumber: toHex(n), blockHash: h, transactionHash: h, transactionIndex: '0x0', logIndex: '0x0', removed: false,
+    topics: encodeEventTopics({ abi: [event], eventName: 'Updated', args: { publisher: pub, repo_id: h } }),
+    data: encodeAbiParameters(event.inputs.filter((i) => !i.indexed), data),
+  });
+  const [a, b] = decodeUpdates([raw(UPDATED_V0, ['old-repo', 1n, h, h], 1), raw(v1, ['new-repo', 2n, h, h, 7n, 1_800_000_000n], 2)]);
+  assert.deepEqual([a.args.repo, a.args.timestamp], ['old-repo', undefined]);
+  assert.deepEqual([b.args.repo, b.args.timestamp], ['new-repo', 1_800_000_000n]);
+}
 
 // Files → records.
 const { parseRecords, parseCsv, sumSales } = await import('./account.js');
@@ -51,20 +83,45 @@ assert.deepEqual(listing, { id: 'kelp', title: 'Kelp', type: 'record', fields: {
 assert.deepEqual(toListing({ id: 'n', type: 'note.v1', payload: { n: 1 } }), { id: 'n', title: 'n', type: 'note.v1', fields: { n: 1 }, sealed: [], price: null, shareBps: 0 }, 'free, untitled');
 assert.equal(toListing({ id: 'f', type: 'file', payload: { mime: 'image/png' } }).type, 'image/png', "a file's type is its mime");
 
+// Log scans resume: a second scan asks only for the blocks since the first (less a re-read minute),
+// and keeps every log once.
+{
+  const { scan } = await import('./account.js');
+  const { clientOf } = await import('./fangorn.js');
+  const kept = new Map();
+  globalThis.localStorage = { getItem: (k) => kept.get(k) ?? null, setItem: (k, v) => kept.set(k, v) };
+  const c = clientOf(), real = { getBlockNumber: c.getBlockNumber, getLogs: c.getLogs };
+  const start = NETWORK.fromBlock;
+  let head = start + 199_999n, calls = 0; // 200,000 blocks: four 50k windows
+  const chain = [start + 5n, start + 150_000n, start + 199_900n]; // the last one is inside the re-read minute
+  c.getBlockNumber = async () => head;
+  c.getLogs = async ({ fromBlock, toBlock }) => { calls++; return chain.filter((b) => b >= fromBlock && b <= toBlock).map((b) => ({ blockNumber: b, args: { n: b } })); };
+  try {
+    const event = { name: 'Test' }, at = (logs) => logs.map((l) => l.blockNumber);
+    assert.deepEqual(at(await scan('0xabc', event, { who: 1n })), chain);
+    assert.equal(calls, 4, 'a first scan walks every window');
+    calls = 0; head += 1000n; chain.push(head - 10n);
+    assert.deepEqual(at(await scan('0xabc', event, { who: 1n })), chain, 'every log once, the new one too');
+    assert.equal(calls, 1, 'a second scan is one window');
+    assert.equal(typeof (await scan('0xabc', event, { who: 1n }))[0].args.n, 'bigint', 'bigints survive being kept');
+  } finally { Object.assign(c, real); delete globalThis.localStorage; }
+}
+
 // Earnings: price less the referrer's cut; a free registration is no sale.
 const reg = (price, cut) => ({ args: { price, referrer_cut: cut } });
 assert.deepEqual(sumSales([reg(10_000n, 500n), reg(20_000n, 0n), reg(0n, 0n)]), { total: 29_500n, sales: 2 });
 
-// The weekly chart: times from the head at 2s a block; a sale older than the window is in the
+// The weekly chart: times from the head at 0.2s a block; a sale older than the window is in the
 // total but not the chart.
 const { salesStats, netPrice } = await import('./account.js');
 const head = { number: 1_000_000n, timestamp: 1_800_000_000n };
 const sale = (price, cut, blockNumber) => ({ blockNumber, args: { price, referrer_cut: cut } });
-const weekBlocks = BigInt(7 * 86400 / 2);
+const weekBlocks = BigInt(7 * 86400 / 0.2);
 const st = salesStats([sale(10_000n, 500n, head.number - 2n * weekBlocks - 1n), sale(10_000n, 500n, head.number - 10n), sale(50_000n, 0n, head.number - 20n * weekBlocks)], head);
 assert.deepEqual([st.total, st.sales], [69_000n, 3]);
-assert.deepEqual(st.weekly.slice(-3), [9_500n, 0n, 9_500n], 'one sale this week, one two weeks back');
-assert.equal(st.weekly.reduce((a, b) => a + b), 19_000n);
+assert.deepEqual(st.weekly.slice(-3), [9_500, 0, 9_500], 'one sale this week, one two weeks back');
+assert.equal(st.weekly.reduce((a, b) => a + b), 19_000);
+assert.doesNotThrow(() => JSON.stringify(st.weekly), 'no bigints: React dev logs props with JSON.stringify');
 assert.equal(netPrice({ price: 10_000n, shareBps: 500 }), 9_500n, "a sale pays the price less the referrer's share");
 assert.equal(netPrice({ price: null, shareBps: 0 }), 0n, 'free');
 
