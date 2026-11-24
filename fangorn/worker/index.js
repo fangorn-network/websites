@@ -7,10 +7,11 @@
 //   GET    /api/repos?q=&publisher=&k=   → { stitch, repos }: repos by meaning, or newest first without q  (its /repos)
 //   POST   /mcp                          the registry as MCP tools: find, repo, read                        (its /mcp)
 //
-//   POST   /api/grants  { app, repos }   Authorization: <Privy access token>  → { token, address }   (from this site)
+//   POST   /api/grants  { app, repos, perDay? }  Authorization: <Privy access token>  → { token, address }   (from this site)
 //   DELETE /api/grants  { app }          Authorization: <Privy access token>  → {}                    (from this site)
-//   GET    /api/grant                    Authorization: Bearer <grant token>  → { address, app, repos } (from an app)
+//   GET    /api/grant                    Authorization: Bearer <grant token>  → { address, app, repos, perDay } (from an app)
 //   POST   /api/sign    { message }      Authorization: Bearer <grant token>  → { signature }          (from an app)
+//                       { messages }                                          → { signatures }         (up to 50, all or none)
 //
 // /api/sign takes an Update's message (publisher, repo, epoch, parent, diff, root, car; epoch as a decimal string),
 // checks it against the grant (worker/grants.js), and signs it as the person's embedded wallet through Privy,
@@ -21,7 +22,7 @@
 
 import { PrivyClient } from '@privy-io/node';
 import { BaseSepoliaConfig } from '@fangorn-network/sdk';
-import { grants, appOf, reposOf, updateFor } from './grants.js';
+import { grants, appOf, reposOf, perDayOf, updateFor, MAX_BATCH, PER_DAY as PER_DAY_DEFAULT } from './grants.js';
 
 const REGISTRY = 'https://registry-sepolia.fangorn.network';
 
@@ -49,24 +50,30 @@ async function api(req, env, path) {
   const store = grants(env.GRANTS), body = req.method === 'POST' || req.method === 'DELETE' ? await req.json().catch(() => ({})) : {};
   if (path === '/api/grants') {
     const privy = privyOf(env), who = await walletOf(privy, bearer(req));
-    if (req.method === 'POST') return json({ token: await store.issue(who, appOf(body.app), reposOf(body.repos)), address: who.address });
+    if (req.method === 'POST') return json({ token: await store.issue(who, appOf(body.app), reposOf(body.repos), perDayOf(body.perDay)), address: who.address });
     if (req.method === 'DELETE') { await store.revoke(who.user, appOf(body.app)); return json({}); }
   }
   if (path === '/api/grant' && req.method === 'GET') {
     const g = await store.of(bearer(req));
-    return g ? json({ address: g.address, app: g.app, repos: g.repos }) : json({ error: 'no such grant: connect again' }, 401);
+    return g ? json({ address: g.address, app: g.app, repos: g.repos, perDay: g.perDay ?? PER_DAY_DEFAULT }) : json({ error: 'no such grant: connect again' }, 401);
   }
+  // { message } → { signature }, or { messages: [...] } → { signatures: [...] } (up to MAX_BATCH, all or none): an app
+  // moving several repos in one transaction asks once.
   if (path === '/api/sign' && req.method === 'POST') {
     const token = bearer(req), g = await store.of(token);
     if (!g) return json({ error: 'no such grant: connect again' }, 401);
-    const typed = updateFor(g, body.message, BaseSepoliaConfig); // throws on anything the grant doesn't cover
+    const many = Array.isArray(body.messages), messages = many ? body.messages : [body.message];
+    if (!messages.length || messages.length > MAX_BATCH) return json({ error: `messages: 1 to ${MAX_BATCH}` }, 400);
+    const typed = messages.map((m) => updateFor(g, m, BaseSepoliaConfig)); // throws on anything the grant doesn't cover
     const privy = privyOf(env);
-    await store.spend(token, g);
-    const { signature } = await privy.client.wallets().ethereum().signTypedData(g.wallet, {
-      params: { typed_data: { domain: typed.domain, types: typed.types, primary_type: typed.primaryType, message: { ...typed.message, epoch: typed.message.epoch.toString() } } },
+    await store.spend(token, g, typed.length);
+    const sign = async (t) => (await privy.client.wallets().ethereum().signTypedData(g.wallet, {
+      params: { typed_data: { domain: t.domain, types: t.types, primary_type: t.primaryType, message: { ...t.message, epoch: t.message.epoch.toString() } } },
       authorization_context: { authorization_private_keys: [privy.key] },
-    });
-    return json({ signature });
+    })).signature;
+    const signatures = [];
+    for (let i = 0; i < typed.length; i += 5) signatures.push(...await Promise.all(typed.slice(i, i + 5).map(sign))); // 5 at a time, gentle on Privy
+    return json(many ? { signatures } : { signature: signatures[0] });
   }
   return json({ error: 'not found' }, 404);
 }
