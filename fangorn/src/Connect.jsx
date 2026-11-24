@@ -2,7 +2,9 @@ import { useState } from 'react';
 import styles from './Landing.module.css';
 import { useAuth } from './authContext';
 
-// #/connect?app=<url>&repos=<a,b>[&name=<shown name>][&mcp=<MCP url>]: let an app publish to some of your repos.
+// #/connect?app=<url>&repos=<a,lb-*>[&perDay=<n>][&name=<shown name>][&mcp=<MCP url>]: let an app publish to some of your repos.
+// A repo ending in * is a prefix (every repo of yours whose name starts with it); perDay is the most updates a day
+// the app may have signed (100 if it doesn't say).
 //
 // Any app links here; there's nothing to register. The first time, Fangorn becomes a signer on your embedded wallet
 // (one key, limited by policy to Fangorn Data updates). Then /api/grants gives this app a token covering only the
@@ -23,6 +25,8 @@ export default function Connect() {
   try { const u = new URL(p.get('app') ?? ''); if (/^https?:$/.test(u.protocol)) app = u.origin; } catch { /* shown below */ }
   const repos = (p.get('repos') ?? '').split(',').map((r) => r.trim()).filter(Boolean);
   const name = p.get('name') || app;
+  const perDay = p.get('perDay') || undefined;
+  const shownRepos = repos.map((r) => r.endsWith('*') ? `any repo starting with “${r.slice(0, -1)}”` : r).join(', ');
   let mcp = null;
   try { const u = new URL(p.get('mcp') ?? ''); if (u.origin === app) mcp = u.href; } catch { /* no MCP command then */ }
 
@@ -42,7 +46,7 @@ export default function Connect() {
   const connect = run(async () => {
     // Adding a signer the wallet already has fails; that's fine, it's there.
     await signers.add([{ signerId: SIGNER, policyIds: POLICY ? [POLICY] : [] }]).catch((e) => { if (!/already/i.test(e?.message ?? '')) throw e; });
-    return { token: (await call('POST', { app, repos })).token };
+    return { token: (await call('POST', { app, repos, perDay })).token };
   });
   const revoke = run(async () => { await call('DELETE', { app }); return { done: `${name} can no longer publish for you.` }; });
   const removeAll = run(async () => { await signers.removeAll(); return { done: 'Fangorn can no longer sign for your wallet, for any app.' }; });
@@ -71,9 +75,9 @@ export default function Connect() {
   else body = (
     <>
       <p className={styles.sectionSub}>
-        <b>{name}</b> <span style={{ opacity: 0.7 }}>({app})</span> wants to publish to {repos.length > 1 ? 'these repos' : 'this repo'} of
+        <b>{name}</b> <span style={{ opacity: 0.7 }}>({app})</span> wants to publish to {repos.length > 1 || repos[0]?.endsWith('*') ? 'these repos' : 'this repo'} of
         yours, signed by your wallet ({signers.address.slice(0, 6)}…{signers.address.slice(-4)}):{' '}
-        <b>{repos.join(', ')}</b>. It can't touch any other repo, spend anything, or sign anything else.
+        <b>{shownRepos}</b>, up to <b>{Number(perDay ?? 100).toLocaleString()}</b> updates a day. It can't touch any other repo, spend anything, or sign anything else.
       </p>
       {!state.token && <button className="appSplashBtn" onClick={connect} disabled={state.busy} type="button">{state.busy ? 'Connecting…' : `Allow ${name}`}</button>}
       {shown && (
@@ -82,7 +86,7 @@ export default function Connect() {
           <div className={styles.cmd}><pre>{shown}</pre></div>
           <p><button className="appSplashBtn" onClick={copy} type="button">{copied ? 'Copied' : 'Copy'}</button></p>
           <p className={styles.sectionSub}>
-            It's shown once. Keep it like a password: whoever has it can publish to {repos.join(', ')} as you.
+            It's shown once. Keep it like a password: whoever has it can publish to {shownRepos} as you.
             Allowing {name} again makes a new one, and the old one stops working.
           </p>
         </>

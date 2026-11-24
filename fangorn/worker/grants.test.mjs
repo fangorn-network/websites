@@ -5,7 +5,7 @@ import assert from 'node:assert';
 import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
 import { recoverTypedDataAddress } from 'viem';
 import { BaseSepoliaConfig } from '@fangorn-network/sdk/lib/config.js';
-import { grants, appOf, reposOf, updateFor, sha256, PER_DAY } from './grants.js';
+import { grants, appOf, reposOf, updateFor, sha256, PER_DAY, covers, perDayOf, MAX_PER_DAY } from './grants.js';
 
 const kv = new Map(), KV = { get: async (k) => kv.get(k) ?? null, put: async (k, v) => void kv.set(k, v), delete: async (k) => void kv.delete(k) };
 const store = grants(KV), alice = privateKeyToAccount(generatePrivateKey());
@@ -16,6 +16,16 @@ assert.throws(() => appOf('javascript:alert(1)'), /http/);
 assert.deepEqual(reposOf('arcade, notes,arcade'), ['arcade', 'notes']);
 assert.throws(() => reposOf(''), /repo/);
 assert.throws(() => reposOf(['../x']), /repo/);
+// Prefixes: an app that makes repos as it goes (one per stream) names them once.
+assert.deepEqual(reposOf('lb-*,notes'), ['lb-*', 'notes']);
+assert.throws(() => reposOf('*'), /repo/, 'no grant covers every repo');
+assert.throws(() => reposOf('lb*x'), /repo/, '* only at the end');
+assert.ok(covers(['lb-*'], 'lb-storms') && covers(['notes'], 'notes'));
+assert.ok(!covers(['lb-*'], 'lb') && !covers(['lb-*'], 'notes') && !covers(['lb-*'], 'lb-*') && !covers(['notes'], 'notes2'));
+assert.equal(perDayOf(undefined), PER_DAY);
+assert.equal(perDayOf('5000'), 5000);
+assert.throws(() => perDayOf(MAX_PER_DAY + 1), /perDay/);
+assert.throws(() => perDayOf(1.5), /perDay/);
 
 const first = await store.issue(who, 'https://store.example', ['arcade']);
 const token = await store.issue(who, 'https://store.example', ['arcade']);
@@ -42,4 +52,15 @@ assert.throws(() => updateFor(g, { ...message, epoch: '-1' }), /epoch/);
 
 for (let i = 0; i < PER_DAY; i++) await store.spend(token, await store.of(token));
 await assert.rejects(store.spend(token, await store.of(token)), /a day/);
+
+// A grant with its own cap, over a prefix, spent in batches.
+const streams = await store.issue(who, 'https://logbook.example', ['lb-*'], 120);
+const sg = await store.of(streams);
+assert.equal(sg.perDay, 120);
+assert.equal(updateFor(sg, { ...message, repo: 'lb-storms' }, BaseSepoliaConfig).message.repo, 'lb-storms');
+assert.throws(() => updateFor(sg, { ...message, repo: 'arcade' }, BaseSepoliaConfig), /doesn't cover/);
+await store.spend(streams, sg, 100);
+await assert.rejects(store.spend(streams, await store.of(streams), 21), /120 signatures a day/, 'a batch that would pass the cap is refused whole');
+await store.spend(streams, await store.of(streams), 20);
+await assert.rejects(store.spend(streams, await store.of(streams)), /a day/);
 console.log('ok: grants');
