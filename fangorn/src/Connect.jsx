@@ -2,7 +2,7 @@ import { useState } from 'react';
 import styles from './Landing.module.css';
 import { useAuth } from './authContext';
 
-// #/connect?app=<url>&repos=<a,lb-*>[&perDay=<n>][&name=<shown name>][&mcp=<MCP url>]: let an app publish to some of your repos.
+// #/connect?app=<url>&repos=<a,b,prefix*>[&perDay=<n>][&name=<shown name>][&mcp=<MCP url>]: let an app publish to some of your repos.
 // A repo ending in * is a prefix (every repo of yours whose name starts with it); perDay is the most updates a day
 // the app may have signed (100 if it doesn't say).
 //

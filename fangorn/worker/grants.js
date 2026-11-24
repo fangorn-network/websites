@@ -6,7 +6,7 @@
 // worker/index.js wires it to Privy and HTTP.
 //
 // A grant is per app (an app is an origin: an indexer/Worker), not per repo. Its repos are names or prefixes
-// (`lb-*`: every repo of theirs whose name starts with lb-), so an app that makes repos as it goes (one per stream)
+// ending in * (for example `lb-*`: every repo of theirs whose name starts with `lb-`), so an app that makes repos as it goes
 // needs no new grant for each. The person approves the list and a daily signature cap, both chosen by the app.
 //
 // KV:  grant:<sha256(token)>  → { address, wallet, user, app, repos, perDay, day, count }
@@ -30,10 +30,10 @@ export function appOf(url) {
   return u.origin;
 }
 
-/** The repos a grant may name: 1 to 10 repo names or prefixes (`lb-*`). */
+/** The repos a grant may name: 1 to 10 repo names or prefixes ending in * (e.g. `lb-*`). */
 export function reposOf(list) {
   const repos = [...new Set((Array.isArray(list) ? list : String(list ?? '').split(',')).map((r) => String(r).trim()).filter(Boolean))];
-  if (!repos.length || repos.length > 10 || !repos.every((r) => REPO.test(r))) throw new Error('repos: 1 to 10 repo names, or prefixes like lb-*');
+  if (!repos.length || repos.length > 10 || !repos.every((r) => REPO.test(r))) throw new Error('repos: 1 to 10 repo names, or prefixes ending in * (e.g. lb-*)');
   return repos;
 }
 
