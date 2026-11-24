@@ -7,7 +7,7 @@
 import { parseAbiItem } from 'viem';
 import { repoId } from '@fangorn-network/sdk/lib/contracts/data-registry/index.js';
 import { recordKey, subjectOf, WHOLE_REPO } from '@fangorn-network/sdk/lib/contracts/settlement-registry/index.js';
-import { NETWORK, publicClient, walletClientFor } from './fangorn.js';
+import { NETWORK, DEFAULT_NET, publicClient, walletClientFor } from './fangorn.js';
 import { blockTime, reader, readRepos, scan, toListing } from './account.js';
 
 // ponytail: the old explorer still quotes paid records (x402); the one thing left on it. Keep it running until
@@ -87,7 +87,7 @@ export async function readLibrary(wallet, address) {
   const found = new Map();
   const client = await reader(address);
   for (const publisher of new Set(publisherOf.values())) {
-    for (const { repo } of await readRepos(publisher)) {
+    for (const { repo } of await readRepos(publisher, [DEFAULT_NET])) { // purchases are testnet only
       const rid = repoId(repo);
       const whole = subjectOf(publisher, rid, WHOLE_REPO);
       if (subjects.includes(whole)) found.set(whole, { publisher, repo, id: null, title: repo });

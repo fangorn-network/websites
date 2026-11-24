@@ -60,11 +60,11 @@ importers:
   fangorn:
     dependencies:
       '@fangorn-network/sdk':
-        specifier: ^0.1.5
-        version: 0.1.5(bufferutil@4.1.0)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(utf-8-validate@5.0.10)(zod@3.25.76)
+        specifier: ^0.2.1
+        version: 0.2.1(bufferutil@4.1.0)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(utf-8-validate@5.0.10)(zod@3.25.76)
       '@fangorn-network/westmarch':
         specifier: ^0.1.1
-        version: 0.1.3(@fangorn-network/sdk@0.1.5(bufferutil@4.1.0)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(utf-8-validate@5.0.10)(zod@3.25.76))(@noble/curves@1.9.7)(@semaphore-protocol/core@4.14.5(@types/snarkjs@0.7.9)(bufferutil@4.1.0)(commander@15.0.0)(utf-8-validate@5.0.10))(viem@2.57.16(bufferutil@4.1.0)(utf-8-validate@5.0.10)(zod@3.25.76))
+        version: 0.1.3(@fangorn-network/sdk@0.2.1(bufferutil@4.1.0)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(utf-8-validate@5.0.10)(zod@3.25.76))(@noble/curves@1.9.7)(@semaphore-protocol/core@4.14.5(@types/snarkjs@0.7.9)(bufferutil@4.1.0)(commander@15.0.0)(utf-8-validate@5.0.10))(viem@2.57.16(bufferutil@4.1.0)(utf-8-validate@5.0.10)(zod@3.25.76))
       '@privy-io/node':
         specifier: ^0.39.0
         version: 0.39.0(@solana/kit@5.5.1(bufferutil@4.1.0)(utf-8-validate@5.0.10))(viem@2.57.16(bufferutil@4.1.0)(utf-8-validate@5.0.10)(zod@3.25.76))
@@ -1516,8 +1516,8 @@ packages:
   '@fangorn-network/markov@0.1.0':
     resolution: {integrity: sha512-iPnHHHXZ1d8PaE6dhhgkA4Fe4zdk0FJltGmjk5JyYi1CVBLRfaIpBFyaYs3P69mpn+Nz4Jf8Bv8b2lSJ00wKOg==}
 
-  '@fangorn-network/sdk@0.1.5':
-    resolution: {integrity: sha512-F+n8E4UTKwdbBriabcGYxythzQJdwFESpzaLBDlxF20sZ2fZ1EsfWhpZ8hStljaz4iUn5tIrRCct6VDwhxLdHQ==}
+  '@fangorn-network/sdk@0.2.1':
+    resolution: {integrity: sha512-rZz34fq8OEMFD4SxMCTrNSiylcSgCt8JcTSJhKTdCIlPtlvG+PCBQODorFLmHhuqMgYG0hrli6RpbGyuMXJWjw==}
     engines: {node: '>=20.19.0'}
     hasBin: true
 
@@ -1676,6 +1676,10 @@ packages:
 
   '@ipld/dag-cbor@10.0.1':
     resolution: {integrity: sha512-nF07iiZPqduSXyMxc0jGANArRHFa9hjMQpQlgLOV2O/3xI1CNb5sXhvbmigbMiz5owSGi0Oq10VtauupMojuiw==}
+
+  '@ipld/dag-pb@4.1.5':
+    resolution: {integrity: sha512-w4PZ2yPqvNmlAir7/2hsCRMqny1EY5jj26iZcSgxREJexmbAc2FI21jp26MqiNdfgAxvkCnf2N/TJI18GaDNwA==}
+    engines: {node: '>=16.0.0', npm: '>=7.0.0'}
 
   '@ipld/dag-pb@4.1.7':
     resolution: {integrity: sha512-/i/13trFihjWfDyXlylRwhuYjtzYjvOFw0vlRjYGnZuv7d7MOgA2lV/vRuL5RfeUajM03aZfFLdq4S7cTbbTRg==}
@@ -5942,6 +5946,9 @@ packages:
     resolution: {integrity: sha512-aq+t5NAc+cS6rZQQVWC2x98CPqGtKKTMDd4Gaodv0wShnItdKg/51djkGJ1hqH+Oy0ivDftCbSLCQob8zso01w==}
     engines: {node: '>= 10'}
 
+  ipfs-unixfs@11.2.5:
+    resolution: {integrity: sha512-uasYJ0GLPbViaTFsOLnL9YPjX5VmhnqtWRriogAHOe4ApmIi9VAOFBzgDHsUW2ub4pEa/EysbtWk126g2vkU/g==}
+
   iron-webcrypto@1.2.1:
     resolution: {integrity: sha512-feOM6FaSr6rEABp/eDfVseKyTMDt+KGpeB35SkVn9Tyn0CqvVsY3EwI0v5i8nMHyJnzCIQf7nsy3p41TPkJZhg==}
 
@@ -7837,6 +7844,9 @@ packages:
     resolution: {integrity: sha512-/FPD0nUc9jH6rfFjji9IBqOz4pcSE3CsT1m7Ep6Mdb0LxSUMj8hgl6GomOvZzpNpAqqGaXA0P3VSrZLFzIhQrw==}
     engines: {node: '>=12.0.0'}
 
+  protons-runtime@5.6.0:
+    resolution: {integrity: sha512-/Kde+sB9DsMFrddJT/UZWe6XqvL7SL5dbag/DBCElFKhkwDj7XKt53S+mzLyaDP5OqS0wXjV5SA572uWDaT0Hg==}
+
   proxy-addr@2.0.8:
     resolution: {integrity: sha512-5nnx0yGyVUcY6t9RnWcARWtwT9F1D8O9rt08htPvnd49W1IgZtmLkhu9WfMzQj1cFxjHIO6connUNVW5k7AVyQ==}
     engines: {node: '>= 0.10'}
@@ -8822,11 +8832,20 @@ packages:
   ufo@1.6.4:
     resolution: {integrity: sha512-JFNbkD1Svwe0KvGi8GOeLcP4kAWQ609twvCdcHxq1oSL8svv39ZuSvajcD8B+5D0eL4+s1Is2D/O6KN3qcTeRA==}
 
+  uint8-varint@2.0.5:
+    resolution: {integrity: sha512-jeFLbL/x30wBRnWjKE1qVBXeumG46r7XmYkpis955lTQ+blccGKFrOsSMHlxePwYB1pI7L8YPHz1t4jLxEs3nA==}
+
+  uint8arraylist@2.4.9:
+    resolution: {integrity: sha512-KxWjyEFzchzik3aoQlK66oaoxIReoMo5bQRm1fcjBUZvE8xv/tyR3CTKhjh6K/faV8VaF6hd5pjr45CzbwuwkA==}
+
   uint8arrays@3.1.0:
     resolution: {integrity: sha512-ei5rfKtoRO8OyOIor2Rz5fhzjThwIHJZ3uyDPnDHTXbP0aMQ1RN/6AI5B5d9dBxJOU+BvOAk7ZQ1xphsX8Lrog==}
 
   uint8arrays@3.1.1:
     resolution: {integrity: sha512-+QJa8QRnbdXVpHYjLoTpJIdCTiw9Ir62nocClWuXIq2JIh4Uta0cQsTSpFL678p2CN8B+XSApwcU+pQEqVpKWg==}
+
+  uint8arrays@5.1.1:
+    resolution: {integrity: sha512-9muQwa4wZG4dKi9gMAIBtnk2Pw87SRpvWTH6lOGm19V2Uqxr4uomUf2PGqPnWc+qs06sN8owUU4jfcoWOcfwVQ==}
 
   uncrypto@0.1.3:
     resolution: {integrity: sha512-Ql87qFHB3s/De2ClA9e0gsnS6zXG27SkTiSJwjCc9MebbfapQfuPzumMIUMi38ezPZVNFcHI9sUIepeQfw8J8Q==}
@@ -12282,17 +12301,19 @@ snapshots:
 
   '@fangorn-network/markov@0.1.0': {}
 
-  '@fangorn-network/sdk@0.1.5(bufferutil@4.1.0)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(utf-8-validate@5.0.10)(zod@3.25.76)':
+  '@fangorn-network/sdk@0.2.1(bufferutil@4.1.0)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(utf-8-validate@5.0.10)(zod@3.25.76)':
     dependencies:
       '@clack/prompts': 1.7.0
       '@ipld/car': 5.4.6
       '@ipld/dag-cbor': 10.0.1
+      '@ipld/dag-pb': 4.1.5
       '@ipld/unixfs': 3.0.0
       '@noble/ciphers': 1.3.0
       '@noble/curves': 1.9.7
       '@noble/hashes': 2.4.0
       commander: 14.0.3
       dotenv: 17.4.2
+      ipfs-unixfs: 11.2.5
       multiformats: 14.0.4
       pinata: 2.5.6(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
       viem: 2.57.16(bufferutil@4.1.0)(utf-8-validate@5.0.10)(zod@3.25.76)
@@ -12305,10 +12326,10 @@ snapshots:
       - utf-8-validate
       - zod
 
-  '@fangorn-network/westmarch@0.1.3(@fangorn-network/sdk@0.1.5(bufferutil@4.1.0)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(utf-8-validate@5.0.10)(zod@3.25.76))(@noble/curves@1.9.7)(@semaphore-protocol/core@4.14.5(@types/snarkjs@0.7.9)(bufferutil@4.1.0)(commander@15.0.0)(utf-8-validate@5.0.10))(viem@2.57.16(bufferutil@4.1.0)(utf-8-validate@5.0.10)(zod@3.25.76))':
+  '@fangorn-network/westmarch@0.1.3(@fangorn-network/sdk@0.2.1(bufferutil@4.1.0)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(utf-8-validate@5.0.10)(zod@3.25.76))(@noble/curves@1.9.7)(@semaphore-protocol/core@4.14.5(@types/snarkjs@0.7.9)(bufferutil@4.1.0)(commander@15.0.0)(utf-8-validate@5.0.10))(viem@2.57.16(bufferutil@4.1.0)(utf-8-validate@5.0.10)(zod@3.25.76))':
     dependencies:
       '@fangorn-network/markov': 0.1.0
-      '@fangorn-network/sdk': 0.1.5(bufferutil@4.1.0)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(utf-8-validate@5.0.10)(zod@3.25.76)
+      '@fangorn-network/sdk': 0.2.1(bufferutil@4.1.0)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(utf-8-validate@5.0.10)(zod@3.25.76)
       '@noble/curves': 1.9.7
       viem: 2.57.16(bufferutil@4.1.0)(utf-8-validate@5.0.10)(zod@3.25.76)
     optionalDependencies:
@@ -12483,6 +12504,10 @@ snapshots:
     dependencies:
       cborg: 5.1.7
       multiformats: 14.0.4
+
+  '@ipld/dag-pb@4.1.5':
+    dependencies:
+      multiformats: 13.4.2
 
   '@ipld/dag-pb@4.1.7':
     dependencies:
@@ -18705,6 +18730,11 @@ snapshots:
 
   ipaddr.js@2.5.0: {}
 
+  ipfs-unixfs@11.2.5:
+    dependencies:
+      protons-runtime: 5.6.0
+      uint8arraylist: 2.4.9
+
   iron-webcrypto@1.2.1: {}
 
   is-alphabetical@2.0.1: {}
@@ -21060,6 +21090,12 @@ snapshots:
       '@types/node': 26.1.1
       long: 5.3.2
 
+  protons-runtime@5.6.0:
+    dependencies:
+      uint8-varint: 2.0.5
+      uint8arraylist: 2.4.9
+      uint8arrays: 5.1.1
+
   proxy-addr@2.0.8:
     dependencies:
       forwarded: 0.2.0
@@ -22191,6 +22227,15 @@ snapshots:
 
   ufo@1.6.4: {}
 
+  uint8-varint@2.0.5:
+    dependencies:
+      uint8arraylist: 2.4.9
+      uint8arrays: 5.1.1
+
+  uint8arraylist@2.4.9:
+    dependencies:
+      uint8arrays: 5.1.1
+
   uint8arrays@3.1.0:
     dependencies:
       multiformats: 9.9.0
@@ -22198,6 +22243,10 @@ snapshots:
   uint8arrays@3.1.1:
     dependencies:
       multiformats: 9.9.0
+
+  uint8arrays@5.1.1:
+    dependencies:
+      multiformats: 13.4.2
 
   uncrypto@0.1.3: {}
 

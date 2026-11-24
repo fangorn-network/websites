@@ -2,9 +2,9 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { formatEther, formatUnits, parseEther } from 'viem';
 import styles from './Home.module.css';
 import { useAuth } from './authContext';
-import { useBalances } from './fangorn';
+import { useBalances, NETWORKS, DEFAULT_NET, isNet, sells } from './fangorn';
 import { truncate, explorer, txExplorer, formatBytes } from './format';
-import { usePublisher, readFiles, recordId, repoLink, readRepoPage, readBuyers, netPrice, blockTime, EXPLORE_URL } from './account';
+import { usePublisher, readFiles, recordId, repoLink, repoHref, readRepoPage, readBuyers, netPrice, EXPLORE_URL } from './account';
 import { buy, readLibrary, hasIdentity } from './library';
 import { Fields, download } from './RepoPage';
 
@@ -163,15 +163,18 @@ function FaucetLinks({ onRefresh }) {
 const usdc = (units) => `${Number(formatUnits(units, 6)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 6 })} USDC`;
 const shortDate = (at) => (at ? new Date(at * 1000).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : '—');
 
-function WalletColumn({ wallet }) {
+const ethAmount = (wei) => `${Number(formatEther(wei)).toFixed(4)} ETH`;
+
+// The wallet on the network the site shows (one address on every chain).
+function WalletColumn({ wallet, net }) {
   return (
-    <Column title="Wallet" state="stateGood" stateLabel="Base Sepolia">
+    <Column title="Wallet" state="stateGood" stateLabel={NETWORKS[net].chain.name}>
       <Field label="Address">
         <div className={styles.inlineValue}>
           <span className={styles.fieldValueMono}>{truncate(wallet, 8, 6)}</span>
           <CopyButton text={wallet} className={styles.ghostBtnSm} />
         </div>
-        <a className={styles.resLink} href={explorer(wallet)} target="_blank" rel="noreferrer">
+        <a className={styles.resLink} href={explorer(wallet, net)} target="_blank" rel="noreferrer">
           View on Basescan <span className={styles.resArrow}>↗</span>
         </a>
       </Field>
@@ -179,9 +182,17 @@ function WalletColumn({ wallet }) {
   );
 }
 
-// What the wallet holds. A buyer pays no gas (Barliman sends the transactions), so only a
-// publisher sees ETH and the low-gas warning.
-function BalanceColumn({ balances, onFund, funding, refreshBalances, gas }) {
+// What the wallet holds on the network the site shows. A buyer pays no gas (Barliman sends the
+// transactions), so only a publisher sees ETH and the low-gas warning. Mainnet is read-only for
+// now: its ETH, and nothing to fund (the site spends nothing there yet).
+function BalanceColumn({ net, balances, onFund, funding, refreshBalances, gas }) {
+  if (net !== DEFAULT_NET) {
+    return (
+      <Column title="Balance" state={balances ? 'stateGood' : 'statePending'} stateLabel={balances ? 'ETH' : 'Loading'}>
+        <div className={styles.bigValue}>{balances ? ethAmount(balances.eth) : <Skeleton width="8em" />}</div>
+      </Column>
+    );
+  }
   // Don't call it low until the balances actually land: an orange dot on a
   // still-loading wallet reads as a problem that isn't there.
   const low = gas && balances && balances.eth < LOW_ETH;
@@ -194,7 +205,7 @@ function BalanceColumn({ balances, onFund, funding, refreshBalances, gas }) {
       <div className={styles.bigValue}>{balances ? usdc(balances.usdc) : <Skeleton width="8em" />}</div>
       {gas && (
         <div className={styles.fieldValue}>
-          {balances ? `${Number(formatEther(balances.eth)).toFixed(4)} ETH for gas` : <Skeleton width="6em" />}
+          {balances ? `${ethAmount(balances.eth)} for gas` : <Skeleton width="6em" />}
         </div>
       )}
       <div className={styles.btnRow}>
@@ -212,12 +223,12 @@ function BalanceColumn({ balances, onFund, funding, refreshBalances, gas }) {
 
 // Net earnings a week, the last twelve, as bars on a shared baseline.
 function WeeklyBars({ weekly }) {
-  const max = weekly.reduce((a, b) => (b > a ? b : a), 0n);
+  const max = Math.max(0, ...weekly);
   return (
     <figure className={styles.barsFig} aria-label="Earnings a week, the last 12 weeks">
       <div className={styles.bars}>
         {weekly.map((w, i) => (
-          <div key={i} className={styles.bar} style={{ height: `${max ? Number((w * 100n) / max) : 0}%` }} title={`${['This week', 'Last week'][weekly.length - 1 - i] ?? `${weekly.length - 1 - i} weeks ago`}: ${usdc(w)}`} />
+          <div key={i} className={styles.bar} style={{ height: `${max ? (w * 100) / max : 0}%` }} title={`${['This week', 'Last week'][weekly.length - 1 - i] ?? `${weekly.length - 1 - i} weeks ago`}: ${usdc(BigInt(w))}`} />
         ))}
       </div>
       <figcaption className={styles.barsAxis}><span>12 weeks ago</span><span>This week</span></figcaption>
@@ -256,6 +267,11 @@ function SpentColumn({ items }) {
 
 // A sortable table whose rows open something. Columns: { key, label, render, sort?, num?, hideSm? }.
 // Rows are keyboard-reachable: Enter or Space opens one, like a click.
+// ponytail: a table draws its first SHOWN rows (a repo can hold 50,000 records, and drawing them
+// all froze the tab); sorting and the filter still reach every row. Page or virtualize if
+// scrolling through all of them matters.
+const SHOWN = 200;
+
 function DataTable({ label, columns, rows, rowKey, onOpen, empty }) {
   const [sort, setSort] = useState(null); // { key, dir }
   const col = columns.find((c) => c.key === sort?.key);
@@ -286,7 +302,7 @@ function DataTable({ label, columns, rows, rowKey, onOpen, empty }) {
           </tr>
         </thead>
         <tbody>
-          {sorted.map((r) => (
+          {sorted.slice(0, SHOWN).map((r) => (
             <tr
               key={rowKey(r)}
               tabIndex={0}
@@ -299,6 +315,7 @@ function DataTable({ label, columns, rows, rowKey, onOpen, empty }) {
         </tbody>
       </table>
       {!rows.length && empty && <div className={styles.tableEmpty}>{empty}</div>}
+      {rows.length > SHOWN && <div className={styles.tableEmpty}>Showing {SHOWN} of {rows.length.toLocaleString()}. Filter or sort to find the rest.</div>}
     </div>
   );
 }
@@ -336,7 +353,6 @@ function Facts({ items }) {
 // ── Buying ──────────────────────────────────────────────────────────────────
 
 const keyOf = (it) => `${it.publisher}/${it.repo}/${it.id}`;
-const repoHref = (publisher, repo) => `#/data/${publisher}/${encodeURIComponent(repo)}`;
 
 // One purchase, opened. Reopening pays nothing: buyRecord sees the reader can already read.
 // `opened` is kept by the tab, so closing and reopening the drawer doesn't fetch again.
@@ -403,8 +419,8 @@ function BuyingTab({ wallet, balances, onFund, funding, refreshBalances }) {
   return (
     <>
       <div className={styles.accountPanel}>
-        <WalletColumn wallet={wallet} />
-        <BalanceColumn balances={balances} onFund={onFund} funding={funding} refreshBalances={refreshBalances} />
+        <WalletColumn wallet={wallet} net={DEFAULT_NET} />
+        <BalanceColumn net={DEFAULT_NET} balances={balances} onFund={onFund} funding={funding} refreshBalances={refreshBalances} />
         <SpentColumn items={items} />
       </div>
 
@@ -454,29 +470,31 @@ function BuyingTab({ wallet, balances, onFund, funding, refreshBalances }) {
 
 // ── Publishing ──────────────────────────────────────────────────────────────
 
-const dataHref = (repo) => `#/account/data${repo ? `/${encodeURIComponent(repo)}` : ''}`;
+// #/account/data/<net>/<repo>: one of your repos, opened. Bare: all of them.
+const dataHref = (r) => `#/account/data${r ? `/${r.net}/${encodeURIComponent(r.repo)}` : ''}`;
 
-// Whether Fangorn lists a repo yet, and whether it's an app.
+// Whether Fangorn lists it yet (on a network Fangorn indexes), and whether it's an app.
 function RepoBadges({ repo }) {
   return (
     <>
       {repo.app && <span className={styles.badge} title={repo.app.card}>App{repo.app.name ? `: ${repo.app.name}` : ''}</span>}
-      <span className={repo.listing ? styles.badge : styles.badgeWarn} title={repo.listing ? undefined : 'New data is listed within a minute or two.'}>
-        {repo.listing ? 'Listed' : 'Not listed yet'}
-      </span>
+      {repo.listing !== undefined && (
+        <span className={repo.listing ? styles.badge : styles.badgeWarn} title={repo.listing ? undefined : 'New data is listed within a minute or two.'}>
+          {repo.listing ? 'Listed' : 'Not listed yet'}
+        </span>
+      )}
     </>
   );
 }
 
-// Every repo, and whether it's listed. Sales are per record, inside a repo.
-function RepoTable({ repos, earnings }) {
-  const updated = (r) => (earnings?.head ? blockTime(earnings.head, r.block) : null);
+// Every repo on the network the site shows, and whether it's listed. Sales are per record, inside a repo.
+function RepoTable({ repos }) {
   const columns = [
     { key: 'repo', label: 'Repo', sort: (r) => r.repo, render: (r) => <span className={styles.cellName}>{r.repo}</span> },
     { key: 'status', label: 'Status', hideSm: true, render: (r) => <span className={styles.cellBadges}><RepoBadges repo={r} /></span> },
-    { key: 'updated', label: 'Updated', num: true, sort: (r) => r.block, render: (r) => shortDate(updated(r)) },
+    { key: 'updated', label: 'Updated', num: true, sort: (r) => r.updated, render: (r) => shortDate(r.updated) },
   ];
-  return <DataTable label="Your repos" columns={columns} rows={repos} rowKey={(r) => r.repo} onOpen={(r) => { location.hash = dataHref(r.repo); }} />;
+  return <DataTable label="Your repos" columns={columns} rows={repos} rowKey={(r) => `${r.net}/${r.repo}`} onOpen={(r) => { location.hash = dataHref(r); }} />;
 }
 
 // A record's buyers and what they paid it, or a stand-in while the registry answers.
@@ -484,21 +502,23 @@ const buyersCell = (r, pick) => (r.buyers === undefined ? <Skeleton width="3em" 
 const earnedOf = (r) => BigInt(r.buyers ?? 0) * netPrice(r);
 
 // One record in the drawer: what it shows, what it sells for, how many bought it.
-function RecordDrawer({ record, address, repo, onClose }) {
+function RecordDrawer({ record, address, repo, net, onClose }) {
   return (
     <Modal open={Boolean(record)} onClose={onClose} title={record?.title ?? ''} side>
       {record && <>
         <Facts items={[
-          ['Price', record.price != null ? usdc(record.price) : 'Free'],
-          ['Buyers', buyersCell(record, (r) => r.buyers.toLocaleString())],
-          ['Earned', buyersCell(record, (r) => usdc(earnedOf(r)))],
+          ...(sells(net) ? [
+            ['Price', record.price != null ? usdc(record.price) : 'Free'],
+            ['Buyers', buyersCell(record, (r) => r.buyers.toLocaleString())],
+            ['Earned', buyersCell(record, (r) => usdc(earnedOf(r)))],
+          ] : []),
           ['Type', record.type],
         ]} />
         <div className={styles.drawerHead}>Fields</div>
         <Fields fields={record.fields} sealed={record.sealed} />
         <p className={`${styles.colText} ${styles.drawerFoot}`}>
           Id <span className={styles.fieldValueMono}>{record.id}</span> ·{' '}
-          <a className={styles.resLink} href={`#/data/${address}/${encodeURIComponent(repo)}`}>Its public page</a>
+          <a className={styles.resLink} href={repoHref(address, repo, net)}>Its public page</a>
         </p>
       </>}
     </Modal>
@@ -506,20 +526,24 @@ function RecordDrawer({ record, address, repo, onClose }) {
 }
 
 // One repo, opened: its records, and how many bought each. A record's buyers are its group in
-// the SettlementRegistry, so a count is a read, not a scan.
+// the SettlementRegistry, so a count is a read, not a scan. A network with no SettlementRegistry
+// (mainnet) shows the records alone, and takes no publishes from here.
 function RepoView({ repo, address, onAdd }) {
+  const selling = sells(repo.net);
   const [records, setRecords] = useState(undefined); // undefined loading, null failed, [...]
   const [buyers, setBuyers] = useState(undefined); // undefined loading, null failed, Map id → count
   const [q, setQ] = useState('');
   const [selected, setSelected] = useState(null);
 
-  // Re-read when the repo moves (a publish adds records).
+  // Re-read when the repo moves (a publish adds records): its head changes.
   useEffect(() => {
     let cancelled = false;
-    readRepoPage(address, repo.repo).then((p) => {
+    readRepoPage(address, repo.repo, repo.net).then((p) => {
       if (cancelled) return;
       setRecords(p.records);
-      return readBuyers(address, repo.repo, p.records.map((r) => r.id)).then((b) => !cancelled && setBuyers(b), (err) => {
+      if (!sells(repo.net)) return;
+      // Only a priced record can have buyers: free ones are 0 without asking the chain.
+      return readBuyers(address, repo.repo, p.records.filter((r) => r.price != null).map((r) => r.id)).then((b) => !cancelled && setBuyers(b), (err) => {
         console.warn('Buyer counts failed:', err);
         if (!cancelled) setBuyers(null);
       });
@@ -528,10 +552,10 @@ function RepoView({ repo, address, onAdd }) {
       if (!cancelled) setRecords(null);
     });
     return () => { cancelled = true; };
-  }, [address, repo.repo, repo.block]);
+  }, [address, repo.repo, repo.net, repo.head]);
 
-  const rows = (records ?? []).map((r) => ({ ...r, buyers: buyers === undefined ? undefined : buyers?.get(r.id) ?? null }));
-  const total = buyers ? rows.reduce((t, r) => ({ n: t.n + (r.buyers ?? 0), earned: t.earned + earnedOf(r) }), { n: 0, earned: 0n }) : null;
+  const rows = (records ?? []).map((r) => ({ ...r, buyers: r.price == null ? 0 : buyers === undefined ? undefined : buyers?.get(r.id) ?? null }));
+  const total = selling && buyers ? rows.reduce((t, r) => ({ n: t.n + (r.buyers ?? 0), earned: t.earned + earnedOf(r) }), { n: 0, earned: 0n }) : null;
   const columns = [
     { key: 'title', label: 'Record', sort: (r) => r.title.toLowerCase(), render: (r) => <span className={styles.cellName}>{r.title}</span> },
     { key: 'type', label: 'Type', hideSm: true, sort: (r) => r.type, render: (r) => <span className={styles.cellSub}>{r.type}</span> },
@@ -539,7 +563,7 @@ function RepoView({ repo, address, onAdd }) {
     { key: 'price', label: 'Price', num: true, sort: (r) => r.price ?? -1n, render: (r) => (r.price != null ? usdc(r.price) : 'Free') },
     { key: 'buyers', label: 'Buyers', num: true, sort: (r) => r.buyers ?? -1, render: (r) => buyersCell(r, (x) => x.buyers.toLocaleString()) },
     { key: 'earned', label: 'Earned', num: true, sort: earnedOf, render: (r) => buyersCell(r, (x) => usdc(earnedOf(x))) },
-  ];
+  ].filter((c) => selling || !['price', 'buyers', 'earned'].includes(c.key));
   return (
     <>
       <div className={styles.toolbar}>
@@ -549,9 +573,9 @@ function RepoView({ repo, address, onAdd }) {
         </div>
         <span className={styles.cardLinks}>
           {repo.app?.site && <a className={styles.resLink} href={repo.app.site} target="_blank" rel="noreferrer">Site <span className={styles.resArrow}>↗</span></a>}
-          <a className={styles.resLink} href={`#/data/${address}/${encodeURIComponent(repo.repo)}`}>Public page</a>
-          <CopyButton text={repoLink(address, repo.repo)} label="Copy link" className={styles.ghostBtnSm} />
-          <button className={styles.ghostBtnSm} type="button" onClick={onAdd}>+ Add files</button>
+          <a className={styles.resLink} href={repoHref(address, repo.repo, repo.net)}>Public page</a>
+          <CopyButton text={repoLink(address, repo.repo, repo.net)} label="Copy link" className={styles.ghostBtnSm} />
+          {repo.net === DEFAULT_NET && <button className={styles.ghostBtnSm} type="button" onClick={onAdd}>+ Add files</button>}
         </span>
       </div>
       {records === undefined && <div className={styles.pending}>Reading {repo.repo}…</div>}
@@ -567,25 +591,31 @@ function RepoView({ repo, address, onAdd }) {
           empty={records.length ? 'Nothing matches.' : 'No records yet.'}
         />
       </>}
-      <RecordDrawer record={selected && rows.find((r) => r.id === selected.id)} address={address} repo={repo.repo} onClose={() => setSelected(null)} />
+      <RecordDrawer record={selected && rows.find((r) => r.id === selected.id)} address={address} repo={repo.repo} net={repo.net} onClose={() => setSelected(null)} />
     </>
   );
 }
 
-function PublishingTab({ wallet, path, balances, onFund, funding, refreshBalances, publisher, onPublish }) {
+function PublishingTab({ wallet, net, path, balances, onFund, funding, refreshBalances, publisher, onPublish }) {
   const { repos, earnings, error } = publisher;
+  // ponytail: publishing from the site is testnet only, until mainnet has a hosted upload worker.
+  const canPublish = net === DEFAULT_NET;
   // null when closed, else { repo }: the repo to add to, or null for the default.
   const [publishing, setPublishing] = useState(null);
-  const open = path[1] != null ? decodeURIComponent(path.slice(1).join('/')) : null;
+  // #/account/data/<net>/<repo> (App switches the site to <net>); links from before networks
+  // (#/account/data/<repo>) are testnet ones.
+  const withNet = isNet(path[1]) && path[2] != null;
+  const rest = path.slice(withNet ? 2 : 1);
+  const open = rest.length ? decodeURIComponent(rest.join('/')) : null;
   const repo = open != null ? repos?.find((r) => r.repo === open) : null;
   const { exportKey } = useAuth();
 
   return (
     <>
       <div className={styles.accountPanel}>
-        <WalletColumn wallet={wallet} />
-        <BalanceColumn balances={balances} onFund={onFund} funding={funding} refreshBalances={refreshBalances} gas />
-        <EarnedColumn earnings={earnings} />
+        <WalletColumn wallet={wallet} net={net} />
+        <BalanceColumn net={net} balances={balances} onFund={onFund} funding={funding} refreshBalances={refreshBalances} gas />
+        {sells(net) && <EarnedColumn earnings={earnings} />}
       </div>
 
       <section className={styles.section}>
@@ -594,7 +624,7 @@ function PublishingTab({ wallet, path, balances, onFund, funding, refreshBalance
             {open != null ? <><a href={dataHref()}>Your data</a><span aria-hidden="true">/</span><span aria-current="page">{open}</span></>
               : <h2 className={styles.h2}>Your data</h2>}
           </nav>
-          {open == null && repos?.length > 0 && (
+          {canPublish && open == null && repos?.length > 0 && (
             <button className={styles.ghostBtnSm} type="button" onClick={() => setPublishing({ repo: null })}>+ Publish data</button>
           )}
         </div>
@@ -604,16 +634,22 @@ function PublishingTab({ wallet, path, balances, onFund, funding, refreshBalance
             {[0, 1].map((i) => <div key={i} className={styles.rowLink}><Skeleton width="9em" /><Skeleton width="6em" /><Skeleton width="12em" /></div>)}
           </div>
         )}
-        {open == null && repos?.length === 0 && (
+        {!canPublish && open == null && repos && (
+          <div className={styles.pending}>
+            Publishing to mainnet from this site is coming soon. Until then, publish with the CLI and your own
+            Pinata JWT (below){repos.length ? '' : ': your mainnet repos show up here'}.
+          </div>
+        )}
+        {canPublish && open == null && repos?.length === 0 && (
           <button className={`${styles.card} ${styles.cardNew}`} type="button" onClick={() => setPublishing({ repo: null })}>
             <span className={styles.cardPlus} aria-hidden="true">+</span>
             <span className={styles.cardTitle}>Publish data</span>
             <span className={styles.cardBody}>Any files. People and agents find them within minutes.</span>
           </button>
         )}
-        {open == null && repos?.length > 0 && <RepoTable repos={repos} earnings={earnings} />}
+        {open == null && repos?.length > 0 && <RepoTable repos={repos} />}
         {open != null && repos && !repo && <div className={styles.pending}>You have no repo called {open}.</div>}
-        {repo && <RepoView key={repo.repo} repo={repo} address={wallet} onAdd={() => setPublishing({ repo: repo.repo })} />}
+        {repo && <RepoView key={`${repo.net}/${repo.repo}`} repo={repo} address={wallet} onAdd={() => setPublishing({ repo: repo.repo })} />}
         {publishing && <PublishModal
           key={publishing.repo ?? ''}
           open
@@ -626,7 +662,7 @@ function PublishingTab({ wallet, path, balances, onFund, funding, refreshBalance
       </section>
 
       {open == null && <>
-        <section className={styles.section}>
+        {canPublish && <section className={styles.section}>
           <h2 className={styles.h2}>How people find it</h2>
           <p className={styles.colText}>
             Everything you publish shows up in <a className={styles.resLink} href={EXPLORE_URL}>Explore</a>, and
@@ -637,7 +673,7 @@ function PublishingTab({ wallet, path, balances, onFund, funding, refreshBalance
             Each repo also has its own public page: share its link to send someone straight to your
             data's storefront.
           </p>
-        </section>
+        </section>}
 
         <details className={styles.section}>
           <summary className={styles.h2}>Publish from the command line</summary>
@@ -650,8 +686,9 @@ function PublishingTab({ wallet, path, balances, onFund, funding, refreshBalance
               <div className={styles.cardTitle}>Configure it with this wallet's key</div>
               <Cmd text="fangorn init" />
               <p className={styles.colText}>
-                Pick <b>Base Sepolia</b>, then paste your private key. Anyone with it controls your
-                wallet: paste it only into your own terminal, never into a chat, a website or an email.
+                Pick <b>{canPublish ? 'Base Sepolia' : 'Base (mainnet)'}</b>, then paste your private key
+                {canPublish ? '' : ' and your own Pinata JWT (mainnet has no hosted storage yet), and hold some Base ETH for gas'}. Anyone
+                with the key controls your wallet: paste it only into your own terminal, never into a chat, a website or an email.
               </p>
               <CopyKey exportKey={exportKey} />
             </li>
@@ -933,15 +970,15 @@ const TABS = [['library', 'Buying'], ['data', 'Publishing']];
 const TAB_KEY = 'fangorn-account-tab';
 const savedTab = () => { try { return localStorage.getItem(TAB_KEY); } catch { return null; } };
 
-export default function Home({ path = [] }) {
+export default function Home({ path = [], net = DEFAULT_NET }) {
   const { user, fundWallet } = useAuth();
-  const { balances, refresh: refreshBalances } = useBalances();
+  const { balances, refresh: refreshBalances } = useBalances(net);
   const [funding, setFunding] = useState(false);
 
   const { name } = readIdentity(user);
   const wallet = user?.wallet?.address;
   // ponytail: read for buyers too, since the default tab hangs on whether there are repos.
-  const publisher = usePublisher(wallet);
+  const publisher = usePublisher(wallet, net);
   const { repos } = publisher;
 
   const asked = TABS.some(([k]) => k === path[0]) ? path[0] : null;
@@ -978,7 +1015,8 @@ export default function Home({ path = [] }) {
           <span className={styles.eyebrow}>Account</span>
           <h1 className={styles.h1}>Welcome, {name}.</h1>
           <p className={styles.sub}>
-            {tab === 'library' ? 'Data you buy is paid from this wallet, with no gas, and kept in your library.'
+            {net !== DEFAULT_NET ? 'Mainnet is read-only on this site for now: your repos and balance, nothing to buy or publish yet.'
+              : tab === 'library' ? 'Data you buy is paid from this wallet, with no gas, and kept in your library.'
               : tab === 'data' ? (repos?.length ? 'Your data is published. People and agents can find it on Fangorn.'
                 : 'Publish files. People and agents find them on Fangorn.')
                 : 'Reading your account from the chain…'}
@@ -989,12 +1027,30 @@ export default function Home({ path = [] }) {
           {TABS.map(([k, label]) => (
             <a key={k} href={`#/account/${k}`} className={tab === k ? `${styles.tab} ${styles.tabOn}` : styles.tab} aria-current={tab === k ? 'page' : undefined}>
               {label}
+              {/* Buying needs a SettlementRegistry, which mainnet doesn't have yet. */}
+              {k === 'library' && !sells(net) && <span className={styles.badge} style={{ marginLeft: 8 }}>Coming soon</span>}
             </a>
           ))}
         </nav>
 
-        {wallet && tab === 'library' && <BuyingTab wallet={wallet} {...money} />}
-        {wallet && tab === 'data' && <PublishingTab wallet={wallet} path={asked ? path : ['data']} publisher={publisher} onPublish={onPublish} {...money} />}
+        {wallet && tab === 'library' && (sells(net) ? <BuyingTab wallet={wallet} {...money} /> : (
+          <>
+            <div className={styles.accountPanel}>
+              <WalletColumn wallet={wallet} net={net} />
+              <BalanceColumn net={net} {...money} />
+            </div>
+            <section className={styles.section}>
+              <div className={styles.tableEmpty}>
+                <h2 className={styles.h2}>Buying on mainnet <span className={styles.badge}>Coming soon</span></h2>
+                <p className={styles.colText}>
+                  Paid records, buying and your library are coming to mainnet. Until then, everything on
+                  mainnet is free to read. Switch to Testnet to try buying today.
+                </p>
+              </div>
+            </section>
+          </>
+        ))}
+        {wallet && tab === 'data' && <PublishingTab wallet={wallet} net={net} path={asked ? path : ['data']} publisher={publisher} onPublish={onPublish} {...money} />}
         {tab === null && <div className={styles.pending} role="status">Loading…</div>}
       </main>
     </div>

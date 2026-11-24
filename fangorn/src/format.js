@@ -1,6 +1,9 @@
 // Shared pure formatters. Kept out of the page components so the data layer
 // (fangorn.js, usage.js) can reuse them without importing UI.
-const EXPLORER = 'https://sepolia.basescan.org';
+import { NETWORKS, DEFAULT_NET } from './fangorn.js';
+
+/** The block explorer for `net`'s chain (basescan, sepolia.basescan). */
+const explorerOf = (net = DEFAULT_NET) => NETWORKS[net].chain.blockExplorers.default.url;
 
 export function truncate(value, lead = 6, tail = 4) {
   if (!value) return '';
@@ -9,8 +12,8 @@ export function truncate(value, lead = 6, tail = 4) {
     : value;
 }
 
-export const explorer = (addr) => `${EXPLORER}/address/${addr}`;
-export const txExplorer = (hash) => `${EXPLORER}/tx/${hash}`;
+export const explorer = (addr, net) => `${explorerOf(net)}/address/${addr}`;
+export const txExplorer = (hash, net) => `${explorerOf(net)}/tx/${hash}`;
 
 // Usage against a limit, for the storage meters. Returns null when there is no
 // ceiling to draw — the gate is disabled (limit 0), or a subscription lifted the
