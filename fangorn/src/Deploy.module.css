@@ -1,0 +1,56 @@
+/* The deploy page: the form on the left, the live quote on the right (stacked on narrow screens). */
+
+.steps { font: 500 12px var(--mono); text-transform: uppercase; letter-spacing: 0.08em; color: var(--dim); margin-bottom: 12px; }
+.steps [aria-current] { color: var(--hi2); }
+
+.grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 380px); gap: 40px; align-items: start; }
+@media (max-width: 860px) { .grid { grid-template-columns: minmax(0, 1fr); } }
+
+.form { display: grid; gap: 22px; min-width: 0; }
+.field { display: grid; gap: 6px; }
+.field label, .label { font-weight: 600; }
+.opt { font-weight: 400; color: var(--dim); font-size: 13px; }
+.hint { color: var(--sub); font-size: 14px; }
+.hint code, .small code, .deposit code { font: 500 12.5px var(--mono); }
+
+.input {
+  width: 100%; max-width: 520px; box-sizing: border-box;
+  font: 13px/1.5 var(--mono); color: var(--text);
+  background: var(--s2); border: 1px solid var(--line2); border-radius: 10px; padding: 9px 12px;
+}
+textarea.input { resize: vertical; }
+.input::placeholder { color: var(--dim); }
+.input:focus { outline: none; border-color: var(--hi); box-shadow: 0 0 0 4px var(--glow); }
+
+.seg { display: flex; width: fit-content; border: 1px solid var(--line2); border-radius: 10px; overflow: hidden; }
+.seg button { font: 600 14px var(--sans); background: var(--s2); color: var(--sub); border: 0; padding: 9px 16px; cursor: pointer; }
+.seg button[aria-pressed='true'] { background: var(--hi); color: var(--on-hi); }
+.seg button:focus-visible { outline: 2px solid var(--hi); outline-offset: -2px; }
+
+.check { display: flex; gap: 10px; align-items: flex-start; color: var(--sub); font-size: 14px; max-width: 520px; }
+.check b { display: block; color: var(--text); font-size: 15px; }
+.check input { margin-top: 4px; accent-color: var(--hi); }
+
+.actions { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
+.actions [aria-disabled='true'], .actions button:disabled { opacity: 0.45; pointer-events: none; }
+
+.quote {
+  position: sticky; top: 88px; display: grid; gap: 10px;
+  background: var(--s1); border: 1px solid var(--line); border-radius: 16px; padding: 22px;
+}
+.pillFree, .pillPaid, .pillTalk {
+  width: fit-content; font: 600 11px var(--mono); text-transform: uppercase; letter-spacing: 0.08em; padding: 4px 10px; border-radius: 999px;
+}
+.pillFree { background: var(--hi); color: var(--on-hi); }
+.pillPaid { background: var(--sun); color: var(--night); }
+.pillTalk { background: var(--orange); color: #fff; }
+.price { font: 800 48px/1 var(--display); letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
+.price small { font: 500 16px var(--sans); color: var(--sub); letter-spacing: 0; }
+.deposit { font: 500 13px var(--mono); color: var(--sub); }
+.warn { color: var(--orange); font-size: 14px; }
+
+.lines { width: 100%; border-collapse: collapse; font-size: 14px; margin-top: 6px; }
+.lines td { padding: 8px 0; border-top: 1px solid var(--line); vertical-align: top; }
+.lines td span { display: block; color: var(--sub); font-size: 12.5px; }
+.lines td:last-child { text-align: right; font: 500 13px var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; padding-left: 12px; }
+.small { color: var(--sub); font-size: 13px; line-height: 1.5; }

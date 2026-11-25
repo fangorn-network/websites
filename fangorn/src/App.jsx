@@ -7,6 +7,7 @@ import Home from './Home';
 import Connect from './Connect';
 import Explore from './Explore';
 import RepoPage from './RepoPage';
+import Deploy from './Deploy';
 import { parseRepoHash } from './account';
 import { useAuth, ACCOUNT_ENABLED } from './authContext';
 import { NETWORKS, setNet, useNet } from './fangorn';
@@ -62,6 +63,8 @@ export default function App() {
     hash === '#/explore' || hash === '#/explorer' ? <Explore /> :
     // #/connect?app=…&repos=…: any app asking to publish for you (worker/index.js signs for it).
     hash.startsWith('#/connect') ? <Connect /> :
+    // #/deploy, #/deploy/setup: size a hosted app, then send it as a pull request to the ops repo.
+    hash === '#/deploy' || hash.startsWith('#/deploy/') ? <Deploy /> :
     // #/data/<net>/<publisher>/<repo>: one repo's public page, the link a publisher shares.
     hash.startsWith('#/data/') ? <RepoPage key={hash} {...parseRepoHash(hash)} /> :
     <Landing />;

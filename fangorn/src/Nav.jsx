@@ -47,6 +47,7 @@ function NetworkSwitch() {
 // GitHub, Discord and Contact live in the footer.
 const LINKS = [
   ['#/explore', 'Explore'],
+  ['#/deploy', 'Deploy'],
   ['https://docs.fangorn.network', 'Docs'],
 ];
 

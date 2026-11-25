@@ -29,8 +29,8 @@ export function PrivyAuthBridge({ children }) {
   const { login } = useLogin({
     onComplete: ({ wasAlreadyAuthenticated }) => {
       // Except on a repo's page: someone logging in to buy stays with what they're buying.
-      // So does someone connecting an app.
-      if (!wasAlreadyAuthenticated && !location.hash.startsWith('#/data/') && !location.hash.startsWith('#/connect')) location.hash = '#/account';
+      // So does someone connecting an app, or deploying one.
+      if (!wasAlreadyAuthenticated && !['#/data/', '#/connect', '#/deploy'].some((p) => location.hash.startsWith(p))) location.hash = '#/account';
     },
   });
   const { fundWallet } = useFundWallet();
