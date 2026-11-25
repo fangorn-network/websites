@@ -17,12 +17,17 @@
 // checks it against the grant (worker/grants.js), and signs it as the person's embedded wallet through Privy,
 // with Fangorn's authorization key. The app relays it (updateBySig) itself or through Barliman.
 //
+//   POST   /api/deploy  { name, network, follow, … }  Authorization: <Privy access token>  → { url, number, name, deployed }
+//                       a pull request to the ops repo adding apps/<name>.json (worker/deploy.js), on GITHUB_TOKEN
+//
 // Bindings: ASSETS, GRANTS (KV), PRIVY_APP_ID (var), and the secrets PRIVY_APP_SECRET and PRIVY_PRIVATE_KEY
-// (the private half of the key quorum the site adds as a signer: VITE_FANGORN_SIGNER_ID).
+// (the private half of the key quorum the site adds as a signer: VITE_FANGORN_SIGNER_ID), and GITHUB_TOKEN (contents and
+// pull requests: write, on the ops repo) for /api/deploy.
 
 import { PrivyClient } from '@privy-io/node';
 import { BaseSepoliaConfig } from '@fangorn-network/sdk';
 import { grants, appOf, reposOf, perDayOf, updateFor, MAX_BATCH, PER_DAY as PER_DAY_DEFAULT } from './grants.js';
+import { github, openDeploy } from './deploy.js';
 
 const REGISTRY = 'https://registry-sepolia.fangorn.network';
 
@@ -46,12 +51,28 @@ async function walletOf(privy, accessToken) {
   return { address: w.address, wallet: w.id, user: user_id };
 }
 
+/** A Privy access token → the person's Ethereum address: their Fangorn wallet, or else any wallet they linked. */
+async function addressOf(privy, accessToken) {
+  const { user_id } = await privy.client.utils().auth().verifyAccessToken(accessToken ?? '').catch(() => {
+    throw Object.assign(new Error('sign in again'), { status: 401 });
+  });
+  const wallets = (await privy.client.users()._get(user_id)).linked_accounts.filter((a) => a.type === 'wallet' && a.chain_type === 'ethereum');
+  const w = wallets.find((a) => a.connector_type === 'embedded') ?? wallets[0];
+  if (!w) throw Object.assign(new Error('this account has no wallet: sign in with email'), { status: 403 });
+  return w.address;
+}
+
 async function api(req, env, path) {
   const store = grants(env.GRANTS), body = req.method === 'POST' || req.method === 'DELETE' ? await req.json().catch(() => ({})) : {};
   if (path === '/api/grants') {
     const privy = privyOf(env), who = await walletOf(privy, bearer(req));
     if (req.method === 'POST') return json({ token: await store.issue(who, appOf(body.app), reposOf(body.repos), perDayOf(body.perDay)), address: who.address });
     if (req.method === 'DELETE') { await store.revoke(who.user, appOf(body.app)); return json({}); }
+  }
+  if (path === '/api/deploy' && req.method === 'POST') {
+    if (!env.GITHUB_TOKEN) return json({ error: 'deploying from the site is not set up yet' }, 503);
+    const owner = await addressOf(privyOf(env), bearer(req));
+    return json(await openDeploy({ gh: github(env.GITHUB_TOKEN), repo: env.OPS_REPO || undefined }, owner, body));
   }
   if (path === '/api/grant' && req.method === 'GET') {
     const g = await store.of(bearer(req));

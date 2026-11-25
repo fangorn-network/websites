@@ -7,7 +7,7 @@
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "test": "node src/fangorn.test.mjs && node worker/grants.test.mjs"
+    "test": "node src/fangorn.test.mjs && node worker/grants.test.mjs && node worker/deploy.test.mjs"
   },
   "dependencies": {
     "@fangorn-network/sdk": "^0.2.1",
