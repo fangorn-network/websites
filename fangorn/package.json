@@ -7,11 +7,10 @@
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "test": "node src/fangorn.test.mjs && node worker/grants.test.mjs && node worker/deploy.test.mjs"
+    "test": "node src/fangorn.test.mjs && node worker/grants.test.mjs && node worker/deploy.test.mjs && node worker/apps.test.mjs"
   },
   "dependencies": {
-    "@fangorn-network/sdk": "^0.2.1",
-    "@fangorn-network/westmarch": "^0.1.1",
+    "@fangorn-network/sdk": "^0.2.4",
     "@privy-io/node": "^0.39.0",
     "@privy-io/react-auth": "^3.33.1",
     "@semaphore-protocol/core": "^4.14.5",

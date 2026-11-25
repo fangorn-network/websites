@@ -11,7 +11,8 @@
     "run_worker_first": ["/api/*", "/mcp"]
   },
   // Created on first deploy. Holds grants (hashed tokens), nothing else.
-  "kv_namespaces": [{ "binding": "GRANTS" }],
+  // DEPLOYS: free slots and pending deploy requests (worker/deploy.js).
+  "kv_namespaces": [{ "binding": "GRANTS" }, { "binding": "DEPLOYS" }],
   "vars": {
     // Same app as VITE_PRIVY_APP_ID. Secrets: PRIVY_APP_SECRET, PRIVY_PRIVATE_KEY (wrangler secret put).
     "PRIVY_APP_ID": "cmnxrwbjl00aa0dlart5xkemq"

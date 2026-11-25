@@ -17,21 +17,26 @@
 // checks it against the grant (worker/grants.js), and signs it as the person's embedded wallet through Privy,
 // with Fangorn's authorization key. The app relays it (updateBySig) itself or through Barliman.
 //
-//   POST   /api/deploy  { name, network, follow, … }  Authorization: <Privy access token>  → { url, number, name, deployed }
-//                       a pull request to the ops repo adding apps/<name>.json (worker/deploy.js), on GITHUB_TOKEN
+//   POST   /api/deploy  { name, network, follow, months?, … }  Authorization: <Privy access token>  [X-PAYMENT: <x402>]
+//                       → { url, number, name, deployed }: a pull request to the ops repo adding apps/<name>.json
+//                       (worker/deploy.js). A paid request without a payment → 402 with the x402 requirements.
+//   GET|POST /api/apps, PATCH|DELETE /api/apps/<name>  Authorization: <Privy access token>
+//                       self-serve apps in the pool: each a commit to the ops repo's main (worker/apps.js)
 //
 // Bindings: ASSETS, GRANTS (KV), PRIVY_APP_ID (var), and the secrets PRIVY_APP_SECRET and PRIVY_PRIVATE_KEY
 // (the private half of the key quorum the site adds as a signer: VITE_FANGORN_SIGNER_ID), and GITHUB_TOKEN (contents and
-// pull requests: write, on the ops repo) for /api/deploy.
+// pull requests: write, on the ops repo) for /api/deploy, with DEPLOYS (KV: free slots and pending requests), and the vars
+// PAY_TO (where USDC goes), and optionally FREE_SLOTS, PAYMENT_NETWORK (base) and FACILITATOR_URL.
 
 import { PrivyClient } from '@privy-io/node';
 import { BaseSepoliaConfig } from '@fangorn-network/sdk';
 import { grants, appOf, reposOf, perDayOf, updateFor, MAX_BATCH, PER_DAY as PER_DAY_DEFAULT } from './grants.js';
-import { github, openDeploy } from './deploy.js';
+import { github, chain, facilitator, ledger, deploy, FREE_SLOTS } from './deploy.js';
+import { apps, opsRepo, route as appsRoute } from './apps.js';
 
 const REGISTRY = 'https://registry-sepolia.fangorn.network';
 
-const CORS = { 'access-control-allow-origin': '*', 'access-control-allow-headers': 'content-type, authorization, mcp-protocol-version', 'access-control-allow-methods': 'GET, POST, DELETE' };
+const CORS = { 'access-control-allow-origin': '*', 'access-control-allow-headers': 'content-type, authorization, mcp-protocol-version, x-payment', 'access-control-allow-methods': 'GET, POST, PATCH, DELETE' };
 const json = (v, status = 200) => new Response(JSON.stringify(v), { status, headers: { 'content-type': 'application/json', ...CORS } });
 const bearer = (req) => req.headers.get('authorization')?.match(/^Bearer\s+(\S+)/i)?.[1];
 
@@ -63,16 +68,28 @@ async function addressOf(privy, accessToken) {
 }
 
 async function api(req, env, path) {
-  const store = grants(env.GRANTS), body = req.method === 'POST' || req.method === 'DELETE' ? await req.json().catch(() => ({})) : {};
+  const store = grants(env.GRANTS), body = ['POST', 'PATCH', 'DELETE'].includes(req.method) ? await req.json().catch(() => ({})) : {};
   if (path === '/api/grants') {
     const privy = privyOf(env), who = await walletOf(privy, bearer(req));
     if (req.method === 'POST') return json({ token: await store.issue(who, appOf(body.app), reposOf(body.repos), perDayOf(body.perDay)), address: who.address });
     if (req.method === 'DELETE') { await store.revoke(who.user, appOf(body.app)); return json({}); }
   }
   if (path === '/api/deploy' && req.method === 'POST') {
-    if (!env.GITHUB_TOKEN) return json({ error: 'deploying from the site is not set up yet' }, 503);
+    if (!env.GITHUB_TOKEN || !env.DEPLOYS) return json({ error: 'deploying from the site is not set up yet' }, 503);
     const owner = await addressOf(privyOf(env), bearer(req));
-    return json(await openDeploy({ gh: github(env.GITHUB_TOKEN), repo: env.OPS_REPO || undefined }, owner, body));
+    const ctx = {
+      gh: github(env.GITHUB_TOKEN), repo: env.OPS_REPO || undefined, chain: chain(), kv: ledger(env.DEPLOYS),
+      pay: facilitator(env.FACILITATOR_URL || undefined), payTo: env.PAY_TO, payNetwork: env.PAYMENT_NETWORK || 'base',
+      slots: Number(env.FREE_SLOTS) || FREE_SLOTS, resource: new URL(req.url).href,
+    };
+    try { return json(await deploy(ctx, owner, body, req.headers.get('x-payment'))); }
+    catch (e) { if (e.status === 402) return json(e.body, 402); throw e; }
+  }
+  if (path === '/api/apps' || path.startsWith('/api/apps/')) {
+    if (!env.GITHUB_TOKEN) return json({ error: 'self-serve apps are not set up yet' }, 503);
+    const owner = await addressOf(privyOf(env), bearer(req));
+    const a = apps({ ops: opsRepo(github(env.GITHUB_TOKEN), env.OPS_REPO || undefined), chain: chain() });
+    return json(await appsRoute(a, req.method, path, owner, body));
   }
   if (path === '/api/grant' && req.method === 'GET') {
     const g = await store.of(bearer(req));

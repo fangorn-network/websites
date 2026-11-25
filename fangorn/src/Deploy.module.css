@@ -54,3 +54,4 @@ textarea.input { resize: vertical; }
 .lines td span { display: block; color: var(--sub); font-size: 12.5px; }
 .lines td:last-child { text-align: right; font: 500 13px var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; padding-left: 12px; }
 .small { color: var(--sub); font-size: 13px; line-height: 1.5; }
+.link { font: inherit; color: inherit; background: none; border: 0; padding: 0; text-decoration: underline; cursor: pointer; }

@@ -2,7 +2,8 @@
 // Shared by the deploy page (src/Deploy.jsx) and /api/deploy (worker/deploy.js), which quotes again rather than
 // trusting the page's number.
 //
-// Price: free inside every FREE limit, on either network. Past any of them: PLATFORM_FEE plus MARKUP × our cost above
+// Price: free inside every free limit (freeOf(network)): a free mainnet app is a read-only index (no gas, no uploads),
+// so nothing in it is worth farming; a testnet one may publish a little (its gas is free). See ../pricing.md. Past any of them: PLATFORM_FEE plus MARKUP × our cost above
 // the free allowance, per item. Gas is not revenue: publishes past the free ones, and the view's commits, are a
 // deposit paid into the app's own gas wallet (with a buffer), and testnet gas is on us. Cloudflare bills the same on
 // both networks, so everything else is priced the same on testnet.
@@ -21,7 +22,10 @@ export const ASSUME = {
   d1ReadUsdPerM: 0.001, d1WriteUsdPerM: 1.0, d1UsdPerGBmo: 0.75, rowsWrittenPerRecord: 4, bytesPerRecord: 2000,
   storageUsdPerGBmo: 0.02,
 };
-export const FREE = { follows: 3, events: 1000, searches: 1000, publish: 10, storage: 1 };
+const BASE_FREE = { follows: 3, events: 1000, searches: 1000 };
+export const FREE = { base: { ...BASE_FREE, publish: 0, storage: 0 }, baseSepolia: { ...BASE_FREE, publish: 10, storage: 0.1 } };
+export const freeOf = (network) => FREE[network] ?? FREE.base;
+export const MONTHS = [1, 3, 12]; // paid up front
 export const CAPS = { follows: 50, events: 100_000, searches: 200_000, publish: 10_000, storage: 100 };
 export const MAX_INDEX = 1_000_000; // search reads every vector: past this it runs into Worker CPU limits
 const LABEL = { follows: 'Repos followed', events: 'New records a day', searches: 'Searches a day', publish: 'Publishes a day', storage: 'File storage (GB)' };
@@ -51,14 +55,14 @@ export function costs(u, a = ASSUME) {
 
 /** The quote for usage `u`: { monthly, gasDeposit, paid, talk, lines, cost }. `talk` lists what's past self-serve. */
 export function quote(u, a = ASSUME) {
-  const full = costs(u, a), free = costs({ ...u, ...FREE, view: false }, a);
-  const records = indexOf(u.events, a), freeReads = FREE.searches * indexOf(FREE.events, a);
+  const F = freeOf(u.network), full = costs(u, a), free = costs({ ...u, ...F, view: false }, a);
+  const records = indexOf(u.events, a), freeReads = F.searches * indexOf(F.events, a);
   const over = {
-    watch: u.follows > FREE.follows, index: u.events > FREE.events, size: u.events > FREE.events,
-    search: u.searches * records > freeReads, storage: u.storage > FREE.storage,
-    gas: u.publish > FREE.publish, view: Boolean(u.view) && u.network === 'base',
+    watch: u.follows > F.follows, index: u.events > F.events, size: u.events > F.events,
+    search: u.searches * records > freeReads, storage: u.storage > F.storage,
+    gas: u.publish > F.publish, view: Boolean(u.view) && u.network === 'base',
   };
-  const freeSearch = FREE.searches * DAYS * (a.neuronsPerEmbed / 1000 * a.neuronUsdPer1k + a.cfReqUsdPerM / 1e6) + freeReads * DAYS * a.d1ReadUsdPerM / 1e6;
+  const freeSearch = F.searches * DAYS * (a.neuronsPerEmbed / 1000 * a.neuronUsdPer1k + a.cfReqUsdPerM / 1e6) + freeReads * DAYS * a.d1ReadUsdPerM / 1e6;
   const allowance = { ...free, search: freeSearch, view: 0 };
   const above = (k) => Math.max(0, full[k] - allowance[k]);
   const talk = Object.entries(CAPS).filter(([k, cap]) => u[k] > cap).map(([k, cap]) => `${LABEL[k]} above ${fmtN(cap)}`);
@@ -75,3 +79,6 @@ export function quote(u, a = ASSUME) {
   const monthly = paid ? Math.ceil(a.platformFee + lines.reduce((s, l) => s + l.price, 0)) : 0;
   return { monthly, gasDeposit, paid, talk, lines, platformFee: paid ? a.platformFee : 0, gas: full.gas + full.view, cost: Object.values(full).reduce((s, v) => s + v, 0) };
 }
+
+/** What `months` of quote `q` comes to, paid up front: the price plus the gas deposit, in USD. */
+export const dueFor = (q, months = 1) => Math.round((q.monthly + q.gasDeposit) * months * 100) / 100;
